@@ -103,7 +103,7 @@ Soldaki telefonda çalışan stok girişini yazıyla (ya da "Ses" düğmesiyle) 
 
 ## 8. MVP kapsamı ve plan
 
-MVP'de olanlar: şirket ve davet, ürün/depo/stok yönetimi, sohbetten stok sorgusu, giriş, çıkış, transfer, sayım ve fire önerisi, onay kartı, yanlış onayın ters kayıtla geri alınması, irsaliye fotoğrafından kalem okuma, cihazda ses tanıma, barkod, kritik stok bildirimi, denetim kaydı. MVP'de olmayanlar: fatura ve e-irsaliye kesimi, lot/seri, varyant, ödeme, çevrimdışı mod.
+MVP'de olanlar: şirket ve davet, ürün/depo/stok yönetimi, sohbetten stok sorgusu, giriş, çıkış, transfer, sayım ve fire önerisi, onay kartı, yanlış onayın ters kayıtla geri alınması, irsaliye fotoğrafından kalem okuma, cihazda ses tanıma, barkod, kritik stok bildirimi, denetim kaydı, KVKK aydınlatma ve hesap silme. MVP'de olmayanlar: fatura ve e-irsaliye kesimi, lot/seri, varyant, ödeme, çevrimdışı mod.
 
 | Hafta | Tarih | Odak | Kapı |
 | --- | --- | --- | --- |
@@ -113,8 +113,10 @@ MVP'de olanlar: şirket ve davet, ürün/depo/stok yönetimi, sohbetten stok sor
 | 4 | 26 Ekim–1 Kasım | Asistan, SSE akışı, okuma araçları | Telefonda canlı stok sorgusu |
 | 5 | 2–8 Kasım | Öneri araçları, onay, transaction, tekrar koruması | Onay stoğu tam bir kez değiştirir |
 | 6 | 9–15 Kasım | 100 mesajlık değerlendirme, model kıyası, push | — |
-| 7 | 16–22 Kasım | İrsaliye okuma, ses, barkod, pilot kullanıcı | Kapsam dondurulur |
+| 7 | 16–22 Kasım | İrsaliye okuma, ses, barkod, pilot kullanıcı | — |
 | 8 | 23–29 Kasım | Test, rapor, Android yayını, demo | Final demo ve ölçülmüş sonuçlar |
+
+Not: 7. haftanın sonunda kapsam dondurulur; bu bir kapı değildir.
 
 ## 9. 8 haftalık geliştirme görevleri
 
@@ -138,6 +140,8 @@ Her görev GitHub'da bir issue, her hafta bir milestone olarak açılır; tamaml
 - [ ] Şirket oluşturma, davet kodu, rol ve depo yetkisi
 - [ ] Backend'de JWT doğrulama ve yetki guard'ları
 - [ ] RLS politikaları; iki şirketli izolasyon testi
+- [ ] Ekran tasarımları (Stitch veya Figma, yalnızca görsel referans; üretilen kod kullanılmaz): mobil sohbet + işlem kartı, mobil stok listesi, web dashboard, web onay kuyruğu, web belge inceleme. Renk, yazı tipi, boşluk ve köşe değerleri `docs/tasarim.md` dosyasına yazılır.
+- [ ] Kapı: iki şirket arasında veri sızıntısı yok
 
 ### Hafta 3 — Manuel stok (19–25 Ekim)
 
@@ -146,7 +150,7 @@ Her görev GitHub'da bir issue, her hafta bir milestone olarak açılır; tamaml
 - [ ] Giriş, çıkış, transfer, sayım, fire ekranları ve stok transaction'ı
 - [ ] Hareketli ortalama maliyet hesabı
 - [ ] OpenAPI istemcisi; mobilde stok listesi ve ürün detayı
-- [ ] Eşzamanlı çıkış ve geri alma testleri
+- [ ] Eşzamanlı çıkış ve rollback testleri
 
 ### Hafta 4 — Asistan altyapısı (26 Ekim – 1 Kasım)
 
@@ -177,7 +181,10 @@ Her görev GitHub'da bir issue, her hafta bir milestone olarak açılır; tamaml
 - [ ] Tesseract + Haiku ile kıyas deneyi (30–50 belge)
 - [ ] Cihazda ses tanıma ve sohbete bağlama
 - [ ] Barkod okutma (zaman kalırsa e-irsaliye XML okuma)
-- [ ] Pilot kullanıcı denemesi; kapsam dondurulur
+- [ ] Pilot kullanıcı denemesi
+- [ ] KVKK aydınlatma metni, gizlilik politikası sayfası ve uygulama içinden hesap silme akışı (mağaza yayını için zorunlu)
+
+Not: Hafta sonunda kapsam dondurulur; bu bir kapı değildir.
 
 ### Hafta 8 — Test, rapor, demo (23–29 Kasım)
 
@@ -186,6 +193,7 @@ Her görev GitHub'da bir issue, her hafta bir milestone olarak açılır; tamaml
 - [ ] Android dahili test yayını veya APK; web canlı adres
 - [ ] Kurulum, mimari ve kullanım dokümantasyonu
 - [ ] Bitirme raporu, sunum ve yedek demo videosu
+- [ ] Kapı: final demo ve ölçülmüş sonuçlar
 
 ## 10. İnceleme raporuna yanıt
 
