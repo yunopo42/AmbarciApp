@@ -15,6 +15,7 @@ Haftalık rapor şablonu için: `references/haftalik-rapor-sablonu.md`
 1. `docs/plan.md` (veya ilgili GitHub milestone) içinden **bu haftanın kapsamını** kontrol et. Kapsam dışı bir özellik istenirse yapma; "yol haritası" olarak not et ve kullanıcıya söyle.
 2. Değiştireceğin dosya **öğrenme modu** listesindeyse (bölüm 5) kod yazma, açıkla.
 3. Mimari değişmezlerden (bölüm 2) birini bozacak bir istek gelirse dur, nedenini açıkla ve alternatif öner.
+4. Mobil veya web ekranı yazıyorsan ve `docs/tasarim.md` varsa renk, yazı tipi, boşluk ve köşe değerlerini oradan al. Dosyada karşılığı olmayan bir değer gerekiyorsa uydurma; kullanıcıya sor. Stitch/Figma tasarımları yalnızca görsel referanstır, ürettikleri kod kullanılmaz.
 
 ## 2. Mimari değişmezler (asla bozulmaz)
 
@@ -89,7 +90,7 @@ Diğer parçalar ajan desteğiyle yazılabilir; öğrenci inceler. Bunlar web pa
 
 ## 7. Kapsam
 
-**MVP'de:** şirket/davet/rol, ürün-birim-alternatif ad-depo (araç dahil)-cari yönetimi, giriş/çıkış/transfer/sayım/fire, hareketli ortalama maliyet, asistan (okuma + öneri araçları), işlem kartı ve onay, ters kayıtla geri alma, irsaliye fotoğrafından kalem okuma, cihazda ses tanıma, barkod, kritik stok bildirimi, denetim kaydı, değerlendirme betiği (`pnpm eval`).
+**MVP'de:** şirket/davet/rol, ürün-birim-alternatif ad-depo (araç dahil)-cari yönetimi, giriş/çıkış/transfer/sayım/fire, hareketli ortalama maliyet, asistan (okuma + öneri araçları), işlem kartı ve onay, ters kayıtla geri alma, irsaliye fotoğrafından kalem okuma, cihazda ses tanıma, barkod, kritik stok bildirimi, denetim kaydı, KVKK aydınlatma ve hesap silme, değerlendirme betiği (`pnpm eval`).
 
 **MVP dışı:** fatura/e-irsaliye kesimi, lot/seri/SKT, varyant, üretim, ödeme/abonelik, çevrimdışı mod, WhatsApp kanalı, ERP entegrasyonu. Bunlar istenirse yapılmaz; `docs/yol-haritasi.md` dosyasına not düşülür.
 
@@ -103,6 +104,7 @@ Hosting: Vercel (web), Render Free (API ve worker tek süreçte), Supabase Free,
 - [ ] Çekirdek modüle dokunulduysa test eklendi ve `pnpm test` geçiyor
 - [ ] `pnpm lint` ve `pnpm typecheck` temiz
 - [ ] Öğrenme modu dosyasına kod yazılmadı
+- [ ] Ekran değiştiyse `docs/tasarim.md` değerlerine uyuldu
 - [ ] Kullanıcıya önerilen commit mesajı ve bu değişikliğin haftalık rapora girecek 1–2 cümlelik özeti verildi
 
 ## 9. Haftalık rapor
