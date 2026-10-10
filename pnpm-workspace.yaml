@@ -1,0 +1,19 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Birden fazla pakette kullanılan bağımlılıkların tek sürüm kaynağı.
+# Paketlerde "catalog:" olarak yazılır.
+catalog:
+  "@types/node": ^24.0.0
+  # ESLint 10, eslint-config-next ve eslint-config-expo eklentileriyle henüz uyumlu değil.
+  eslint: ^9.39.5
+  typescript: ~6.0.3
+  zod: ^4.6.5
+
+# Bağımlılıkların kurulum betikleri. İkisine de gerek yok:
+# @scarf/scarf yalnızca kullanım istatistiği gönderir; unrs-resolver'ın yerel
+# ikili dosyası zaten platforma özel opsiyonel paketle kurulur.
+allowBuilds:
+  '@scarf/scarf': false
+  unrs-resolver: false
