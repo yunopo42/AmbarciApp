@@ -1,0 +1,30 @@
+# Render Blueprint: apps/api (NestJS) için Free web servisi.
+# Panelde New > Blueprint ile okunur; adımlar docs/yayin.md dosyasında.
+services:
+  - type: web
+    name: ambarci-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    # rootDir bilerek verilmedi: pnpm workspace kökteki dosyalara (pnpm-lock.yaml,
+    # packages/shared) ihtiyaç duyar ve Node sürümü kökteki .nvmrc dosyasından okunur.
+    # pnpm, Corepack ile package.json'daki packageManager sürümünde çalıştırılır.
+    # "@ambarci/api..." filtresi API'yi ve bağımlı olduğu workspace paketlerini kapsar.
+    buildCommand: corepack pnpm install --frozen-lockfile --filter @ambarci/api... && corepack pnpm --filter @ambarci/api... build
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /v1/health
+    # Yalnızca API'yi etkileyen değişiklikler yeni deploy başlatır.
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/shared/**
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - tsconfig.base.json
+        - .nvmrc
+        - render.yaml
+    envVars:
+      # Web panelinin adresi (CORS). Değeri Blueprint oluşturulurken panelden girilir.
+      - key: WEB_ORIGIN
+        sync: false
