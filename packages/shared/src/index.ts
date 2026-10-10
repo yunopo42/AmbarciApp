@@ -1,2 +1,2 @@
-// Mobil, web ve API'nin paylaştığı Zod şemaları ve tipler buraya eklenecek.
-export {};
+// Mobil, web ve API'nin paylaştığı Zod şemaları ve tipler.
+export * from './health.js';
