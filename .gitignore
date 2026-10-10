@@ -1,8 +1,36 @@
-   node_modules/
-   .env
-   .env.*
-   !.env.example
-   dist/
-   .next/
-   .expo/
-   *.log
+# Bağımlılıklar
+node_modules/
+
+# Ortam değişkenleri (yalnızca örnek dosya commit edilir)
+.env
+.env.*
+!.env.example
+
+# Derleme çıktıları
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Next.js
+next-env.d.ts
+.vercel/
+
+# Expo / React Native
+.expo/
+expo-env.d.ts
+web-build/
+.metro-health-check*
+apps/mobile/ios/
+apps/mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Diğer
+*.log
+*.pem
+.DS_Store

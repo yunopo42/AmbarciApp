@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Ambarcı",
+    "slug": "ambarci",
+    "scheme": "ambarci",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["android", "ios"],
+    "plugins": ["expo-router"]
+  }
+}
