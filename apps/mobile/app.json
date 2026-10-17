@@ -6,7 +6,36 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "platforms": ["android", "ios"],
-    "plugins": ["expo-router"]
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "android": {
+      "package": "com.ambarci.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "$(PRODUCT_NAME), söylediklerinizi yazıya çevirmek için mikrofonu kullanır.",
+          "speechRecognitionPermission": "$(PRODUCT_NAME), konuşmanızı metne dönüştürmek için ses tanımayı kullanır.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.tts"
+          ]
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "331f370a-2832-4844-9dc1-80be7451c2e4"
+      }
+    },
+    "owner": "yunopo42"
   }
 }
