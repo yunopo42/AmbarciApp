@@ -80,3 +80,6 @@ Gözlemler (hangi kelimeler karıştı, kodlar nasıl yazıldı, gecikme hissi):
 Sonuç: Ürün adı, miktar ve depo büyük ölçüde doğru geliyor; kod ve birim hataları, asistanın tanınan metni katalogla
 eşleştirmesi, belirsizlikte kullanıcıya sorması ve işlemi onay kartıyla göstermesi gerektiğini doğruluyor.
 Kodları sınamak için daha çok cümle 6. haftadaki etiketli veri kümesine eklenmeli.
+
+Karar: Ürün eşleştirme isim benzerliğiyle yapılacak (tanınan ürün adı katalogda `pg_trgm` benzerlik aramasıyla
+aranır, birden fazla yakın aday varsa kullanıcıya sorulur). Ürün kodu sesle alınmayacak; kod gerektiğinde barkod okutulacak.

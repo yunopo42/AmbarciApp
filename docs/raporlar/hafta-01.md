@@ -1,248 +1,133 @@
-# Ambarcı — 1. Hafta Raporu: Araştırma ve Proje Önerisi
+# Ambarcı — 1. Hafta Raporu: Araştırma ve iskelet
 
-Oct 6, 2026 · @Yunus Emre Atmaz
-
-|  |  |
+| | |
 | --- | --- |
 | Öğrenci | Yunus Emre ATMAZ |
 | Öğrenci no | 221450018 |
 | Danışman | Ali Osman Çıbıkdiken |
 | Ders | Senior Design Project |
-| Hafta | 1. hafta (5–11 Ekim 2026) — Araştırma ve proje önerisi |
-| Proje adı (geçici) | **Ambarcı** — Yapay Zekâ Destekli Saha Stok Asistanı |
+| Hafta | 1. hafta (5–11 Ekim 2026; çalışmalar 17 Ekim'e uzadı) |
+| Proje | Ambarcı — Yapay Zekâ Destekli Saha Stok Asistanı |
 
-Ambarcı; Türk toptancı ve dağıtıcılar için, saha çalışanlarının mobil uygulamadaki yapay zekâ asistanıyla konuşarak (yazı, ses, irsaliye fotoğrafı) stok işlemi yaptığı, yöneticilerin web panelinden yönettiği çok kiracılı bir stok sistemi. Asistan (Claude) yalnızca okur ve işlem önerir; stok, kullanıcının onayıyla ve tek bir veritabanı transaction'ıyla değişir.
+## Proje bağlantıları
 
-## 1. Bu hafta yapılanlar: araştırma süreci
-
-Bu hafta kod yazılmadan önce problem, pazar, teknoloji ve maliyet araştırıldı; araştırmanın sonucunda proje fikri iki kez değişti ve son haline geldi.
-
-| Aşama | Ne araştırıldı | Sonuç |
-| --- | --- | --- |
-| 1. İlk fikir | WhatsApp üzerinden stok işlemi yapan bot; WhatsApp Cloud API, Meta'nın 2026 AI politikası ve mesaj fiyatlandırması | Kurulum zahmetli, 1 Ekim 2026'dan itibaren servis mesajları ücretli; arayüz düz metinle sınırlı |
-| 2. Kanal değişikliği | Expo ile mobil uygulama, Next.js web paneli, uygulama içi sohbet; streaming, ses tanıma, push bildirim | Kendi uygulamamız seçildi; WhatsApp yol haritasına alındı |
-| 3. LLM seçimi | Claude API modelleri, fiyatları, araç kullanımı (tool use), yapılandırılmış çıktı, görüntü anlama | Sohbet için Haiku 4.5, belge okuma için Sonnet 5.5 |
-| 4. Belge okuma | Tesseract OCR ile multimodal LLM kıyası (literatür) | Doğrudan multimodal LLM + zorunlu insan onayı; kıyas deney olarak yapılacak |
-| 5. Pazar ve mevzuat | Paraşüt, Bizim Hesap, Logo İşbası, Logo ERP stok modülleri; e-irsaliye zorunluluğu; VUK 274 stok değerleme | Türk ticaret pratiklerine uygun özellik listesi (çoklu depo, birim çevrimi, sayım, fire, cari) |
-| 6. Altyapı ve maliyet | Supabase, Vercel, Render, Railway, EAS ücretsiz katmanları | Tüm altyapı ücretsiz katmanda; tek maliyet Claude kullanımı |
-| 7. Bağımsız inceleme | Mimari bir inceleme raporuyla değerlendirildi | 5 öneriden 4'ü işlendi (bölüm 10) |
-
-Araştırmanın ayrıntılı hali (kaynaklar, maliyet hesapları, risk tablosu) ekteki [Teknik Araştırma Raporu](https://claude.ai/code/artifact/da99ebd5-b2f1-4712-8d05-d052e2303bc9)'ndadır.
-
-## 2. Problem ve araştırma bulguları
-
-**Problem.** Toptancılarda depo bilgisi sahada, telefonda ve kağıt irsaliyelerde yaşar; sisteme sonradan elle girilir. Sonuç: gecikmeli stok, eksik kayıt ve "depoda kaç tane kaldı?" sorusuna telefonla cevap aramak.
-
-**Temel bulgular:**
-
-1. **Pazar.** Paraşüt, Bizim Hesap ve Logo İşbası gibi ürünlerde çoklu depo, depolar arası transfer, kritik stok uyarısı, barkod ve e-irsaliye artık temel beklenti. İncelenen ürünlerin hiçbirinde sahadaki hareketi konuşarak, sesle veya irsaliye fotoğrafıyla kaydeden bir asistan yok.
-2. **Mevzuat.** 2024 veya 2025 brüt satış hasılatı 10 milyon TL ve üzeri olan e-Fatura mükellefleri 1 Temmuz 2026'dan beri e-irsaliye kullanmak zorunda. VUK 274'e göre stok maliyet bedeliyle değerlenir; LIFO 2004'ten beri kullanılmıyor.
-3. **Kanal.** WhatsApp Business API'de genel amaçlı AI botları 15 Ocak 2026'dan beri yasak, iş odaklı botlar serbest; ancak servis mesajları 1 Ekim 2026'dan itibaren aylık 1.000 mesaj sonrası ücretli. Kendi uygulamamız bu kısıtları kaldırır ve onay kartı, kamera, barkod gibi zengin arayüze izin verir.
-4. **LLM.** Claude Haiku 4.5 (1M token başına $1 girdi / $5 çıktı) araç kullanımı için yeterli ve ucuz; sohbetten bir stok işlemi yaklaşık 0,5–0,8 sent. Claude ses girdisi almadığı için ses telefonda yazıya çevrilir.
-5. **Belge okuma.** Klasik OCR okuyamadığında bozuk metin üretir, multimodal LLM ise makul ama yanlış değer üretebilir. Bu yüzden çıkarılan kalemler fotoğrafla yan yana gösterilir ve onaysız stoka girmez.
-
-**Projenin araştırma sorusu:** Güvenilmez bir bileşen olan LLM ajanı, stok gibi hata kaldırmayan bir iş sürecine nasıl güvenli biçimde yerleştirilir ve bu yaklaşım klasik form girişine göre ne kadar doğru ve hızlıdır?
-
-## 3. Kesinleşen kararlar
-
-| Konu | Karar |
+| | |
 | --- | --- |
-| Hedef kullanıcı | 1–50 çalışanlı, 1–5 depolu toptancı ve dağıtıcılar; ilk demo "ABC Elektrik" |
-| Konumlanma | Ön muhasebe programı değil; Paraşüt, Logo gibi yazılımların yanında sahadaki stok hareketini kaydeden katman |
-| Kanal | Kendi mobil uygulamamız (Expo) ve web panelimiz (Next.js); WhatsApp yol haritasında |
-| Backend ve veri | NestJS modüler monolit, PostgreSQL (Supabase), Drizzle, pg-boss + outbox |
-| LLM | Claude API: sohbet ve araç kullanımı Haiku 4.5, irsaliye okuma Sonnet 5.5; ses cihazda yazıya çevrilir |
-| Güvenlik ilkesi | LLM yalnızca okuma ve öneri aracı çağırır; onay LLM'den geçmeyen ayrı bir uç noktadadır; yanlış onay silinmez, ters kayıtla düzeltilir |
-| Türkiye uyumu | Çoklu depo ve araç deposu, birim çevrimi, sayım ve fire fişi, cari kartı, hareketli ortalama maliyet |
-| Hosting | Vercel (web), Render Free (API + worker tek süreç), Supabase Free, EAS Free; gecikme sorun olursa Railway |
-| Maliyet | Altyapı 0 $; Claude 8 haftada \~10–30 $ (Console kredisi); mağaza hesapları isteğe bağlı |
-| Çalışma düzeni | Commit'leri öğrenci atar; çekirdek modüller elle, çevre kod ajan desteğiyle; haftalık rapor repoda |
+| GitHub deposu | [github.com/yunopo42/AmbarciApp](https://github.com/yunopo42/AmbarciApp) |
+| 1. hafta sonu kod durumu (etiket) | [hafta-1](https://github.com/yunopo42/AmbarciApp/tree/hafta-1) |
+| Commit geçmişi | [github.com/yunopo42/AmbarciApp/commits/main](https://github.com/yunopo42/AmbarciApp/commits/main) |
+| Issue'lar ve PR'lar | [Issues](https://github.com/yunopo42/AmbarciApp/issues?q=is%3Aissue) · [Pull requests](https://github.com/yunopo42/AmbarciApp/pulls?q=is%3Apr) |
+| Web paneli (Vercel) | [ambarci-app.vercel.app](https://ambarci-app.vercel.app) |
+| API sağlık kontrolü (Render) | [ambarci-api.onrender.com/v1/health](https://ambarci-api.onrender.com/v1/health) |
+| 8 haftalık plan | [docs/plan.md](https://github.com/yunopo42/AmbarciApp/blob/main/docs/plan.md) |
+| Rapor ve belgeler (Drive) | [Proje klasörü](https://drive.google.com/drive/folders/1ON1zxHnz4k0fIdIXaCvwqlk0g4buD0_n?usp=sharing) |
 
-## 4. Kullanılacak teknolojiler
+API ücretsiz planda çalıştığı için 15 dakika istek almazsa uyur; ilk açılışta yaklaşık bir dakika beklemek gerekebilir.
 
-Tüm proje TypeScript ile, tek bir monorepo içinde geliştirilir; mobil, web ve backend aynı veri şemalarını paylaşır.
+## 1. Özet
 
-| Katman | Teknoloji | Ne için |
+Bu haftanın hedefi araştırmayı tamamlamak ve geliştirme iskeletini kurmaktı. Araştırma ve proje önerisi raporu danışmana gönderildi; pnpm monorepo, CI, web (Vercel) ve API (Render) yayını ile telefonda çalışan Expo development build tamamlandı ve Türkçe ses tanıma 10 cümleyle denendi. Supabase projesi, README ve milestone'lar, Claude araç çağırma denemesi ve demo verisi 2. haftanın başına devredildi. Bu haftanın kapısı yoktu.
+
+## 2. Bu hafta yapılanlar
+
+| İş | Durum | Not |
 | --- | --- | --- |
-| Dil ve depo | TypeScript, pnpm workspaces, GitHub | Tek dil, tek repo; hoca ilerlemeyi commit geçmişinden izler |
-| Mobil uygulama | Expo (React Native), Expo Router, NativeWind | Saha çalışanı için iOS/Android uygulaması |
-| Mobil yetenekler | expo-camera, expo-speech-recognition, expo-notifications, expo-secure-store | Kamera ve barkod, sesle komut, bildirim, güvenli oturum |
-| Web paneli | Next.js, React, Tailwind CSS, shadcn/ui, TanStack Table | Yönetici paneli: ürün, depo, stok, onay, rapor |
-| Ortak katman | Zod, OpenAPI'den üretilen API istemcisi, TanStack Query | Tip güvenli veri alışverişi |
-| Backend | NestJS (Node.js), REST `/v1`, Swagger/OpenAPI, SSE | İş kuralları, yetki, asistan, akışlı sohbet |
-| Veritabanı | PostgreSQL (Supabase), Drizzle ORM, pg\_trgm | İlişkisel stok verisi, transaction, bulanık ürün arama |
-| Kimlik ve dosya | Supabase Auth, Supabase Storage | Giriş, JWT, irsaliye fotoğrafları |
-| Arka plan işleri | pg-boss + outbox tablosu | Belge işleme, bildirim, olaylar |
-| Yapay zekâ | Claude API (Haiku 4.5, Sonnet 5.5), @anthropic-ai/sdk | Sohbet ajanı, araç kullanımı, irsaliye okuma |
-| Test ve kalite | Vitest, Supertest, Playwright, ESLint, GitHub Actions | Birim, API ve uçtan uca test; her push'ta CI |
-| Yayın | Vercel (web), Render Free (API), EAS Build (mobil) | Ücretsiz katmanlarda canlı demo |
+| Araştırma raporu ve proje önerisi, danışmana sunum | Tamamlandı | Sunum olarak gönderildi: [hafta-01-arastirma-ve-oneri.md](https://github.com/yunopo42/AmbarciApp/blob/main/docs/raporlar/hafta-01-arastirma-ve-oneri.md) |
+| GitHub reposu ve 1. hafta issue'ları | Tamamlandı | #1, #3, #5, #7 |
+| README ve 8 milestone | Ertelendi | 2. haftanın başına devredildi |
+| pnpm monorepo: mobile, web, api, shared | Tamamlandı | [PR #2](https://github.com/yunopo42/AmbarciApp/pull/2) |
+| GitHub Actions | Tamamlandı | Her push'ta lint, typecheck, test, build |
+| `.env.example`; web Vercel'de, API `/v1/health` Render'da yayında | Tamamlandı | [PR #4](https://github.com/yunopo42/AmbarciApp/pull/4) |
+| Supabase projesi | Ertelendi | 2. haftanın başına devredildi |
+| Expo development build telefonda; Türkçe ses tanıma denemesi | Tamamlandı | [PR #6](https://github.com/yunopo42/AmbarciApp/pull/6), [#8](https://github.com/yunopo42/AmbarciApp/pull/8); 10 cümlenin 8'i doğru tanındı |
+| Claude API anahtarı, harcama limiti, 20 mesajla araç çağırma denemesi | Ertelendi | 2. haftanın başına devredildi |
+| Demo verisi: ABC Elektrik, 15–20 ürün, 2 depo, 1 araç deposu | Ertelendi | 2. haftanın başına devredildi |
 
-## 5. Genel sistem haritası
+## 3. Teknik açıklama
 
-Sistem üç katmandan oluşur: istemciler (mobil ve web), tek bir NestJS uygulaması (API, asistan çekirdeği ve worker) ve Supabase üzerindeki veri katmanı. Claude ve Expo Push dış servislerdir.
+### 3.1 Monorepo ve CI
 
-&#91;embedded content: Ambarcı genel sistem haritası\]
+**Ne yapıldı:** pnpm workspace içinde `apps/web` (Next.js 16, Tailwind), `apps/api` (NestJS 12), `apps/mobile` (Expo SDK 57, Expo Router) ve `packages/shared` (Zod) kuruldu. Ortak strict TypeScript ayarı, ESLint ve kök komutlar (dev, build, lint, typecheck, test) eklendi; API'deki `GET /v1/health` uç noktası Vitest ve Supertest ile test ediliyor. GitHub Actions her push'ta kurulum, lint, typecheck, test ve build adımlarını çalıştırıyor.
 
-Bir sohbet mesajı şu yolu izler: mobil uygulama mesajı API'ye gönderir → asistan çekirdeği Claude'u çağırır → Claude ürün arama ve öneri araçlarını kullanır → istemciye bir işlem kartı döner → kullanıcı Onayla'ya basınca API stok transaction'ını çalıştırır → worker bildirim ve denetim kaydını tamamlar. Kesik çizgili kutu, aynı çekirdeğe sonradan bağlanabilecek kanalları gösterir.
+**Neden önemli:** Mobil, web ve API aynı Zod şemalarını paylaşacak; bir alan değiştiğinde üç taraf da derleme anında hata verir. CI, ana dala bozuk kod girmesini engelleyen ilk kontrol.
 
-## 6. Veritabanı ilişki diyagramı
+**Ne öğrenildi:** Ortak paket, onu kullanan uygulamalardan önce derlenmeli; pnpm'in `--filter "<paket>..."` seçicisi bir paketi bağımlılıklarıyla birlikte doğru sırada derliyor. Araçların en yeni sürümleri her zaman birlikte çalışmıyor: eklenti uyumu nedeniyle TypeScript 7 yerine 6.0, ESLint 10 yerine 9 seçildi.
 
-Veritabanı PostgreSQL'dedir ve altı alana ayrılır. Her kutu bir tablodur; ikinci satır temel alanları, üçüncü satır bağlı olduğu tabloyu (yabancı anahtar) gösterir.
+### 3.2 Web ve API yayını
 
-&#91;embedded content: veritabanı ilişki diyagramı · 6 alan, 20 tablo\]
+**Ne yapıldı:** API, kökteki `render.yaml` ile Render'ın ücretsiz planında (Frankfurt) yayınlandı; sağlık kontrolü `/v1/health`. Web paneli Vercel'de `apps/web` kök dizininden derleniyor. Web ana sayfasındaki durum kartı API'nin sağlık cevabını gösteriyor; API'de CORS yalnızca `WEB_ORIGIN` ortam değişkenindeki adrese açık.
 
-Önemli kurallar: (şirket, depo, ürün) üçlüsü `inventory` tablosunda benzersizdir ve miktar sıfırın altına inemez (`CHECK`); her stok hareketi bir `operations` kaydına bağlanır ve (operasyon, kalem) benzersiz olduğu için aynı onay iki kez uygulanamaz; miktarlar `NUMERIC(14,3)` ile tutulur.
+**Neden önemli:** Monorepo yapısının gerçek platformlarda derlendiği erken doğrulandı; ileride yayın sorunları özellik geliştirmeyle karışmayacak. CORS kısıtı, API'nin tarayıcıdan yalnızca kendi panelimizce çağrılmasını sağlıyor.
 
-## 7. Prototip ekranlar
+**Ne öğrenildi:** Render'da kök dizin verilirse dışındaki dosyalar build'e alınmıyor; bu yüzden API depo kökünden derleniyor ve build filtresiyle yalnızca API'yi etkileyen değişikliklerde yeniden yayınlanıyor. `NEXT_PUBLIC_` önekli değişkenler build sırasında sayfaya gömüldüğü için değerleri değişince yeniden deploy gerekiyor. Render belgesine göre ücretsiz servis 15 dakika istek almazsa uyuyor ve ilk istekte yaklaşık bir dakikada uyanıyor.
 
-Mobil uygulama tek bir sohbet ekranı etrafında kurulur; web paneli ise yöneticinin aynı işlemleri tablo, onay ve belge inceleme ekranlarından izlemesi içindir. Aşağıdaki çizim tasarım amaçlıdır; gerçek ekranlar 3.–7. haftalarda geliştirilecektir.
+### 3.3 Mobil development build ve Türkçe ses tanıma denemesi
 
-&#91;embedded content: prototip · mobil sohbet ekranı ve web yönetim paneli\]
+**Ne yapıldı:** Mobil uygulamaya `expo-dev-client` ve `expo-speech-recognition` eklendi; EAS Build'de `development` profiliyle Android APK alındı ve telefona kuruldu. Geçici `/speech-test` ekranı `tr-TR` diliyle tanıma yapıyor. Ürün adı, miktar ve depo içeren 10 stok cümlesiyle deneme yapıldı; üç cümlede ürün kodu rakam rakam söylendi.
 
-Soldaki telefonda çalışan stok girişini yazıyla (ya da "Ses" düğmesiyle) bildirir, asistan bir işlem kartı çıkarır ve stok yalnızca "Onayla" ile değişir. Sağdaki panelde aynı işlem "Onay bekliyor" olarak görünür; belge inceleme alanı irsaliye fotoğrafını çıkarılan kalemlerle yan yana gösterir ve okunamayan kalemi işaretler.
+**Neden önemli:** Saha çalışanının asistana işlemi sesle söylemesi projenin temel giriş yollarından biri. Tanımanın hangi bilgide güvenilir olduğunu erken görmek, asistanın ürünü nasıl bulacağını belirliyor.
 
-## 8. MVP kapsamı ve plan
+**Ne öğrenildi:** Ürün adı, miktar ve depo büyük ölçüde doğru tanındı; rakam rakam söylenen kodlar ise tutarsız yazıldı ve kısa birim kelimeleri karışabildi ("kutu" → "kota"). Bu yüzden şu karar alındı: ürün eşleştirme isim benzerliğiyle yapılacak (tanınan ürün adı katalogda `pg_trgm` benzerlik aramasıyla aranacak, birden fazla yakın aday varsa kullanıcıya sorulacak); ürün kodu sesle alınmayacak, kod gerektiğinde barkod okutulacak.
 
-MVP'de olanlar: şirket ve davet, ürün/depo/stok yönetimi, sohbetten stok sorgusu, giriş, çıkış, transfer, sayım ve fire önerisi, onay kartı, yanlış onayın ters kayıtla geri alınması, irsaliye fotoğrafından kalem okuma, cihazda ses tanıma, barkod, kritik stok bildirimi, denetim kaydı, KVKK aydınlatma ve hesap silme. MVP'de olmayanlar: fatura ve e-irsaliye kesimi, lot/seri, varyant, ödeme, çevrimdışı mod.
+## 4. Görseller
 
-| Hafta | Tarih | Odak | Kapı |
-| --- | --- | --- | --- |
-| 1 | 5–11 Ekim | Araştırma, monorepo, CI, Claude ve Expo denemesi | — |
-| 2 | 12–18 Ekim | Veritabanı, web + mobil giriş, roller | İki şirket arasında veri sızıntısı yok |
-| 3 | 19–25 Ekim | Manuel stok, mobil stok ekranları | — |
-| 4 | 26 Ekim–1 Kasım | Asistan, SSE akışı, okuma araçları | Telefonda canlı stok sorgusu |
-| 5 | 2–8 Kasım | Öneri araçları, onay, transaction, tekrar koruması | Onay stoğu tam bir kez değiştirir |
-| 6 | 9–15 Kasım | 100 mesajlık değerlendirme, model kıyası, push | — |
-| 7 | 16–22 Kasım | İrsaliye okuma, ses, barkod, pilot kullanıcı | — |
-| 8 | 23–29 Kasım | Test, rapor, Android yayını, demo | Final demo ve ölçülmüş sonuçlar |
+| Ölçüm | Sonuç |
+| --- | --- |
+| Doğru tanınan cümle | 8 / 10 |
+| Kodu doğru tanınan cümle | 1 / 3 |
+| Miktarı doğru tanınan cümle | 9 / 9 (bir cümlede miktar yok) |
 
-Not: 7. haftanın sonunda kapsam dondurulur; bu bir kapı değildir.
+*Türkçe ses tanıma denemesinin özeti: Xiaomi 15 (Android 16), sessiz oda, Wi-Fi, tek konuşmacı, 10 cümle; tanıma telefonun varsayılan ses tanıma servisiyle (`expo-speech-recognition`, `tr-TR`) yapıldı. Ayrıntı: [eval/ses-denemesi.md](https://github.com/yunopo42/AmbarciApp/blob/main/eval/ses-denemesi.md).*
 
-## 9. 8 haftalık geliştirme görevleri
+| Söylenen kod | Tanınan |
+| --- | --- |
+| altı iki sıfır dört (6204) | 6 2 0 4 |
+| yedi sıfır bir beş (7015) | 7.05 |
+| sıfır sıfır dört yedi (0047) | 04 7 |
 
-Her görev GitHub'da bir issue, her hafta bir milestone olarak açılır; tamamlanan görevler haftalık raporda commit bağlantılarıyla işaretlenir.
+*Rakam rakam söylenen üç kod üç farklı biçimde yazıldı; ürün kodunun barkodla alınması kararı bu sonuca dayanıyor.*
 
-### Hafta 1 — Araştırma ve iskelet (5–11 Ekim)
+## 5. Tamamlanan görevler
 
-- [ ] Araştırma raporunu ve bu özeti tamamla, danışmana sun
-- [ ] GitHub reposu, README, 8 milestone, 1. hafta issue'ları
-- [ ] pnpm monorepo: `apps/mobile`, `apps/web`, `apps/api`, `packages/shared`
-- [ ] GitHub Actions: lint, typecheck, build
-- [ ] Supabase projesi, `.env.example`; web Vercel'de, API `/health` Render'da yayında
-- [ ] Expo development build telefonda; Türkçe ses tanıma denemesi
-- [ ] Claude API anahtarı ve harcama limiti; 20 örnek mesajla araç çağırma denemesi
-- [ ] Demo verisi: ABC Elektrik, 15–20 ürün, 2 depo, 1 araç deposu
+- [x] Araştırma ve proje önerisi raporu danışmana gönderildi — [63ceab6](https://github.com/yunopo42/AmbarciApp/commit/63ceab6), [38eb87b](https://github.com/yunopo42/AmbarciApp/commit/38eb87b)
+- [x] pnpm monorepo iskeleti ve CI — [#1](https://github.com/yunopo42/AmbarciApp/issues/1), [ff8e41d](https://github.com/yunopo42/AmbarciApp/commit/ff8e41d)
+- [x] Web ve API yayını (Vercel + Render) — [#3](https://github.com/yunopo42/AmbarciApp/issues/3), [d72aed7](https://github.com/yunopo42/AmbarciApp/commit/d72aed7)
+- [x] Expo development build ve Türkçe ses tanıma denemesi — [#5](https://github.com/yunopo42/AmbarciApp/issues/5), [c9b08c0](https://github.com/yunopo42/AmbarciApp/commit/c9b08c0), [d62c01b](https://github.com/yunopo42/AmbarciApp/commit/d62c01b)
+- [x] EAS build pnpm kurulum hatası — [#7](https://github.com/yunopo42/AmbarciApp/issues/7), [8814141](https://github.com/yunopo42/AmbarciApp/commit/8814141)
+- [ ] Supabase projesi — ertelendi, nedeni: 1. hafta işleri 17 Ekim'e uzadı; 2. haftanın başına devredildi
+- [ ] README ve 8 milestone — ertelendi, nedeni: 1. hafta işleri 17 Ekim'e uzadı; 2. haftanın başına devredildi
+- [ ] Claude API anahtarı, harcama limiti ve 20 mesajla araç çağırma denemesi — ertelendi, nedeni: 1. hafta işleri 17 Ekim'e uzadı; 2. haftanın başına devredildi
+- [ ] Demo verisi (ABC Elektrik) — ertelendi, nedeni: 1. hafta işleri 17 Ekim'e uzadı; 2. haftanın başına devredildi
 
-### Hafta 2 — Veritabanı ve kimlik (12–18 Ekim)
+## 6. Karşılaşılan sorunlar ve çözümler
 
-- [ ] Drizzle şeması ve migration'lar (ER diyagramındaki tablolar)
-- [ ] Supabase Auth: web ve mobilde giriş/çıkış
-- [ ] Şirket oluşturma, davet kodu, rol ve depo yetkisi
-- [ ] Backend'de JWT doğrulama ve yetki guard'ları
-- [ ] RLS politikaları; iki şirketli izolasyon testi
-- [ ] Ekran tasarımları (Stitch veya Figma, yalnızca görsel referans; üretilen kod kullanılmaz): mobil sohbet + işlem kartı, mobil stok listesi, web dashboard, web onay kuyruğu, web belge inceleme. Renk, yazı tipi, boşluk ve köşe değerleri `docs/tasarim.md` dosyasına yazılır.
-- [ ] Kapı: iki şirket arasında veri sızıntısı yok
+| Sorun | Çözüm / durum |
+| --- | --- |
+| EAS Build, pnpm 12'yi Corepack ile kuramadı ("Failed to install pnpm") | pnpm sürümü `eas.json` içinde 12.10.1 olarak sabitlendi; build başarılı (#7) |
+| Proje klasörünün adındaki "İ" harfi Windows'ta ESLint'in yok sayma kurallarını bozdu; lint build çıktılarını da taradı | Lint komutları kaynak klasörlerini doğrudan hedefleyecek şekilde değiştirildi |
+| TypeScript 7 ve ESLint 10, kullanılan eklentilerle uyumlu değil | TypeScript 6.0 ve ESLint 9 kullanıldı; eklentiler güncellenince yükseltilecek |
+| pnpm, 24 saatten yeni paket sürümlerini reddediyor; Expo aynı gün yeni yama yayınladı | Bir önceki yama sürümü kullanıldı; güvenlik kuralına istisna eklenmedi |
+| Bilgisayardaki sanal ağ bağdaştırıcıları yüzünden Metro yanlış adresi seçebiliyor | Metro, `REACT_NATIVE_PACKAGER_HOSTNAME` ile Wi-Fi adresinde başlatıldı; adım belgeye eklendi |
+| Android emülatörüne development build kurulamadı; `adb` hata nedeni göstermedi | Deneme fiziksel telefonda yapıldı; emülatör sorunu açık |
 
-### Hafta 3 — Manuel stok (19–25 Ekim)
+## 7. Sonraki hafta planı
 
-- [ ] Ürün, birim, alternatif ad, depo ve cari yönetimi (web)
-- [ ] Excel/CSV ile ürün içe aktarma
-- [ ] Giriş, çıkış, transfer, sayım, fire ekranları ve stok transaction'ı
-- [ ] Hareketli ortalama maliyet hesabı
-- [ ] OpenAPI istemcisi; mobilde stok listesi ve ürün detayı
-- [ ] Eşzamanlı çıkış ve rollback testleri
+**Hafta 2 — Veritabanı ve kimlik (12–22 Ekim).** Kapı: iki şirket arasında veri sızıntısı yok (22 Ekim). Plan değişikliği: 2. haftanın kapısı 22 Ekim'e alındı, 3. hafta 23–25 Ekim'e sıkıştırıldı; 4. haftanın kapısı (telefonda canlı stok sorgusu) değişmedi.
 
-### Hafta 4 — Asistan altyapısı (26 Ekim – 1 Kasım)
+1. Önceki haftadan devredenler: Supabase projesi, README ve 8 milestone, Claude API anahtarı ve harcama limiti ile 20 mesajlık araç çağırma denemesi, demo verisi.
+2. Drizzle şeması ve migration'lar.
+3. Supabase Auth ile web ve mobilde giriş/çıkış; backend'de JWT doğrulama ve yetki guard'ları.
+4. Şirket oluşturma, davet kodu, rol ve depo yetkisi.
+5. RLS politikaları ve iki şirketli izolasyon testi (kapı).
+6. Ekran tasarımları ve `docs/tasarim.md`.
 
-- [ ] Sohbet ve mesaj tabloları, ajan döngüsü, araç kayıt defteri
-- [ ] Okuma araçları: ürün arama (pg\_trgm), stok sorgusu, son hareketler
-- [ ] SSE akışı; web ve mobilde sohbet ekranı
-- [ ] `ai_runs` kayıtları (token, süre, maliyet)
-- [ ] Kapı: telefondan canlı stok sorgusu
+## 8. Kaynaklar
 
-### Hafta 5 — Öneri ve onay (2–8 Kasım)
-
-- [ ] Öneri araçları: giriş, çıkış, transfer, sayım, fire
-- [ ] İşlem kartı (mobil + web), durum makinesi, onay uç noktası
-- [ ] Idempotency, outbox, denetim kaydı; ters kayıtla geri alma (15 dk kendi işlemi, sonrası yönetici)
-- [ ] Tekrar ve eşzamanlılık testleri
-- [ ] Kapı: onay stoğu tam bir kez değiştirir
-
-### Hafta 6 — Ölçüm ve bildirim (9–15 Kasım)
-
-- [ ] 100 etiketli mesaj (60 geliştirme, 40 test); `pnpm eval` betiği
-- [ ] Haiku–Sonnet kıyası, prompt iyileştirme, test kümesini dondurma
-- [ ] Push bildirimi: onay bekleyen işlem, kritik stok
-- [ ] Web onay kuyruğu ve dashboard
-
-### Hafta 7 — Belge, ses, barkod (16–22 Kasım)
-
-- [ ] Kamera ile irsaliye çekme, Sonnet ile kalem çıkarma, inceleme ekranı
-- [ ] Tesseract + Haiku ile kıyas deneyi (30–50 belge)
-- [ ] Cihazda ses tanıma ve sohbete bağlama
-- [ ] Barkod okutma (zaman kalırsa e-irsaliye XML okuma)
-- [ ] Pilot kullanıcı denemesi
-- [ ] KVKK aydınlatma metni, gizlilik politikası sayfası ve uygulama içinden hesap silme akışı (mağaza yayını için zorunlu)
-
-Not: Hafta sonunda kapsam dondurulur; bu bir kapı değildir.
-
-### Hafta 8 — Test, rapor, demo (23–29 Kasım)
-
-- [ ] Final değerlendirme ve işlem süresi deneyi (form vs. asistan)
-- [ ] Hata düzeltme; yeni özellik yok
-- [ ] Android dahili test yayını veya APK; web canlı adres
-- [ ] Kurulum, mimari ve kullanım dokümantasyonu
-- [ ] Bitirme raporu, sunum ve yedek demo videosu
-- [ ] Kapı: final demo ve ölçülmüş sonuçlar
-
-## 10. İnceleme raporuna yanıt
-
-İnceleme, mimarinin ana kararlarını (LLM yalıtımı, kilit sırası, idempotency, outbox) doğru bulmuş ve beş iyileştirme önermiştir; dördü ana rapora işlendi, biri zaten vardı.
-
-| # | Öneri | Durum |
-| --- | --- | --- |
-| 1 | Çok kiracılı bulanık aramada `organization_id` + trigram birleşik GIN indeksi (`btree_gin`) | Eklendi: veri modeli ve sohbet ajanı hattı |
-| 2 | Supabase'in 7 günlük uykusuna karşı zamanlanmış canlı tutma | Zaten vardı; demo kontrol listesine Render da eklendi |
-| 3 | Tek süreçte worker'ın olay döngüsünü kilitlemesi | Eklendi: en fazla 2 eşzamanlı belge işi; görüntü işleme yalnızca cihazda |
-| 4 | Birim çevriminde yuvarlama hatası | Eklendi: katsayı NUMERIC(14,6), çevrim yalnızca çarpmayla, tek noktada yuvarlama |
-| 5 | Gürültülü ortamda ses tanıma hatası | Eklendi: bağlamsal kelime listesi, sesli sayı/kod toleransı, bulanık katalog araması |
-
-Bir düzeltme: İnceleme, hareketli ortalama maliyetin VUK 274 gereksinimlerini "karşıladığını" söylüyor. Sistem resmi defter tutmaz; bu maliyet yönetim raporu içindir ve yasal değerleme muhasebe yazılımının sorumluluğunda kalır. Savunmada bu sınır açıkça söylenmelidir.
-
-Ayrıntılar: [1. Hafta Teknik Araştırma Raporu](https://claude.ai/code/artifact/da99ebd5-b2f1-4712-8d05-d052e2303bc9).
-
-## 11. Sonraki hafta planı ve rapor formatı
-
-**2. hafta (12–18 Ekim) hedefi:** veritabanı şeması kurulur, web ve mobilde giriş çalışır, şirket ve davet akışı tamamlanır; iki şirket arasında veri sızıntısı olmadığı testle gösterilir.
-
-**Haftalık rapor formatı.** Sonraki tüm haftalık raporlar aynı yapıda yazılır ve repoda `docs/raporlar/hafta-XX.md` olarak tutulur:
-
-1. Kapak bilgisi: öğrenci, no, danışman, ders, hafta ve tarih aralığı
-2. Özet: haftanın sonucu 2–3 cümlede
-3. Bu hafta yapılanlar: tamamlanan işler tablosu
-4. Teknik açıklama: ne yapıldı, neden önemli, ne öğrenildi
-5. Görseller: ekran görüntüsü, diyagram veya ölçüm grafiği
-6. Tamamlanan görevler: issue ve commit bağlantılarıyla işaretli liste
-7. Karşılaşılan sorunlar ve çözümler
-8. Sonraki hafta planı
-9. Kaynaklar
-
-## 12. Kaynaklar
-
-- [Claude — fiyatlandırma](https://platform.claude.com/docs/en/about-claude/pricing)
-- [Claude — yapılandırılmış çıktı ve strict tool use](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
-- [Claude — görüntü (vision)](https://platform.claude.com/docs/en/build-with-claude/vision)
-- [Meta — WhatsApp Business Platform fiyatlandırma](https://developers.facebook.com/docs/whatsapp/pricing)
-- [Wati — 1 Ekim 2026 servis mesajı ücretlendirmesi](https://support.wati.io/en/articles/16954666-whatsapp-business-platform-api-pricing-changes-service-messages-and-click-to-message-ads)
-- [Alibaba Cloud — WhatsApp 2026 AI politikası](https://www.alibabacloud.com/help/en/chatapp/use-cases/whatsapp-ai-policy-2026-guide)
+- [Ambarcı — 1. Hafta Raporu: Araştırma ve Proje Önerisi](https://github.com/yunopo42/AmbarciApp/blob/main/docs/raporlar/hafta-01-arastirma-ve-oneri.md)
+- [Ambarcı — Teknik araştırma](https://github.com/yunopo42/AmbarciApp/blob/main/docs/teknik-arastirma.md)
+- [Render — Blueprint YAML Reference](https://render.com/docs/blueprint-spec)
+- [Render — Monorepo Support](https://render.com/docs/monorepo-support)
+- [Vercel — Using Monorepos](https://vercel.com/docs/monorepos)
+- [Expo — Work with monorepos](https://docs.expo.dev/guides/monorepos/)
+- [Expo — eas.json reference](https://docs.expo.dev/eas/json/)
 - [expo-speech-recognition](https://github.com/jamsch/expo-speech-recognition)
-- [Expo — EAS fiyatlandırma](https://expo.dev/pricing)
-- [Supabase — fiyatlandırma](https://supabase.com/pricing)
-- [Render, Railway, Fly.io karşılaştırması (2026)](https://hostim.dev/blog/render-vs-railway-vs-fly-pricing/)
-- [Paraşüt — depo takibi](https://announcekit.app/parasut/duyurular/depo-takibi-parasutte-2cT3BS)
-- [Bizim Hesap — stok ve depo takibi](https://bizimhesap.com/ozellikler/stok-ve-depo-takibi)
-- [Logo ERP depo yönetimi özeti](https://raporx.com.tr/blog-logo-depo-uretim.html)
-- [MDP Group — e-irsaliye mükellefiyeti 2026](https://mdpgroup.com/blog/kimler-e-irsaliye-mukellefidir/)
-- [VUK 274 ve ticari malların değerlemesi](https://www.muhasebedersleri.com/genel-muhasebe-2/degerleme-islemleri-2.html)
-- [CEUR-WS — fatura ve fiş OCR derlemesi](https://ceur-ws.org/Vol-4044/paper12.pdf)
-- [Ayrıntılı teknik araştırma raporu](https://claude.ai/code/artifact/da99ebd5-b2f1-4712-8d05-d052e2303bc9)

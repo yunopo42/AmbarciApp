@@ -1,14 +1,16 @@
 # Ambarcı — 8 haftalık plan
 
-Kaynak: `docs/raporlar/hafta-01.md`, bölüm 8 (kapılar) ve bölüm 9 (görevler). Dönem: 5 Ekim – 29 Kasım 2026.
+Kaynak: `docs/raporlar/hafta-01-arastirma-ve-oneri.md`, bölüm 8 (kapılar) ve bölüm 9 (görevler). Dönem: 5 Ekim – 29 Kasım 2026.
+
+**Plan değişikliği (17 Ekim 2026):** 1. hafta işleri 17 Ekim'e uzadı; yetişmeyen 1. hafta maddeleri 2. haftanın başına devredildi. 2. haftanın kapısı 22 Ekim'e alındı, 3. hafta 23–25 Ekim'e sıkıştırıldı. 4. haftanın kapısı ve sonraki haftalar değişmedi.
 
 Her hafta bir GitHub milestone'u, her görev bir issue olarak açılır. Dört kapı vardır: 2., 4., 5. ve 8. hafta. Kapı geçilmeden sonraki faza geçilmez; geçilemezse kapsam daraltılır. Öncelik sırası: sohbet → öneri → onay → stok akışı, sonra irsaliye, sonra ses ve barkod. Son haftada yeni özellik eklenmez.
 
 | Hafta | Tarih | Odak | Kapı |
 | --- | --- | --- | --- |
 | 1 | 5–11 Ekim | Araştırma ve iskelet | — |
-| 2 | 12–18 Ekim | Veritabanı ve kimlik | İki şirket arasında veri sızıntısı yok |
-| 3 | 19–25 Ekim | Manuel stok | — |
+| 2 | 12–22 Ekim | Veritabanı ve kimlik | İki şirket arasında veri sızıntısı yok (22 Ekim) |
+| 3 | 23–25 Ekim | Manuel stok | — |
 | 4 | 26 Ekim – 1 Kasım | Asistan altyapısı | Telefonda canlı stok sorgusu |
 | 5 | 2–8 Kasım | Öneri ve onay | Onay stoğu tam bir kez değiştirir |
 | 6 | 9–15 Kasım | Ölçüm ve bildirim | — |
@@ -19,18 +21,31 @@ Her hafta bir GitHub milestone'u, her görev bir issue olarak açılır. Dört k
 
 **Kapı:** —
 
-- [ ] Araştırma raporunu ve bu özeti tamamla, danışmana sun
-- [ ] GitHub reposu, README, 8 milestone, 1. hafta issue'ları
-- [ ] pnpm monorepo: `apps/mobile`, `apps/web`, `apps/api`, `packages/shared`
-- [ ] GitHub Actions: lint, typecheck, build
-- [ ] Supabase projesi, `.env.example`; web Vercel'de, API `/health` Render'da yayında
-- [ ] Expo development build telefonda; Türkçe ses tanıma denemesi
+- [x] Araştırma raporunu ve bu özeti tamamla, danışmana sun
+- [x] GitHub reposu, 1. hafta issue'ları
+- [ ] README, 8 milestone — 2. haftanın başına devredildi
+- [x] pnpm monorepo: `apps/mobile`, `apps/web`, `apps/api`, `packages/shared`
+- [x] GitHub Actions: lint, typecheck, build
+- [x] `.env.example`; web Vercel'de, API `/health` Render'da yayında
+- [ ] Supabase projesi — 2. haftanın başına devredildi
+- [x] Expo development build telefonda; Türkçe ses tanıma denemesi
+- [ ] Claude API anahtarı ve harcama limiti; 20 örnek mesajla araç çağırma denemesi — 2. haftanın başına devredildi
+- [ ] Demo verisi: ABC Elektrik, 15–20 ürün, 2 depo, 1 araç deposu — 2. haftanın başına devredildi
+
+Ses denemesinden çıkan karar (`eval/ses-denemesi.md`): ürün eşleştirme isim benzerliğiyle yapılır; ürün kodu sesle alınmaz, kod için barkod okutulur.
+
+## Hafta 2 — Veritabanı ve kimlik (12–22 Ekim)
+
+**Kapı:** İki şirket arasında veri sızıntısı yok (22 Ekim)
+
+1. haftadan devredenler:
+
+- [ ] Supabase projesi
+- [ ] README, 8 milestone
 - [ ] Claude API anahtarı ve harcama limiti; 20 örnek mesajla araç çağırma denemesi
 - [ ] Demo verisi: ABC Elektrik, 15–20 ürün, 2 depo, 1 araç deposu
 
-## Hafta 2 — Veritabanı ve kimlik (12–18 Ekim)
-
-**Kapı:** İki şirket arasında veri sızıntısı yok
+2. haftanın işleri:
 
 - [ ] Drizzle şeması ve migration'lar (ER diyagramındaki tablolar)
 - [ ] Supabase Auth: web ve mobilde giriş/çıkış
@@ -39,9 +54,11 @@ Her hafta bir GitHub milestone'u, her görev bir issue olarak açılır. Dört k
 - [ ] RLS politikaları; iki şirketli izolasyon testi
 - [ ] Ekran tasarımları (Stitch veya Figma, yalnızca görsel referans; üretilen kod kullanılmaz): mobil sohbet + işlem kartı, mobil stok listesi, web dashboard, web onay kuyruğu, web belge inceleme. Renk, yazı tipi, boşluk ve köşe değerleri `docs/tasarim.md` dosyasına yazılır.
 
-## Hafta 3 — Manuel stok (19–25 Ekim)
+## Hafta 3 — Manuel stok (23–25 Ekim)
 
 **Kapı:** —
+
+2. haftanın uzaması nedeniyle 23–25 Ekim'e sıkıştırıldı. 4. haftanın kapısı (telefonda canlı stok sorgusu) değişmedi.
 
 - [ ] Ürün, birim, alternatif ad, depo ve cari yönetimi (web)
 - [ ] Excel/CSV ile ürün içe aktarma
