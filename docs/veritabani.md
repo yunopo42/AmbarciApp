@@ -97,6 +97,21 @@ Sıra önemlidir: politikalar fonksiyonları, fonksiyonlar da tabloları kullan�
 
 Uygulanmış bir migration düzenlenmez; değişiklik yeni bir migration'la yapılır. Supabase'in güvenlik denetimi (Security Advisor) bu şemada uyarı vermiyor.
 
+## Demo verisi
+
+`pnpm db:seed` iki kurgusal şirket yükler (veri: `packages/db/seed/demo-data.ts`):
+
+- **ABC Elektrik:** 18 ürün (kablo, priz, anahtar, sigorta, aydınlatma, tesisat malzemesi), her biri için bir ek birim (makara, koli, kutu…) ve sahada kullanılan adlar ("üçlü priz", "otomat"). Ayrıca 2 depo, 1 araç deposu ve 3 cari.
+- **Kuzey Tesisat:** 1 depo, 3 ürün. İzolasyonu elle göstermek için ABC Elektrik ile aynı depo adını kullanır.
+
+Kararlar:
+
+- **Tekrar çalıştırılabilir.** Her kayıt doğal anahtarıyla eklenir ya da güncellenir (şirket: sabit kimlik, depo: ad, ürün: SKU, birim: ürün + birim, cari: VKN). İkinci çalıştırma kayıt çoğaltmaz; bunu `test/seed.spec.ts` doğrular.
+- **Başlangıç stoğu yok.** Stok yalnızca hareket kaydıyla değişmeli; hareket ve işlem tabloları 3. haftada gelince açılış stokları açılış işlemiyle girilecek.
+- **Kullanıcı hesabı açılmaz.** `SEED_ADMIN_EMAIL` verilirse o e-postayla Supabase Auth'ta zaten kayıtlı kullanıcı ABC Elektrik'e yönetici olarak bağlanır.
+- **Barkodlar gerçek bir ürüne ait değil.** Mağaza içi kullanıma ayrılmış `200` önekli, geçerli kontrol haneli EAN-13 kodlarıdır; 7. haftada etiket basıp okutulabilir.
+- **Cari VKN'leri kurgusal** (`999` önekli). TCKN kullanılmaz.
+
 ## İki şirketli izolasyon testi
 
 `pnpm db:test` (dosya: `packages/db/test/rls.spec.ts`). Gerçek Supabase veritabanında çalışır; CI'daki `pnpm test` bunu çalıştırmaz, çünkü CI'da veritabanı bilgisi yok.
