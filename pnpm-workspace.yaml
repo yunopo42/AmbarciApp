@@ -5,6 +5,7 @@ packages:
 # Birden fazla pakette kullanılan bağımlılıkların tek sürüm kaynağı.
 # Paketlerde "catalog:" olarak yazılır.
 catalog:
+  "@supabase/supabase-js": ^2.118.0
   "@types/node": ^24.0.0
   # ESLint 10, eslint-config-next ve eslint-config-expo eklentileriyle henüz uyumlu değil.
   eslint: ^9.39.5
