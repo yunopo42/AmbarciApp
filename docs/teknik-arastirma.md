@@ -16,7 +16,7 @@ Asistan Claude ile çalışır ve araçlar (tool use) üzerinden stok okur, işl
 | Veritabanı | PostgreSQL (Supabase) + Drizzle ORM | İlişkisel stok verisi, transaction, satır kilidi, RLS |
 | Kimlik ve dosya | Supabase Auth + Storage | Web ve mobilde aynı oturum; irsaliye fotoğrafları özel bucket'ta |
 | Arka plan işleri | pg-boss (Postgres tabanlı kuyruk) | Belge işleme, bildirim, olay dağıtımı; Redis gerekmez |
-| LLM | Claude API: sohbet ajanı Haiku 4.5, belge okuma Sonnet 5.5 | Mevcut Console kredisi; tool use, yapılandırılmış çıktı, görüntü anlama |
+| LLM | Claude API: sohbet ajanı Haiku 5.5 (`effort: low`), belge okuma Sonnet 5.5 | Mevcut Console kredisi; tool use, yapılandırılmış çıktı, görüntü anlama |
 | Ses | Cihaz üzerinde konuşma tanıma (`expo-speech-recognition`, tarayıcıda Web Speech API) | Claude ses girdisi almaz; cihaz tanıma ücretsiz ve hızlı |
 | Bildirim | Expo Push (`expo-notifications`) | Onay bekleyen işlem ve kritik stok uyarıları |
 | Yayın | Vercel (web), Render Free (API), EAS Build (mobil) | Demo döneminde altyapı ücretsiz; ilk istekte uyku gecikmesi kabul |
@@ -213,13 +213,13 @@ AI katmanı iki iş yapar: sohbette kullanıcının niyetini anlayıp doğru ara
 
 | Görev | Model (API kimliği) | Fiyat (1M token, girdi / çıktı) | Gerekçe |
 | --- | --- | --- | --- |
-| Sohbet ajanı, araç seçimi | Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) | $1 / $5 | En hızlı model; kısa, çok turlu araç kullanımı için yeterli ve ucuz |
+| Sohbet ajanı, araç seçimi | Claude Haiku 5.5 (`claude-haiku-5-5`), `effort: low` | $0,10 / $0,50 (istem 100K tokenın altındayken) | Araç çağırma denemesinde Haiku 4.5 ile aynı doğrulukta, daha hızlı ve yaklaşık 11 kat ucuz; araç tanımındaki talimatlara daha iyi uyuyor (`eval/arac-cagirma-denemesi.md`, `docs/kararlar/ADR-001-sohbet-modeli.md`) |
 | İrsaliye/fatura okuma | Claude Sonnet 5.5 (`claude-sonnet-5-5`) | $2 / $10 | Yüksek çözünürlüklü görüntü katmanı; yoğun tablolarda daha güvenilir |
 | Zor sohbet durumları (yedek) | Sonnet 5.5 | $2 / $10 | Haiku iki kez başarısız olursa veya çok kalemli karmaşık mesajda |
 
-Fiyatlar resmi sayfadandır; aynı sayfaya göre önbellekten okunan girdi (prompt caching) taban fiyatın onda biridir ve Claude 4.7 sonrası modellerin yeni tokenizer'ı aynı metin için yaklaşık %30 daha fazla token üretir ([Claude fiyatlandırma](https://platform.claude.com/docs/en/about-claude/pricing)). Sistem talimatı ve araç tanımları her istekte aynı olduğu için önbelleğe alınır; bu, sohbet maliyetinin büyük kısmını düşürür.
+Sonnet 5.5 fiyatları resmi sayfadandır; aynı sayfaya göre önbellekten okunan girdi (prompt caching) taban fiyatın onda biridir ve Claude 4.7 sonrası modellerin yeni tokenizer'ı aynı metin için yaklaşık %30 daha fazla token üretir ([Claude fiyatlandırma](https://platform.claude.com/docs/en/about-claude/pricing)). Haiku 5.5 fiyatı `claude-api` skill'indeki model tablosundan alındı (tablo tarihi 2026-10-06); istem 100K tokenı aşarsa fiyat 0,50 $ / 2,50 $ olur. Sohbet modeli 20 Ekim 2026'da Haiku 4.5'ten Haiku 5.5'e geçirildi (ADR-001). Haiku 5.5'te önbelleğe alınabilecek en kısa istem 512 token olduğu için (Haiku 4.5'te 4.096 token) her istekte aynı kalan sistem talimatı ve araç tanımları önbelleğe alınabilir; bu, sohbet maliyetini daha da düşürür (henüz ölçülmedi).
 
-Model adları ortam değişkenindedir. `AIProvider` arayüzü sayesinde Gemini veya OpenAI'ye geçiş tek bir adaptör yazmak demektir; değerlendirme bölümündeki model kıyası da bu arayüzle yapılır.
+Model adları ve sohbet modelinin effort düzeyi ortam değişkenindedir (`CLAUDE_CHAT_MODEL`, `CLAUDE_CHAT_EFFORT`, `CLAUDE_DOC_MODEL`). `AIProvider` arayüzü sayesinde Gemini veya OpenAI'ye geçiş tek bir adaptör yazmak demektir; değerlendirme bölümündeki model kıyası da bu arayüzle yapılır.
 
 ### Sohbet ajanı hattı
 
@@ -417,16 +417,16 @@ Demo döneminde nakit maliyet sıfırdır (tüm altyapı ücretsiz katmanlarda);
 
 **İşlem başına Claude maliyeti (yaklaşık):**
 
-- Sohbetten stok girişi, Haiku 4.5: 2–3 model çağrısı (ürün arama, öneri, son cevap). Sistem talimatı ve araçlar (\~3.000 token) önbellekten okunur; yeni girdi \~2.500, çıktı \~400 token. Toplam ≈ 0,005–0,008 dolar. 1.000 işlem ≈ 5–8 dolar.
+- Sohbetten stok işlemi, Haiku 5.5 (`effort: low`): araç çağırma denemesinde (20 mesaj, önbellek kapalı) mesaj başına ortalama 2,75 model çağrısı (ürün arama ve depo listesi, öneri ya da stok sorgusu, son cevap), 8.334 giriş ve 341 çıkış tokenı ölçüldü. Ortalama ≈ 0,0010 dolar; stok girişi mesajları 0,0011–0,0013 dolar. 1.000 mesaj ≈ 1 dolar. Aynı denemede Haiku 4.5 mesaj başına ≈ 0,011 dolar tuttu. Önbellekli maliyet henüz ölçülmedi.
 - İrsaliye fotoğrafı, Sonnet 5.5: 2000×1500 px bir görüntü yüksek çözünürlük katmanında yaklaşık 3.900 görsel token tutar ([Claude görüntü belgesi](https://platform.claude.com/docs/en/build-with-claude/vision)); talimat ve çıktıyla birlikte ≈ 0,02 dolar. 100 belge ≈ 2 dolar.
 - Ses: cihazda tanındığı için 0.
 - Değerlendirme çalıştırmaları (100 mesaj × 2 model × birkaç prompt sürümü): toplam 3–5 dolar; acil olmayan çalıştırmalar Batch API ile %50 indirimli yapılabilir.
 
-Bu rakamlar 1. haftanın sonunda 20 örnek mesajla ölçülen gerçek token sayılarıyla güncellenecek. Her model çağrısı `ai_runs` tablosuna yazıldığı için panelde şirket bazında aylık AI maliyeti de gösterilebilir.
+Sohbet rakamları 20 Ekim 2026'daki araç çağırma denemesinde ölçüldü (`eval/arac-cagirma-denemesi.md`); irsaliye ve değerlendirme rakamları hâlâ tahmindir. Her model çağrısı `ai_runs` tablosuna yazıldığı için panelde şirket bazında aylık AI maliyeti de gösterilebilir.
 
 **Riskli kalemler:** Supabase'in 7 günlük duraklatması tatil haftalarında demoyu bozabilir; GitHub Actions ile 3 günde bir basit sorgu atan zamanlanmış iş bunu önler. Bir ajan döngüsünün kontrolsüz tekrarı maliyeti şişirebilir; tur sınırı ve günlük token bütçesi bunu engeller.
 
-**Ticari ölçek için kaba fikir:** 20 çalışanlı, günde 100 işlem yapan bir şirket ayda yaklaşık 3.000 işlem üretir; Haiku ile bu 15–25 dolarlık model maliyeti demektir. WhatsApp'taki mesaj başı ücret ortadan kalktığı için abonelik fiyatı neredeyse yalnızca altyapı ve model maliyeti üzerine kurulur.
+**Ticari ölçek için kaba fikir:** 20 çalışanlı, günde 100 işlem yapan bir şirket ayda yaklaşık 3.000 işlem üretir; denemede ölçülen Haiku 5.5 maliyetiyle (önbelleksiz, işlem başına 0,0011–0,0013 dolar) bu ayda yaklaşık 3–4 dolarlık sohbet maliyeti demektir. Netleştirme sorusu gereken işlemler iki mesaj sürer; belge okuma ayrıca hesaplanır. WhatsApp'taki mesaj başı ücret ortadan kalktığı için abonelik fiyatı neredeyse yalnızca altyapı ve model maliyeti üzerine kurulur.
 
 ## 8 haftalık uygulama planı
 

@@ -1,0 +1,1259 @@
+{
+  "config": {
+    "id": "haiku-5-5-medium",
+    "model": "claude-haiku-5-5",
+    "effort": "medium"
+  },
+  "promptVersion": "arac-denemesi-v1",
+  "maxTokens": 4096,
+  "maxToolRounds": 5,
+  "pricesNanoUsdPerToken": {
+    "input": 100,
+    "output": 500,
+    "cacheWrite": 125,
+    "cacheRead": 10
+  },
+  "startedAt": "2026-10-20T18:24:42.176Z",
+  "finishedAt": "2026-10-20T18:30:31.877Z",
+  "warmup": {
+    "calls": [
+      {
+        "round": 1,
+        "name": "list_warehouses",
+        "input": {},
+        "isError": false
+      }
+    ],
+    "finalText": "Erişebildiğiniz depolar:\n\n1. **Merkez Depo** (depo)\n2. **Şube Depo (Kadıköy)** (şube)\n3. **Araç 1 (34 ABC 101)** (araç)",
+    "stopReason": "end_turn",
+    "toolRounds": 1,
+    "apiCalls": 2,
+    "roundLimitHit": false,
+    "usage": {
+      "input_tokens": 5289,
+      "output_tokens": 108,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    },
+    "costNanoUsd": 582900,
+    "latencyMs": 2032.3710999999994,
+    "callLatenciesMs": [
+      891.6590999999999,
+      1140.7119999999995
+    ],
+    "maxInputTokensPerCall": 2729,
+    "retries": 0,
+    "servedModels": [
+      "claude-haiku-5-5"
+    ]
+  },
+  "cases": [
+    {
+      "id": 1,
+      "category": "sorgu",
+      "text": "Merkez depoda NYM 3x2,5 kablodan kaç metre kaldı?",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "NYM 3x2,5 kablo"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "get_stock",
+          "input": {
+            "product_id": "p-01",
+            "warehouse_id": "wh-merkez"
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Merkez Depo'da NYM Kablo 3x2,5 mm²'den **850 metre** var.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9166,
+        "output_tokens": 245,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1039100,
+      "latencyMs": 4282.675800000003,
+      "callLatenciesMs": [
+        1860.1031999999996,
+        1282.1381000000001,
+        1140.434500000003
+      ],
+      "maxInputTokensPerCall": 3378,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 2,
+      "category": "sorgu",
+      "text": "16 amperlik otomatik sigortadan elimizde ne kadar var?",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "16 amper otomatik sigorta"
+          },
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "get_stock",
+          "input": {
+            "product_id": "p-05"
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "16A otomatik sigorta (C16, ABC-2001) toplam **139 adet** var:\n\n- Merkez Depo: 80 adet\n- Şube Depo (Kadıköy): 35 adet\n- Araç 1 (34 ABC 101): 24 adet",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 8727,
+        "output_tokens": 271,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1008200,
+      "latencyMs": 5538.788600000007,
+      "callLatenciesMs": [
+        1788.7589000000007,
+        1883.0652000000046,
+        1866.9645000000019
+      ],
+      "maxInputTokensPerCall": 3225,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 3,
+      "category": "sorgu",
+      "text": "Araçta 9 watt LED ampul kaç tane var?",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "9 watt LED ampul"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "get_stock",
+          "input": {
+            "product_id": "p-10",
+            "warehouse_id": "wh-arac1"
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Araçta (Araç 1, 34 ABC 101) **18 adet** LED Ampul 9W E27 var.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 8974,
+        "output_tokens": 247,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1020900,
+      "latencyMs": 5313.298900000002,
+      "callLatenciesMs": [
+        2633.8516999999993,
+        1159.4232000000047,
+        1520.0239999999976
+      ],
+      "maxInputTokensPerCall": 3288,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 4,
+      "category": "sorgu",
+      "text": "Şube depoda beyaz topraklı prizden kaç adet var?",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "beyaz topraklı priz"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "get_stock",
+          "input": {
+            "product_id": "p-08",
+            "warehouse_id": "wh-sube"
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Şube Depo (Kadıköy)'da 45 adet Topraklı Priz Beyaz var.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 8874,
+        "output_tokens": 240,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1007400,
+      "latencyMs": 5187.145699999994,
+      "callLatenciesMs": [
+        1879.207899999994,
+        1705.4193999999989,
+        1602.5184000000008
+      ],
+      "maxInputTokensPerCall": 3236,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 5,
+      "category": "giris",
+      "text": "Merkez depoya 100 metre NYM 3x2,5 kablo girişi yap.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "NYM kablo 3x2,5"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_in",
+          "input": {
+            "warehouse_id": "wh-merkez",
+            "items": [
+              {
+                "product_id": "p-01",
+                "quantity": 100
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Merkez Depo'ya 100 metre NYM Kablo 3x2,5 mm² girişi için öneri hazırladım. Onay kartındaki \"Onayla\" butonuna basınca stok güncellenecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9276,
+        "output_tokens": 354,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1104600,
+      "latencyMs": 6464.461999999985,
+      "callLatenciesMs": [
+        2154.612699999998,
+        2274.1115999999893,
+        2035.7376999999979
+      ],
+      "maxInputTokensPerCall": 3502,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 6,
+      "category": "giris",
+      "text": "Yılmaz Elektrik'ten 250 metre 2x1,5 TTR kablo geldi, merkez depoya al.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "TTR kablo 2x1,5"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_in",
+          "input": {
+            "warehouse_id": "wh-merkez",
+            "items": [
+              {
+                "product_id": "p-03",
+                "quantity": 250
+              }
+            ],
+            "party_name": "Yılmaz Elektrik"
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Merkez Depo'ya giriş önerisi hazırlandı:\n\n- **Ürün:** TTR Kablo 2x1,5 mm²\n- **Miktar:** 250 metre\n- **Tedarikçi:** Yılmaz Elektrik\n\nOnay kartında Onayla'ya basınca stok güncellenecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9372,
+        "output_tokens": 404,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1139200,
+      "latencyMs": 5236.426399999982,
+      "callLatenciesMs": [
+        1711.7170999999944,
+        1921.2369999999937,
+        1603.472299999994
+      ],
+      "maxInputTokensPerCall": 3527,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 7,
+      "category": "giris",
+      "text": "Şube depoya 40 adet 12 watt LED ampul girişi yap.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "12 watt LED ampul"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_in",
+          "input": {
+            "warehouse_id": "wh-sube",
+            "items": [
+              {
+                "product_id": "p-11",
+                "quantity": 40
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Şube Depo (Kadıköy) için 40 adet LED Ampul 12W E27 girişi hazırladım. Onay kartında \"Onayla\"ya basınca stok güncellenecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9161,
+        "output_tokens": 374,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1103100,
+      "latencyMs": 4064.5225000000064,
+      "callLatenciesMs": [
+        1351.6972999999998,
+        1397.6891000000032,
+        1315.1361000000034
+      ],
+      "maxInputTokensPerCall": 3447,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 8,
+      "category": "giris",
+      "text": "Merkez depoya 30 tane 100'lük buat ve 50 metre 16'lık spiral boru girdi.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "buat 100'lük"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "spiral boru 16'lık"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_in",
+          "input": {
+            "warehouse_id": "wh-merkez",
+            "items": [
+              {
+                "product_id": "p-14",
+                "quantity": 30
+              },
+              {
+                "product_id": "p-15",
+                "quantity": 50
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Merkez Depo'ya giriş önerisi hazırladım:\n\n- 30 adet Buat 100x100\n- 50 metre Spiral Boru 16 mm\n\nOnay kartında Onayla'ya basınca stok güncellenecek. Malın geldiği tedarikçi ya da not eklemek ister misiniz?",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 10053,
+        "output_tokens": 567,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1288800,
+      "latencyMs": 4969.375500000024,
+      "callLatenciesMs": [
+        1829.5405000000028,
+        1747.7876000000106,
+        1392.0474000000104
+      ],
+      "maxInputTokensPerCall": 3930,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 9,
+      "category": "cikis",
+      "text": "Araç deposundan 20 adet 16 amper otomatik sigorta çıkışı yap.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "16 amper otomatik sigorta"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_out",
+          "input": {
+            "warehouse_id": "wh-arac1",
+            "items": [
+              {
+                "product_id": "p-05",
+                "quantity": 20
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Araç 1 (34 ABC 101) deposundan 20 adet Otomatik Sigorta C16 16A çıkışı için öneri hazırladım. Onay kartında \"Onayla\"ya basınca stok güncellenecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9291,
+        "output_tokens": 403,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1130600,
+      "latencyMs": 5183.217100000009,
+      "callLatenciesMs": [
+        2380.768000000011,
+        1615.6496000000043,
+        1186.7994999999937
+      ],
+      "maxInputTokensPerCall": 3535,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 10,
+      "category": "cikis",
+      "text": "Merkez depodan 2 tane kaçak akım rölesi çıkışı yap, Ataşehir şantiyesine gitti.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "kaçak akım rölesi"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_out",
+          "input": {
+            "warehouse_id": "wh-merkez",
+            "items": [
+              {
+                "product_id": "p-07",
+                "quantity": 2
+              }
+            ],
+            "note": "Ataşehir şantiyesi"
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Merkez Depo'dan 2 adet Kaçak Akım Rölesi 40A 30mA için çıkış önerisi hazırladım. Not: Ataşehir şantiyesi. Onay kartında \"Onayla\"ya basınca stok düşecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 8914,
+        "output_tokens": 400,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1091400,
+      "latencyMs": 6615.960899999976,
+      "callLatenciesMs": [
+        2125.385799999989,
+        2360.7909999999974,
+        2129.78409999999
+      ],
+      "maxInputTokensPerCall": 3327,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 11,
+      "category": "cikis",
+      "text": "Şube depodan 15 adet krem topraklı priz düş.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "krem topraklı priz"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_out",
+          "input": {
+            "warehouse_id": "wh-sube",
+            "items": [
+              {
+                "product_id": "p-09",
+                "quantity": 15
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Şube Depo (Kadıköy) için 15 adet Topraklı Priz Krem çıkış önerisi hazırladım. Onay kartında Onayla'ya basınca stok düşer.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9071,
+        "output_tokens": 398,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1106100,
+      "latencyMs": 3979.7291999999725,
+      "callLatenciesMs": [
+        1283.0842999999877,
+        1488.2917999999772,
+        1208.3531000000075
+      ],
+      "maxInputTokensPerCall": 3414,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 12,
+      "category": "cikis",
+      "text": "Araçtan 3 elektrik bandı ve 10 metre 3x2,5 TTR kablo kullandım.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "elektrik bandı"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "TTR kablo 3x2,5"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_stock_out",
+          "input": {
+            "warehouse_id": "wh-arac1",
+            "items": [
+              {
+                "product_id": "p-18",
+                "quantity": 3
+              },
+              {
+                "product_id": "p-04",
+                "quantity": 10
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Araç 1 (34 ABC 101) deposundan çıkış önerisi hazırladım:\n\n- 3 adet Elektrik Bandı 19 mm\n- 10 metre TTR Kablo 3x2,5 mm²\n\nOnay kartında Onayla'ya basınca stok düşecek. Bir şantiye adı eklemek ister misin?",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9756,
+        "output_tokens": 557,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1254100,
+      "latencyMs": 7590.690000000002,
+      "callLatenciesMs": [
+        2400.9435999999987,
+        2716.767900000006,
+        2472.9784999999974
+      ],
+      "maxInputTokensPerCall": 3794,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 13,
+      "category": "transfer",
+      "text": "Merkez depodan şube deposuna 50 adet beyaz topraklı priz transfer et.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "beyaz topraklı priz"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_transfer",
+          "input": {
+            "from_warehouse_id": "wh-merkez",
+            "to_warehouse_id": "wh-sube",
+            "items": [
+              {
+                "product_id": "p-08",
+                "quantity": 50
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Transfer önerisi hazır, onay kartında:\n\n- **Ürün:** Topraklı Priz Beyaz (ABC-3001), 50 adet\n- **Gönderen:** Merkez Depo\n- **Alan:** Şube Depo (Kadıköy)\n\nStok, kartta Onayla'ya basınca değişecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9035,
+        "output_tokens": 400,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1103500,
+      "latencyMs": 5041.689100000018,
+      "callLatenciesMs": [
+        1911.107799999998,
+        1563.2018000000098,
+        1567.37950000001
+      ],
+      "maxInputTokensPerCall": 3390,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 14,
+      "category": "transfer",
+      "text": "Şubeden araca 10 tane 25 amper sigorta aktar.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "25 amper sigorta"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_transfer",
+          "input": {
+            "from_warehouse_id": "wh-sube",
+            "to_warehouse_id": "wh-arac1",
+            "items": [
+              {
+                "product_id": "p-06",
+                "quantity": 10
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Transfer önerisi hazır, onay kartında:\n\n- **Kaynak:** Şube Depo (Kadıköy)\n- **Hedef:** Araç 1 (34 ABC 101)\n- **Ürün:** 10 adet Otomatik Sigorta C25 25A\n\nStok, kartta Onayla'ya basınca değişecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9323,
+        "output_tokens": 468,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1166300,
+      "latencyMs": 6817.289799999999,
+      "callLatenciesMs": [
+        2173.844699999987,
+        2428.571600000025,
+        2214.873499999987
+      ],
+      "maxInputTokensPerCall": 3561,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 15,
+      "category": "transfer",
+      "text": "Araçtaki 5 kablo kanalını merkez depoya geri bıraktım.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "kablo kanalı"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        },
+        {
+          "round": 2,
+          "name": "propose_transfer",
+          "input": {
+            "from_warehouse_id": "wh-arac1",
+            "to_warehouse_id": "wh-merkez",
+            "items": [
+              {
+                "product_id": "p-13",
+                "quantity": 5
+              }
+            ]
+          },
+          "isError": false
+        }
+      ],
+      "finalText": "Transfer önerisi hazır: Araç 1 (34 ABC 101) → Merkez Depo, 5 adet Kablo Kanalı 40x16 (2 m). Stok, kartta Onayla'ya basınca değişecek.",
+      "stopReason": "end_turn",
+      "toolRounds": 2,
+      "apiCalls": 3,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 9411,
+        "output_tokens": 464,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 1173100,
+      "latencyMs": 6084.6651999999885,
+      "callLatenciesMs": [
+        2016.0553000000073,
+        2323.630200000014,
+        1744.9796999999671
+      ],
+      "maxInputTokensPerCall": 3615,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 16,
+      "category": "belirsiz",
+      "text": "Merkez depoya 100 metre NYM kablo girişi yap.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "NYM kablo"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        }
+      ],
+      "finalText": "Merkez Depo'ya giriş için hangi NYM kablosu olduğunu seçer misin?\n\n1. NYM Kablo 3x2,5 mm² (ABC-1001)\n2. NYM Kablo 3x1,5 mm² (ABC-1002)\n\nSeçimini yaptıktan sonra 100 metrelik giriş önerisini hazırlarım.",
+      "stopReason": "end_turn",
+      "toolRounds": 1,
+      "apiCalls": 2,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 5796,
+        "output_tokens": 323,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 741100,
+      "latencyMs": 3867.428500000038,
+      "callLatenciesMs": [
+        1686.0800000000163,
+        2181.348500000022
+      ],
+      "maxInputTokensPerCall": 3221,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 17,
+      "category": "belirsiz",
+      "text": "Araçtan 10 adet LED ampul çıkışı yap.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "LED ampul"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        }
+      ],
+      "finalText": "Araç 1 (34 ABC 101) için hangi LED ampul? İki seçenek var:\n\n1. LED Ampul 9W E27 (ABC-4001)\n2. LED Ampul 12W E27 (ABC-4002)\n\nHangisinden 10 adet çıkış yapayım?",
+      "stopReason": "end_turn",
+      "toolRounds": 1,
+      "apiCalls": 2,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 5724,
+        "output_tokens": 313,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 728900,
+      "latencyMs": 4885.184999999998,
+      "callLatenciesMs": [
+        2514.9998999999953,
+        2370.1851000000024
+      ],
+      "maxInputTokensPerCall": 3150,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 18,
+      "category": "belirsiz",
+      "text": "Merkez depodan araca 30 metre TTR kablo aktar.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "TTR kablo"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        }
+      ],
+      "finalText": "Merkez Depo'dan Araç 1'e transfer için iki TTR kablo var, hangisi?\n\n1. **TTR Kablo 2x1,5 mm²** (ABC-1003)\n2. **TTR Kablo 3x2,5 mm²** (ABC-1004)\n\nHangisini aktarayım? Miktar 30 metre olarak hazırlanacak.",
+      "stopReason": "end_turn",
+      "toolRounds": 1,
+      "apiCalls": 2,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 5763,
+        "output_tokens": 303,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 727800,
+      "latencyMs": 3326.1287999999477,
+      "callLatenciesMs": [
+        1597.2251999999862,
+        1728.9035999999614
+      ],
+      "maxInputTokensPerCall": 3188,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 19,
+      "category": "belirsiz",
+      "text": "25 adet 16 amper otomatik sigorta çıkışı yap.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "16 amper otomatik sigorta"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        }
+      ],
+      "finalText": "16 amperlik otomatik sigorta olarak **Otomatik Sigorta C16 16A** (ABC-2001) bulundu. Hangi depodan çıkış yapılacak?\n\n1. Merkez Depo\n2. Şube Depo (Kadıköy)\n3. Araç 1 (34 ABC 101)",
+      "stopReason": "end_turn",
+      "toolRounds": 1,
+      "apiCalls": 2,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 5797,
+        "output_tokens": 364,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 761700,
+      "latencyMs": 3499.6893000000855,
+      "callLatenciesMs": [
+        1625.3783000000403,
+        1874.3110000000452
+      ],
+      "maxInputTokensPerCall": 3221,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    },
+    {
+      "id": 20,
+      "category": "belirsiz",
+      "text": "Şube depoya beyaz topraklı priz girişi yap.",
+      "calls": [
+        {
+          "round": 1,
+          "name": "search_products",
+          "input": {
+            "query": "beyaz topraklı priz"
+          },
+          "isError": false
+        },
+        {
+          "round": 1,
+          "name": "list_warehouses",
+          "input": {},
+          "isError": false
+        }
+      ],
+      "finalText": "Ürün ve depo bulundu. Tek eksik: kaç adet girileceği.\n\n- **Ürün:** Topraklı Priz Beyaz (ABC-3001), birim: adet\n- **Depo:** Şube Depo (Kadıköy)\n\nKaç adet giriş yapayım? İsterseniz tedarikçi (cari) adı ve not (ör. şantiye adı) da ekleyebilirim.",
+      "stopReason": "end_turn",
+      "toolRounds": 1,
+      "apiCalls": 2,
+      "roundLimitHit": false,
+      "usage": {
+        "input_tokens": 5669,
+        "output_tokens": 301,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "costNanoUsd": 717400,
+      "latencyMs": 4742.2828000000445,
+      "callLatenciesMs": [
+        2789.126600000018,
+        1953.1562000000267
+      ],
+      "maxInputTokensPerCall": 3096,
+      "retries": 0,
+      "servedModels": [
+        "claude-haiku-5-5"
+      ],
+      "grade": {
+        "firstTool": true,
+        "tool": true,
+        "params": true,
+        "notes": []
+      }
+    }
+  ]
+}
