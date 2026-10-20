@@ -28,7 +28,8 @@
             "com.google.android.tts"
           ]
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "router": {},

@@ -6,6 +6,16 @@ Bundan sonra günlük geliştirmede yalnızca bilgisayardaki Metro sunucusu çal
 yerel bir modül eklendiğinde ya da `app.json` içindeki yerel ayarlar değiştiğinde gerekir.
 
 Ayarlar `apps/mobile/eas.json` (profil: `development`) ve `apps/mobile/app.json` dosyalarındadır.
+`apps/mobile/app.config.js`, `app.json`'u temel alır ve Supabase adresiyle anon anahtarını depo kökündeki
+`.env` dosyasından (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`) ekler. Development
+build bu değerleri Metro'dan aldığı için build'e gömülmez; `.env` değişince yalnızca Metro yeniden başlatılır.
+
+Yeni build gereken değişiklikler:
+
+| Değişiklik | Neden |
+| --- | --- |
+| `expo-speech-recognition` (1. hafta) | Ses tanıma yerel modülü |
+| `expo-secure-store` (#16) | Oturum token'larını Android Keystore'da saklayan yerel modül |
 
 ## 1. Bir kereye mahsus hazırlık
 

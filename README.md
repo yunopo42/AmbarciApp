@@ -37,7 +37,7 @@ Tasarımın temel kuralları:
 | API | NestJS, REST `/v1`, Swagger | `GET /v1/health`, Supabase JWT doğrulaması, `GET /v1/auth/me`; Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog ve stok tabloları (10 tablo), RLS politikaları ve iki şirketli izolasyon testi |
-| Kimlik doğrulama | Supabase Auth | API'de token doğrulama var; web ve mobil giriş ekranları planlandı (2. hafta) |
+| Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |
 | Asistan | Claude API | Planlandı (4. hafta) |
 
 Ayrıntılı mimari ve teknoloji seçimlerinin gerekçeleri: [docs/teknik-arastirma.md](docs/teknik-arastirma.md).
@@ -149,6 +149,8 @@ Demo şirketine giriş yapabilmek için önce Supabase panelinde (**Authenticati
 ### Mobil uygulama
 
 Mobil uygulama yerel modül kullandığı için Expo Go'da çalışmaz; telefona kurulan bir development build gerekir. Build alma, telefona kurma ve Metro'ya bağlanma adımları: [docs/mobil-development-build.md](docs/mobil-development-build.md).
+
+Web ve mobilde giriş yapabilmek için `.env` dosyasında `NEXT_PUBLIC_SUPABASE_*` ve `EXPO_PUBLIC_SUPABASE_*` değerleri dolu olmalı (`.env.example`) ve Supabase Auth'ta bir kullanıcı bulunmalı. Kullanıcıyı demo şirketine bağlamak için: [Veritabanı komutları](#veritabanı-komutları).
 
 ## Yayın
 

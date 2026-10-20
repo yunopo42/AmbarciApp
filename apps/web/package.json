@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint app components",
+    "lint": "eslint app components lib proxy.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@ambarci/shared": "workspace:*",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "catalog:",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
