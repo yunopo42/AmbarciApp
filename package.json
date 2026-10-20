@@ -10,7 +10,7 @@
     "dev": "pnpm build:shared && pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "build:shared": "pnpm --filter @ambarci/shared build",
-    "lint": "pnpm -r lint",
+    "lint": "pnpm build:shared && pnpm -r lint",
     "typecheck": "pnpm build:shared && pnpm -r typecheck",
     "test": "pnpm build:shared && pnpm -r test",
     "db:check": "pnpm --filter @ambarci/db check",
