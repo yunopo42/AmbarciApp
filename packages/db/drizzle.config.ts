@@ -18,7 +18,8 @@ if (!databaseUrl) {
 
 export default defineConfig({
   dialect: 'postgresql',
-  schema: './schema',
+  // Tek giriş noktası: aynı tablo hem kendi dosyasından hem index'ten iki kez okunmasın.
+  schema: './schema/index.ts',
   out: './migrations',
   dbCredentials: { url: databaseUrl },
   // Supabase'in hazır rolleri (anon, authenticated, service_role) RLS politikalarında

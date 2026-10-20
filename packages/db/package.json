@@ -7,14 +7,16 @@
     "check": "node scripts/check-connection.ts",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
-    "lint": "eslint schema scripts drizzle.config.ts --no-error-on-unmatched-pattern",
+    "test:db": "vitest run",
+    "lint": "eslint schema scripts test drizzle.config.ts vitest.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "drizzle-kit": "^0.31.11",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^5.0.3"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
