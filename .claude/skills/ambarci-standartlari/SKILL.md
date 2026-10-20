@@ -50,7 +50,7 @@ Haftalık rapor şablonu için: `references/haftalik-rapor-sablonu.md`
 | Backend | NestJS, REST `/v1`, `@nestjs/swagger`, SSE | GraphQL, WebSocket |
 | Veri | PostgreSQL (Supabase), Drizzle ORM, drizzle-kit migration | Prisma, TypeORM, ham `pg` sorgusunun dağınık kullanımı |
 | Kuyruk | pg-boss + `outbox_events` | Redis, BullMQ |
-| LLM | `@anthropic-ai/sdk`; sohbet Haiku 4.5, belge Sonnet 5.5 (model adları env'de) | LangChain ve benzeri çerçeveler |
+| LLM | `@anthropic-ai/sdk`; sohbet Haiku 5.5 (`effort: low`), belge Sonnet 5.5 (model adları ve effort env'de; ADR-001) | LangChain ve benzeri çerçeveler |
 | Test | Vitest, Supertest, Playwright | Jest |
 
 Yeni bağımlılık veya yığın değişikliği gerekiyorsa önce `docs/kararlar/ADR-XXX-konu.md` taslağı yaz: bağlam, seçenekler, karar, sonuçlar. Kullanıcı onaylamadan ekleme.
