@@ -15,7 +15,8 @@
     "test": "pnpm build:shared && pnpm -r test",
     "db:check": "pnpm --filter @ambarci/db check",
     "db:generate": "pnpm --filter @ambarci/db generate",
-    "db:migrate": "pnpm --filter @ambarci/db migrate"
+    "db:migrate": "pnpm --filter @ambarci/db migrate",
+    "db:test": "pnpm --filter @ambarci/db test:db"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

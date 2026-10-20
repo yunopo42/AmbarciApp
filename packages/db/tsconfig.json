@@ -8,7 +8,9 @@
     // Betikler Node'un tip silme özelliğiyle doğrudan çalıştırılır (node scripts/x.ts);
     // bu yüzden yalnızca silinebilen TypeScript sözdizimine izin verilir.
     "erasableSyntaxOnly": true,
+    // Göreli importlar .ts uzantısıyla yazılır; drizzle-kit, Node ve Vitest dosyayı doğrudan bulur.
+    "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["schema", "scripts", "drizzle.config.ts"]
+  "include": ["schema", "scripts", "test", "drizzle.config.ts", "vitest.config.ts"]
 }

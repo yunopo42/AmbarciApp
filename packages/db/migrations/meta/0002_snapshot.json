@@ -1,0 +1,1299 @@
+{
+  "id": "a8bdafdf-3c26-4687-ab6b-94649ae0d62e",
+  "prevId": "3856c3ec-333c-41d8-86d4-f812bc7af577",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.parties": {
+      "name": "parties",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "party_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tax_id": {
+          "name": "tax_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "parties_org_name_idx": {
+          "name": "parties_org_name_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "parties_organization_id_organizations_id_fk": {
+          "name": "parties_organization_id_organizations_id_fk",
+          "tableFrom": "parties",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "parties_org_tax_id_key": {
+          "name": "parties_org_tax_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "tax_id"
+          ]
+        }
+      },
+      "policies": {
+        "parties_select_member": {
+          "name": "parties_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"parties\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "parties_name_not_blank": {
+          "name": "parties_name_not_blank",
+          "value": "length(trim(\"parties\".\"name\")) > 0"
+        },
+        "parties_tax_id_format": {
+          "name": "parties_tax_id_format",
+          "value": "\"parties\".\"tax_id\" ~ '^[0-9]{10,11}$'"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.product_aliases": {
+      "name": "product_aliases",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "alias": {
+          "name": "alias",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "alias_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'MANUAL'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "product_aliases_org_alias_idx": {
+          "name": "product_aliases_org_alias_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "alias",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "product_aliases_product_fk": {
+          "name": "product_aliases_product_fk",
+          "tableFrom": "product_aliases",
+          "tableTo": "products",
+          "columnsFrom": [
+            "organization_id",
+            "product_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "product_aliases_product_alias_key": {
+          "name": "product_aliases_product_alias_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "product_id",
+            "alias"
+          ]
+        }
+      },
+      "policies": {
+        "product_aliases_select_member": {
+          "name": "product_aliases_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"product_aliases\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "product_aliases_alias_not_blank": {
+          "name": "product_aliases_alias_not_blank",
+          "value": "length(trim(\"product_aliases\".\"alias\")) > 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.product_units": {
+      "name": "product_units",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "factor": {
+          "name": "factor",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "product_units_product_fk": {
+          "name": "product_units_product_fk",
+          "tableFrom": "product_units",
+          "tableTo": "products",
+          "columnsFrom": [
+            "organization_id",
+            "product_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "product_units_product_unit_key": {
+          "name": "product_units_product_unit_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "product_id",
+            "unit"
+          ]
+        },
+        "product_units_org_barcode_key": {
+          "name": "product_units_org_barcode_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "barcode"
+          ]
+        }
+      },
+      "policies": {
+        "product_units_select_member": {
+          "name": "product_units_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"product_units\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "product_units_unit_not_blank": {
+          "name": "product_units_unit_not_blank",
+          "value": "length(trim(\"product_units\".\"unit\")) > 0"
+        },
+        "product_units_factor_positive": {
+          "name": "product_units_factor_positive",
+          "value": "\"product_units\".\"factor\" > 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.products": {
+      "name": "products",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sku": {
+          "name": "sku",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_unit": {
+          "name": "base_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "min_stock": {
+          "name": "min_stock",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "products_organization_id_organizations_id_fk": {
+          "name": "products_organization_id_organizations_id_fk",
+          "tableFrom": "products",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "products_org_sku_key": {
+          "name": "products_org_sku_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "sku"
+          ]
+        },
+        "products_org_barcode_key": {
+          "name": "products_org_barcode_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "barcode"
+          ]
+        },
+        "products_org_id_key": {
+          "name": "products_org_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "products_select_member": {
+          "name": "products_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"products\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "products_sku_not_blank": {
+          "name": "products_sku_not_blank",
+          "value": "length(trim(\"products\".\"sku\")) > 0"
+        },
+        "products_name_not_blank": {
+          "name": "products_name_not_blank",
+          "value": "length(trim(\"products\".\"name\")) > 0"
+        },
+        "products_min_stock_non_negative": {
+          "name": "products_min_stock_non_negative",
+          "value": "\"products\".\"min_stock\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.inventory": {
+      "name": "inventory",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "warehouse_id": {
+          "name": "warehouse_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "average_cost": {
+          "name": "average_cost",
+          "type": "numeric(14, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "inventory_org_product_idx": {
+          "name": "inventory_org_product_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "inventory_warehouse_fk": {
+          "name": "inventory_warehouse_fk",
+          "tableFrom": "inventory",
+          "tableTo": "warehouses",
+          "columnsFrom": [
+            "organization_id",
+            "warehouse_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inventory_product_fk": {
+          "name": "inventory_product_fk",
+          "tableFrom": "inventory",
+          "tableTo": "products",
+          "columnsFrom": [
+            "organization_id",
+            "product_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "inventory_org_warehouse_product_key": {
+          "name": "inventory_org_warehouse_product_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "warehouse_id",
+            "product_id"
+          ]
+        }
+      },
+      "policies": {
+        "inventory_select_member": {
+          "name": "inventory_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"inventory\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "inventory_quantity_non_negative": {
+          "name": "inventory_quantity_non_negative",
+          "value": "\"inventory\".\"quantity\" >= 0"
+        },
+        "inventory_average_cost_non_negative": {
+          "name": "inventory_average_cost_non_negative",
+          "value": "\"inventory\".\"average_cost\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.invitations": {
+      "name": "invitations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "organization_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "used_by": {
+          "name": "used_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "invitations_organization_id_idx": {
+          "name": "invitations_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "invitations_created_by_idx": {
+          "name": "invitations_created_by_idx",
+          "columns": [
+            {
+              "expression": "created_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "invitations_used_by_idx": {
+          "name": "invitations_used_by_idx",
+          "columns": [
+            {
+              "expression": "used_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "invitations_organization_id_organizations_id_fk": {
+          "name": "invitations_organization_id_organizations_id_fk",
+          "tableFrom": "invitations",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "invitations_created_by_users_id_fk": {
+          "name": "invitations_created_by_users_id_fk",
+          "tableFrom": "invitations",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "invitations_used_by_users_id_fk": {
+          "name": "invitations_used_by_users_id_fk",
+          "tableFrom": "invitations",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "used_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "invitations_code_key": {
+          "name": "invitations_code_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
+      "policies": {
+        "invitations_select_admin": {
+          "name": "invitations_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"invitations\".\"organization_id\" in (select private.admin_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "invitations_code_min_length": {
+          "name": "invitations_code_min_length",
+          "value": "char_length(\"invitations\".\"code\") >= 8"
+        },
+        "invitations_used_by_requires_used_at": {
+          "name": "invitations_used_by_requires_used_at",
+          "value": "\"invitations\".\"used_by\" is null or \"invitations\".\"used_at\" is not null"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.organization_users": {
+      "name": "organization_users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "organization_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'EMPLOYEE'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "organization_users_user_id_idx": {
+          "name": "organization_users_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "organization_users_organization_id_organizations_id_fk": {
+          "name": "organization_users_organization_id_organizations_id_fk",
+          "tableFrom": "organization_users",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "organization_users_user_id_users_id_fk": {
+          "name": "organization_users_user_id_users_id_fk",
+          "tableFrom": "organization_users",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "organization_users_org_user_key": {
+          "name": "organization_users_org_user_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "user_id"
+          ]
+        },
+        "organization_users_org_id_key": {
+          "name": "organization_users_org_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "organization_users_select_member": {
+          "name": "organization_users_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"organization_users\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.organizations": {
+      "name": "organizations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "settings": {
+          "name": "settings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "organizations_select_member": {
+          "name": "organizations_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"organizations\".\"id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "organizations_name_not_blank": {
+          "name": "organizations_name_not_blank",
+          "value": "length(trim(\"organizations\".\"name\")) > 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.user_warehouse_access": {
+      "name": "user_warehouse_access",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_user_id": {
+          "name": "organization_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "warehouse_id": {
+          "name": "warehouse_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_warehouse_access_warehouse_idx": {
+          "name": "user_warehouse_access_warehouse_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "warehouse_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_warehouse_access_member_fk": {
+          "name": "user_warehouse_access_member_fk",
+          "tableFrom": "user_warehouse_access",
+          "tableTo": "organization_users",
+          "columnsFrom": [
+            "organization_id",
+            "organization_user_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_warehouse_access_warehouse_fk": {
+          "name": "user_warehouse_access_warehouse_fk",
+          "tableFrom": "user_warehouse_access",
+          "tableTo": "warehouses",
+          "columnsFrom": [
+            "organization_id",
+            "warehouse_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "user_warehouse_access_pkey": {
+          "name": "user_warehouse_access_pkey",
+          "columns": [
+            "organization_id",
+            "organization_user_id",
+            "warehouse_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "user_warehouse_access_select_member": {
+          "name": "user_warehouse_access_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_warehouse_access\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.warehouses": {
+      "name": "warehouses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "warehouse_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'WAREHOUSE'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "warehouses_organization_id_organizations_id_fk": {
+          "name": "warehouses_organization_id_organizations_id_fk",
+          "tableFrom": "warehouses",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "warehouses_org_name_key": {
+          "name": "warehouses_org_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "name"
+          ]
+        },
+        "warehouses_org_id_key": {
+          "name": "warehouses_org_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "warehouses_select_member": {
+          "name": "warehouses_select_member",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"warehouses\".\"organization_id\" in (select private.user_organization_ids())"
+        }
+      },
+      "checkConstraints": {
+        "warehouses_name_not_blank": {
+          "name": "warehouses_name_not_blank",
+          "value": "length(trim(\"warehouses\".\"name\")) > 0"
+        }
+      },
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {
+    "public.alias_source": {
+      "name": "alias_source",
+      "schema": "public",
+      "values": [
+        "MANUAL",
+        "LEARNED"
+      ]
+    },
+    "public.organization_role": {
+      "name": "organization_role",
+      "schema": "public",
+      "values": [
+        "ADMIN",
+        "EMPLOYEE"
+      ]
+    },
+    "public.party_type": {
+      "name": "party_type",
+      "schema": "public",
+      "values": [
+        "SUPPLIER",
+        "CUSTOMER"
+      ]
+    },
+    "public.warehouse_type": {
+      "name": "warehouse_type",
+      "schema": "public",
+      "values": [
+        "WAREHOUSE",
+        "BRANCH",
+        "VEHICLE"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

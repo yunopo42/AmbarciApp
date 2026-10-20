@@ -24,20 +24,20 @@ Mobil (Expo) ──┐
 Web (Next.js) ─┘                    └──────────> Claude API
 ```
 
-Tasarımın temel kuralları (henüz kodlanmadı):
+Tasarımın temel kuralları:
 
-- Asistan yalnızca okuma ve öneri araçlarını çağırabilecek; stok yazan bir aracı olmayacak. Öneri, onay bekleyen bir işlem kaydı oluşturacak.
-- Stok yalnızca kullanıcı onayladığında, onay uç noktasında tek bir veritabanı transaction'ıyla değişecek.
-- Her sorgu şirket kimliğiyle sınırlanacak; veritabanında ayrıca RLS politikaları olacak.
+- Asistan yalnızca okuma ve öneri araçlarını çağırabilecek; stok yazan bir aracı olmayacak. Öneri, onay bekleyen bir işlem kaydı oluşturacak. *(Henüz kodlanmadı.)*
+- Stok yalnızca kullanıcı onayladığında, onay uç noktasında tek bir veritabanı transaction'ıyla değişecek. *(Henüz kodlanmadı.)*
+- Şirket verisi birbirinden ayrılır. Veritabanında RLS politikaları ve bileşik yabancı anahtarlar var; API sorgularındaki şirket filtresi uç noktalarla birlikte gelecek. Ayrıntı: [docs/veritabani.md](docs/veritabani.md).
 
 | Katman | Teknoloji | Durum |
 | --- | --- | --- |
 | Mobil | Expo, Expo Router | İskelet, development build, ses tanıma deneme ekranı |
 | Web paneli | Next.js, Tailwind | İskelet, API durum kartı; Vercel'de yayında |
-| API | NestJS, REST `/v1`, Swagger | Yalnızca `GET /v1/health`; Render'da yayında |
-| Ortak şemalar | Zod | Sağlık cevabı şeması |
-| Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Supabase projesi ve bağlantı hazır; şema yazılıyor (2. hafta) |
-| Kimlik doğrulama | Supabase Auth | Planlandı (2. hafta) |
+| API | NestJS, REST `/v1`, Swagger | `GET /v1/health`, Supabase JWT doğrulaması, `GET /v1/auth/me`; Render'da yayında |
+| Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
+| Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog ve stok tabloları (10 tablo), RLS politikaları ve iki şirketli izolasyon testi |
+| Kimlik doğrulama | Supabase Auth | API'de token doğrulama var; web ve mobil giriş ekranları planlandı (2. hafta) |
 | Asistan | Claude API | Planlandı (4. hafta) |
 
 Ayrıntılı mimari ve teknoloji seçimlerinin gerekçeleri: [docs/teknik-arastirma.md](docs/teknik-arastirma.md).
@@ -51,7 +51,7 @@ apps/
   mobile/          Expo saha uygulaması
 packages/
   shared/          Ortak Zod şemaları ve tipler
-  db/              Drizzle şeması ve migration'lar (şema henüz yok)
+  db/              Drizzle şeması, migration'lar ve RLS testleri
   api-client/      OpenAPI'den üretilecek istemci (henüz boş)
 eval/              Deneme ve değerlendirme sonuçları
 docs/
@@ -141,6 +141,7 @@ pnpm build
 | `pnpm db:check` | Veritabanına bağlanmayı dener |
 | `pnpm db:generate` | `packages/db/schema` içindeki şemadan yeni migration üretir |
 | `pnpm db:migrate` | Uygulanmamış migration'ları veritabanına uygular |
+| `pnpm db:test` | İki şirketli izolasyon testini gerçek veritabanında çalıştırır; her test kendi verisini geri alır |
 
 ### Mobil uygulama
 

@@ -1,0 +1,10 @@
+CREATE POLICY "parties_select_member" ON "parties" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("parties"."organization_id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "product_aliases_select_member" ON "product_aliases" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("product_aliases"."organization_id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "product_units_select_member" ON "product_units" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("product_units"."organization_id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "products_select_member" ON "products" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("products"."organization_id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "inventory_select_member" ON "inventory" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("inventory"."organization_id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "invitations_select_admin" ON "invitations" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("invitations"."organization_id" in (select private.admin_organization_ids()));--> statement-breakpoint
+CREATE POLICY "organization_users_select_member" ON "organization_users" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("organization_users"."organization_id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "organizations_select_member" ON "organizations" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("organizations"."id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "user_warehouse_access_select_member" ON "user_warehouse_access" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("user_warehouse_access"."organization_id" in (select private.user_organization_ids()));--> statement-breakpoint
+CREATE POLICY "warehouses_select_member" ON "warehouses" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("warehouses"."organization_id" in (select private.user_organization_ids()));
