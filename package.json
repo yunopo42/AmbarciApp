@@ -16,6 +16,7 @@
     "db:check": "pnpm --filter @ambarci/db check",
     "db:generate": "pnpm --filter @ambarci/db generate",
     "db:migrate": "pnpm --filter @ambarci/db migrate",
+    "db:seed": "pnpm --filter @ambarci/db seed",
     "db:test": "pnpm --filter @ambarci/db test:db"
   },
   "devDependencies": {

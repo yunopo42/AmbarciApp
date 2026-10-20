@@ -12,5 +12,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["schema", "scripts", "test", "drizzle.config.ts", "vitest.config.ts"]
+  "include": ["schema", "scripts", "seed", "test", "drizzle.config.ts", "vitest.config.ts"]
 }

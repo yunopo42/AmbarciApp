@@ -7,8 +7,9 @@
     "check": "node scripts/check-connection.ts",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
+    "seed": "node scripts/seed.ts",
     "test:db": "vitest run",
-    "lint": "eslint schema scripts test drizzle.config.ts vitest.config.ts",
+    "lint": "eslint schema scripts seed test drizzle.config.ts vitest.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

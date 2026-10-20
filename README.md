@@ -141,7 +141,10 @@ pnpm build
 | `pnpm db:check` | Veritabanına bağlanmayı dener |
 | `pnpm db:generate` | `packages/db/schema` içindeki şemadan yeni migration üretir |
 | `pnpm db:migrate` | Uygulanmamış migration'ları veritabanına uygular |
-| `pnpm db:test` | İki şirketli izolasyon testini gerçek veritabanında çalıştırır; her test kendi verisini geri alır |
+| `pnpm db:seed` | Demo verisini (ABC Elektrik, Kuzey Tesisat) yükler; tekrar çalıştırmak kayıt çoğaltmaz |
+| `pnpm db:test` | İzolasyon ve seed testlerini gerçek veritabanında çalıştırır; her test kendi verisini geri alır |
+
+Demo şirketine giriş yapabilmek için önce Supabase panelinde (**Authentication → Users**) kendine bir kullanıcı oluştur, e-postasını `.env` dosyasındaki `SEED_ADMIN_EMAIL` satırına yaz ve `pnpm db:seed` komutunu yeniden çalıştır. Bu kullanıcı ABC Elektrik'e yönetici olarak bağlanır.
 
 ### Mobil uygulama
 
