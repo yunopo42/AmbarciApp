@@ -11,9 +11,11 @@ catalog:
   typescript: ~6.0.3
   zod: ^4.6.5
 
-# Bağımlılıkların kurulum betikleri. İkisine de gerek yok:
-# @scarf/scarf yalnızca kullanım istatistiği gönderir; unrs-resolver'ın yerel
-# ikili dosyası zaten platforma özel opsiyonel paketle kurulur.
+# Bağımlılıkların kurulum betikleri. Hiçbirine gerek yok:
+# @scarf/scarf yalnızca kullanım istatistiği gönderir; unrs-resolver'ın ve
+# esbuild'in (drizzle-kit üzerinden gelir) yerel ikili dosyası zaten platforma özel
+# opsiyonel paketle kurulur.
 allowBuilds:
   '@scarf/scarf': false
+  esbuild: false
   unrs-resolver: false

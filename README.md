@@ -36,7 +36,7 @@ Tasarımın temel kuralları (henüz kodlanmadı):
 | Web paneli | Next.js, Tailwind | İskelet, API durum kartı; Vercel'de yayında |
 | API | NestJS, REST `/v1`, Swagger | Yalnızca `GET /v1/health`; Render'da yayında |
 | Ortak şemalar | Zod | Sağlık cevabı şeması |
-| Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Planlandı (2. hafta) |
+| Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Supabase projesi ve bağlantı hazır; şema yazılıyor (2. hafta) |
 | Kimlik doğrulama | Supabase Auth | Planlandı (2. hafta) |
 | Asistan | Claude API | Planlandı (4. hafta) |
 
@@ -51,7 +51,7 @@ apps/
   mobile/          Expo saha uygulaması
 packages/
   shared/          Ortak Zod şemaları ve tipler
-  db/              Drizzle şeması ve migration'lar (henüz boş)
+  db/              Drizzle şeması ve migration'lar (şema henüz yok)
   api-client/      OpenAPI'den üretilecek istemci (henüz boş)
 eval/              Deneme ve değerlendirme sonuçları
 docs/
@@ -84,7 +84,7 @@ Gerekenler: Node.js 24 (sürüm `.nvmrc` dosyasında) ve Corepack. pnpm sürüm�
    cp .env.example .env
    ```
 
-   API depo kökündeki `.env` dosyasını okur. Web paneli bu dosyadan yalnızca `NEXT_PUBLIC_` ile başlayan değişkenleri alır. Şu an yalnızca `NEXT_PUBLIC_API_URL` ve `WEB_ORIGIN` kullanılıyor; örnek dosyadaki yerel değerler olduğu gibi çalışır. Supabase ve Claude değişkenleri ilgili işler bitince kullanılmaya başlanacak. `.env` dosyası commit edilmez.
+   API depo kökündeki `.env` dosyasını okur. Web paneli bu dosyadan yalnızca `NEXT_PUBLIC_` ile başlayan değişkenleri alır. Uygulamalar şu an yalnızca `NEXT_PUBLIC_API_URL` ve `WEB_ORIGIN` değişkenlerini kullanıyor; örnek dosyadaki yerel değerler olduğu gibi çalışır. `DATABASE_URL` yalnızca veritabanı komutlarında kullanılıyor (aşağıda). Supabase ve Claude değişkenleri ilgili işler bitince uygulamalarda kullanılmaya başlanacak. `.env` dosyası commit edilmez.
 
 3. Geliştirme sunucularını başlat:
 
@@ -131,6 +131,16 @@ pnpm test
 ```bash
 pnpm build
 ```
+
+### Veritabanı komutları
+
+`.env` içindeki `DATABASE_URL` ile çalışır.
+
+| Komut | Ne yapar |
+| --- | --- |
+| `pnpm db:check` | Veritabanına bağlanmayı dener |
+| `pnpm db:generate` | `packages/db/schema` içindeki şemadan yeni migration üretir |
+| `pnpm db:migrate` | Uygulanmamış migration'ları veritabanına uygular |
 
 ### Mobil uygulama
 

@@ -13,8 +13,30 @@ aşağıdaki adımlar elle yapılır.
 | Vercel (web) | `ENABLE_EXPERIMENTAL_COREPACK` | `1` |
 
 - `PORT` ve `NODE_ENV` değişkenlerini Render kendisi verir; Node sürümü kökteki `.nvmrc` dosyasından okunur.
-- Supabase, veritabanı ve Claude anahtarları bu hafta hiçbir yere girilmez; API henüz kullanmıyor.
-  Kullanılmaya başlandığında **yalnızca Render'a** eklenir. Service role ve Claude anahtarı Vercel'e asla girilmez.
+
+### Supabase ve Claude değişkenleri
+
+Bu değişkenler şimdilik yalnızca yerel `.env` dosyasındadır; API henüz kullanmıyor. Her biri, onu kullanan iş
+`main` dalına birleşince Render'a eklenir. Yerelde veritabanı bağlantısı `pnpm db:check` ile denenir.
+
+| Değişken | Girildiği yer | Asla girilmez | Render'a ne zaman |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | Yerel `.env`, Render | Vercel, mobil | API veritabanını kullanmaya başlayınca |
+| `SUPABASE_URL` | Yerel `.env`, Render | — | API JWT doğrulamaya başlayınca (#17) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yerel `.env`; Render'a yalnızca API kullanacaksa | Vercel, mobil | Gerekirse |
+| `SUPABASE_ANON_KEY` | Yerel `.env` (testler) | — | Gerekmez |
+| `ANTHROPIC_API_KEY`, `CLAUDE_CHAT_MODEL`, `CLAUDE_DOC_MODEL` | Yerel `.env`, Render | Vercel, mobil | Asistan altyapısıyla (4. hafta) |
+
+- Service role anahtarı RLS'yi atlar; `DATABASE_URL` veritabanına tam erişim verir. İkisi ve Claude anahtarı
+  yalnızca backend'de durur. `NEXT_PUBLIC_` ve `EXPO_PUBLIC_` önekli değişkenler web ve mobil paketine gömülür
+  ve herkes tarafından okunabilir; bu öneklerle gizli değer tanımlanmaz.
+- Render yalnızca IPv4 kullandığı için `DATABASE_URL` olarak Supabase'in **Session pooler** adresi (port 5432)
+  girilir; doğrudan bağlantı adresi (`db.<proje>.supabase.co`) IPv6'dır.
+- Supabase projesi eu-west-1 (İrlanda), API ise Render'da Frankfurt'tadır; Render'da İrlanda bölgesi yoktur.
+  Bu yüzden her veritabanı sorgusuna bölgeler arası gidiş-dönüş süresi eklenir. Proje 20 Ekim kararıyla
+  İrlanda'da bırakıldı; gecikme 3. haftadaki transaction testlerinde ölçülecek.
+- Web paneli ve mobil uygulama Supabase adresini ve anon anahtarını kendi önekli değişkenleriyle alacak
+  (`NEXT_PUBLIC_…`, `EXPO_PUBLIC_…`); bu satırlar giriş/çıkış işiyle (#16) tabloya eklenecek.
 - `ENABLE_EXPERIMENTAL_COREPACK=1` olmazsa Vercel, `package.json` içindeki pnpm sürümü yerine kendi seçtiği
   sürümü kullanır ve kurulum bozulabilir.
 
