@@ -170,6 +170,9 @@ catalogs:
     '@types/node':
       specifier: ^24.0.0
       version: 24.19.1
+    drizzle-orm:
+      specifier: ^0.45.4
+      version: 0.45.4
     eslint:
       specifier: ^9.39.5
       version: 9.39.5
@@ -202,6 +205,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@ambarci/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@ambarci/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -217,6 +223,9 @@ importers:
       '@nestjs/swagger':
         specifier: ^12.0.2
         version: 12.0.2(@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.1.2)(reflect-metadata@0.2.2)(typescript@6.0.3)
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.4(postgres@3.4.9)
       jose:
         specifier: ^6.2.12
         version: 6.2.12
@@ -226,6 +235,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
     devDependencies:
       '@nestjs/cli':
         specifier: ^12.0.8
@@ -380,7 +392,7 @@ importers:
   packages/db:
     dependencies:
       drizzle-orm:
-        specifier: ^0.45.4
+        specifier: 'catalog:'
         version: 0.45.4(postgres@3.4.9)
       postgres:
         specifier: ^3.4.9

@@ -18,6 +18,7 @@ services:
       paths:
         - apps/api/**
         - packages/shared/**
+        - packages/db/**
         - package.json
         - pnpm-lock.yaml
         - pnpm-workspace.yaml

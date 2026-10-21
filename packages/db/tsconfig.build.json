@@ -1,0 +1,16 @@
+{
+  // API'nin import ettiği derlenmiş paket: dist/src/index.js (+ .d.ts).
+  // Kaynakta göreli importlar .ts uzantılıdır; derlemede .js'e çevrilir.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": ".",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src", "schema"]
+}

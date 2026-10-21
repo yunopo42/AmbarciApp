@@ -9,6 +9,8 @@ import { AccessTokenVerifier } from '../src/modules/auth/access-token-verifier.j
 interface TestAppOptions {
   /** Supabase'in JWKS adresi yerine testte üretilen anahtarlarla doğrulama yapmak için. */
   accessTokenVerifier?: AccessTokenVerifier;
+  /** Sağlayıcıların yerine test sürümleri (örn. veritabanı yerine bellek içi repository). */
+  overrides?: { provide: unknown; useValue: unknown }[];
 }
 
 /** main.ts ile aynı ayarları taşıyan, ağ portu açmayan test uygulaması. */
@@ -16,6 +18,9 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<INest
   const builder = Test.createTestingModule({ imports: [AppModule] });
   if (options.accessTokenVerifier) {
     builder.overrideProvider(AccessTokenVerifier).useValue(options.accessTokenVerifier);
+  }
+  for (const override of options.overrides ?? []) {
+    builder.overrideProvider(override.provide).useValue(override.useValue);
   }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();

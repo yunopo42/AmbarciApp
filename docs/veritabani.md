@@ -134,7 +134,13 @@ Kararlar:
 
 **Testin gerçekten sızıntı yakaladığı nasıl bilinir?** Geliştirme sırasında bir transaction içinde `products` tablosuna herkese açık bir politika (`using (true)`) eklendi. Aynı yöntemle bakıldığında A kullanıcısının gördüğü şirket sayısı 1'den 2'ye çıktı, yani test başarısız olurdu. Deneme geri alındı.
 
-**Henüz kapsamadığı:** API üzerinden izolasyon. Şirket verisi döndüren uç noktalar #18 ile gelecek; o testler API'nin Vitest/Supertest testlerine eklenecek.
+**API üzerinden izolasyon** (`apps/api/test-db/organizations.db.spec.ts`, aynı `pnpm db:test` komutuyla). API gerçek veritabanıyla çalıştırılır; token'lar testin kendi anahtarıyla imzalanır. Test şunları doğrular:
+
+- A şirketinin yöneticisi `X-Organization-Id` başlığına C şirketini yazınca 403 alır; C de A'ya erişemez (depolar, üyeler, davet üretimi).
+- Kendi şirketinin depo listesinde başka şirketin deposu yoktur. Başka şirketin depo kimliği bilinse bile 404 döner ve o depoya yetki verilemez; bunu bileşik yabancı anahtar engeller.
+- Aynı davet kodu iki kullanıcı tarafından aynı anda gönderildiğinde yalnızca biri üye olur (satır kilidi, `FOR UPDATE`).
+
+Guard, rol, depo yetkisi ve davet kurallarının ayrıntılı senaryoları veritabanı olmadan CI'da çalışır (`apps/api/test/organizations.e2e.spec.ts`).
 
 ## Savunmada sorulabilecek sorular
 
