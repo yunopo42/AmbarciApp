@@ -10,3 +10,5 @@ export const warehouseSchema = z.object({
   isActive: z.boolean(),
 });
 export type Warehouse = z.infer<typeof warehouseSchema>;
+
+export const warehouseListSchema = z.array(warehouseSchema);

@@ -8,7 +8,6 @@ export const metadata: Metadata = {
   title: 'Giriş · Ambarcı',
 };
 
-// Hesaplar yönetici davetiyle açılacak (#18); bu yüzden kayıt formu yok.
 export default async function LoginPage(props: PageProps<'/login'>): Promise<JSX.Element> {
   const { next } = await props.searchParams;
   return (

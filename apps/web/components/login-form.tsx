@@ -1,6 +1,7 @@
 'use client';
 
 import { describeSignInError } from '@ambarci/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { FormEvent, JSX } from 'react';
@@ -57,6 +58,12 @@ export function LoginForm({ next }: { next: string }): JSX.Element {
       <button type="submit" disabled={pending} className="rounded border px-4 py-2 font-medium">
         {pending ? 'Giriş yapılıyor…' : 'Giriş yap'}
       </button>
+      <p className="text-sm">
+        Hesabın yok mu?{' '}
+        <Link href="/register" className="underline">
+          Hesap oluştur
+        </Link>
+      </p>
     </form>
   );
 }
