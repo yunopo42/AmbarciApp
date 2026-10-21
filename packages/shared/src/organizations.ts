@@ -52,3 +52,6 @@ export const memberSchema = z.object({
   warehouseIds: z.array(z.uuid()),
 });
 export type Member = z.infer<typeof memberSchema>;
+
+export const organizationMembershipListSchema = z.array(organizationMembershipSchema);
+export const memberListSchema = z.array(memberSchema);

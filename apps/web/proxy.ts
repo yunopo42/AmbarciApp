@@ -5,10 +5,12 @@ import type { NextRequest } from 'next/server';
 import { getSupabaseConfig } from '@/lib/supabase/config';
 
 const LOGIN_PATH = '/login';
+// Oturumsuz açılabilen sayfalar; oturum varken açılırsa ana sayfaya yönlendirilir.
+const PUBLIC_PATHS = new Set([LOGIN_PATH, '/register']);
 
 /**
  * Her sayfa isteğinden önce çalışır: oturumu doğrular, süresi dolmak üzere olan token'ı yeniler ve
- * yenilenen çerezleri cevaba yazar. Oturum yoksa giriş sayfasına, oturum varken giriş sayfası açılırsa
+ * yenilenen çerezleri cevaba yazar. Oturum yoksa giriş sayfasına, oturum varken giriş veya kayıt sayfası açılırsa
  * ana sayfaya yönlendirir.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
@@ -38,14 +40,14 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { data } = await supabase.auth.getClaims();
   const isLoggedIn = Boolean(data?.claims);
   const { pathname, search } = request.nextUrl;
-  const isLoginPage = pathname === LOGIN_PATH;
+  const isPublicPage = PUBLIC_PATHS.has(pathname);
 
-  if (!isLoggedIn && !isLoginPage) {
+  if (!isLoggedIn && !isPublicPage) {
     const loginUrl = new URL(LOGIN_PATH, request.url);
     loginUrl.searchParams.set('next', pathname + search);
     return redirectKeepingCookies(loginUrl, response);
   }
-  if (isLoggedIn && isLoginPage) {
+  if (isLoggedIn && isPublicPage) {
     return redirectKeepingCookies(new URL('/', request.url), response);
   }
   return response;
