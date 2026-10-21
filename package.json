@@ -7,17 +7,17 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "pnpm build:shared && pnpm -r --parallel dev",
+    "dev": "pnpm build:packages && pnpm -r --parallel dev",
     "build": "pnpm -r build",
-    "build:shared": "pnpm --filter @ambarci/shared build",
-    "lint": "pnpm build:shared && pnpm -r lint",
-    "typecheck": "pnpm build:shared && pnpm -r typecheck",
-    "test": "pnpm build:shared && pnpm -r test",
+    "build:packages": "pnpm --filter @ambarci/shared --filter @ambarci/db build",
+    "lint": "pnpm build:packages && pnpm -r lint",
+    "typecheck": "pnpm build:packages && pnpm -r typecheck",
+    "test": "pnpm build:packages && pnpm -r test",
     "db:check": "pnpm --filter @ambarci/db check",
     "db:generate": "pnpm --filter @ambarci/db generate",
     "db:migrate": "pnpm --filter @ambarci/db migrate",
     "db:seed": "pnpm --filter @ambarci/db seed",
-    "db:test": "pnpm --filter @ambarci/db test:db"
+    "db:test": "pnpm -r --workspace-concurrency=1 test:db"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

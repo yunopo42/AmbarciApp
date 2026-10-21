@@ -28,13 +28,13 @@ Tasarımın temel kuralları:
 
 - Asistan yalnızca okuma ve öneri araçlarını çağırabilecek; stok yazan bir aracı olmayacak. Öneri, onay bekleyen bir işlem kaydı oluşturacak. *(Henüz kodlanmadı.)*
 - Stok yalnızca kullanıcı onayladığında, onay uç noktasında tek bir veritabanı transaction'ıyla değişecek. *(Henüz kodlanmadı.)*
-- Şirket verisi birbirinden ayrılır. Veritabanında RLS politikaları ve bileşik yabancı anahtarlar var; API sorgularındaki şirket filtresi uç noktalarla birlikte gelecek. Ayrıntı: [docs/veritabani.md](docs/veritabani.md).
+- Şirket verisi birbirinden ayrılır. API'de aktif şirket `X-Organization-Id` başlığıyla gelir ve kullanıcının üyeliğiyle doğrulanır, her sorgu şirket kimliğiyle süzülür; veritabanında ayrıca RLS politikaları ve bileşik yabancı anahtarlar var. Ayrıntı: [docs/veritabani.md](docs/veritabani.md).
 
 | Katman | Teknoloji | Durum |
 | --- | --- | --- |
 | Mobil | Expo, Expo Router | İskelet, development build, ses tanıma deneme ekranı |
 | Web paneli | Next.js, Tailwind | İskelet, API durum kartı; Vercel'de yayında |
-| API | NestJS, REST `/v1`, Swagger | `GET /v1/health`, Supabase JWT doğrulaması, `GET /v1/auth/me`; Render'da yayında |
+| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi, depolar (şirket ve rol guard'larıyla); Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog ve stok tabloları (10 tablo), RLS politikaları ve iki şirketli izolasyon testi |
 | Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |
@@ -100,10 +100,10 @@ Gerekenler: Node.js 24 (sürüm `.nvmrc` dosyasında) ve Corepack. pnpm sürüm�
    | API | http://localhost:3001/v1/health |
    | Swagger | http://localhost:3001/docs |
 
-   Tek bir uygulamayı başlatmak için önce ortak paketi derle, sonra uygulamayı filtreyle çalıştır:
+   Tek bir uygulamayı başlatmak için önce ortak paketleri (shared, db) derle, sonra uygulamayı filtreyle çalıştır:
 
    ```bash
-   pnpm build:shared
+   pnpm build:packages
    ```
 
    ```bash
@@ -142,7 +142,7 @@ pnpm build
 | `pnpm db:generate` | `packages/db/schema` içindeki şemadan yeni migration üretir |
 | `pnpm db:migrate` | Uygulanmamış migration'ları veritabanına uygular |
 | `pnpm db:seed` | Demo verisini (ABC Elektrik, Kuzey Tesisat) yükler; tekrar çalıştırmak kayıt çoğaltmaz |
-| `pnpm db:test` | İzolasyon ve seed testlerini gerçek veritabanında çalıştırır; her test kendi verisini geri alır |
+| `pnpm db:test` | RLS izolasyon, seed ve API (şirket, davet, iki şirket izolasyonu) testlerini gerçek veritabanında çalıştırır; testler kendi verisini geri alır ya da siler |
 
 Demo şirketine giriş yapabilmek için önce Supabase panelinde (**Authentication → Users**) kendine bir kullanıcı oluştur, e-postasını `.env` dosyasındaki `SEED_ADMIN_EMAIL` satırına yaz ve `pnpm db:seed` komutunu yeniden çalıştır. Bu kullanıcı ABC Elektrik'e yönetici olarak bağlanır.
 

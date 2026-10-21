@@ -10,6 +10,7 @@ aşağıdaki adımlar elle yapılır.
 | --- | --- | --- |
 | Render (`ambarci-api`) | `WEB_ORIGIN` | Önce `http://localhost:3000`, Vercel adresi belli olunca `https://<proje>.vercel.app` |
 | Render (`ambarci-api`) | `SUPABASE_URL` | `https://<proje-ref>.supabase.co`; API oturum token'larını bu projenin anahtarlarıyla doğrular, tanımlı değilse açılmaz |
+| Render (`ambarci-api`) | `DATABASE_URL` | Supabase'in **Session pooler** adresi (aşağıya bakın); tanımlı değilse API açılmaz |
 | Vercel (web) | `NEXT_PUBLIC_API_URL` | Render'ın verdiği adres, örn. `https://ambarci-api.onrender.com` |
 | Vercel (web) | `NEXT_PUBLIC_SUPABASE_URL` | `https://<proje-ref>.supabase.co` (giriş/çıkış) |
 | Vercel (web) | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase'in anon anahtarı; herkese açık bir değerdir |
@@ -25,7 +26,7 @@ ve Render eski sürümü yayında tutar (#17'de `SUPABASE_URL` için yaşandı).
 
 | Değişken | Girildiği yer | Asla girilmez | Render'a ne zaman |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | Yerel `.env`, Render | Vercel, mobil | API veritabanını kullanmaya başlayınca |
+| `DATABASE_URL` | Yerel `.env`, Render | Vercel, mobil | #18 birleşmeden önce (API açılışta ister) |
 | `SUPABASE_URL` | Yerel `.env`, Render | — | Eklendi (#17) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yerel `.env`; Render'a yalnızca API kullanacaksa | Vercel, mobil | Gerekirse |
 | `SUPABASE_ANON_KEY` | Yerel `.env` (testler) | — | Gerekmez |

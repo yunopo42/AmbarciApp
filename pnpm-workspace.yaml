@@ -6,6 +6,7 @@ packages:
 # Paketlerde "catalog:" olarak yazılır.
 catalog:
   "@supabase/supabase-js": ^2.118.0
+  drizzle-orm: ^0.45.4
   "@types/node": ^24.0.0
   # ESLint 10, eslint-config-next ve eslint-config-expo eklentileriyle henüz uyumlu değil.
   eslint: ^9.39.5

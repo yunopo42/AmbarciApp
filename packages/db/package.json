@@ -3,13 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "check": "node scripts/check-connection.ts",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "seed": "node scripts/seed.ts",
     "test:db": "vitest run",
-    "lint": "eslint schema scripts seed test drizzle.config.ts vitest.config.ts",
+    "lint": "eslint src schema scripts seed test drizzle.config.ts vitest.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -20,7 +27,7 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.4",
+    "drizzle-orm": "catalog:",
     "postgres": "^3.4.9"
   }
 }

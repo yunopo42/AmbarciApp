@@ -7,19 +7,23 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
-    "lint": "eslint src test",
+    "lint": "eslint src test test-db",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db": "vitest run --config vitest.db.config.ts"
   },
   "dependencies": {
+    "@ambarci/db": "workspace:*",
     "@ambarci/shared": "workspace:*",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-express": "^12.1.2",
     "@nestjs/swagger": "^12.0.2",
+    "drizzle-orm": "catalog:",
     "jose": "^6.2.12",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.8",
