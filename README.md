@@ -57,7 +57,9 @@ eval/              Deneme ve değerlendirme sonuçları
 docs/
   plan.md          8 haftalık plan
   raporlar/        Haftalık raporlar
-  kararlar/        Mimari karar kayıtları, ADR (henüz boş)
+  kararlar/        Mimari karar kayıtları (ADR)
+  tasarim.md       Ekran tasarımları ve tasarım değerleri (renk, yazı, boşluk)
+  tasarim/         Ekran görselleri (Google Stitch)
   yayin.md         Render ve Vercel yayın adımları
   mobil-development-build.md
 .github/workflows/ CI: lint, typecheck, test, build
