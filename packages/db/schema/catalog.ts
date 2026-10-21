@@ -113,6 +113,8 @@ export const parties = pgTable(
   },
   (t) => [
     unique('parties_org_tax_id_key').on(t.organizationId, t.taxId),
+    // Bileşik yabancı anahtarların hedefi: işlemin carisi aynı şirketten olmak zorunda.
+    unique('parties_org_id_key').on(t.organizationId, t.id),
     index('parties_org_name_idx').on(t.organizationId, t.name),
     check('parties_name_not_blank', sql`length(trim(${t.name})) > 0`),
     check('parties_tax_id_format', sql`${t.taxId} ~ '^[0-9]{10,11}$'`),

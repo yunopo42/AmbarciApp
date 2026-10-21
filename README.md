@@ -36,7 +36,7 @@ Tasarımın temel kuralları:
 | Web paneli | Next.js, Tailwind | İskelet, API durum kartı; Vercel'de yayında |
 | API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi, depolar (şirket ve rol guard'larıyla); Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
-| Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog ve stok tabloları (10 tablo), RLS politikaları ve iki şirketli izolasyon testi |
+| Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog, stok, işlem, hareket, sayım, denetim ve outbox tabloları (16 tablo), RLS politikaları ve iki şirketli izolasyon testi |
 | Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |
 | Asistan | Claude API | Planlandı (4. hafta) |
 
