@@ -39,7 +39,14 @@ const TENANT_TABLES = [
   ['product_aliases', 'organization_id'],
   ['parties', 'organization_id'],
   ['inventory', 'organization_id'],
+  ['operations', 'organization_id'],
+  ['operation_items', 'organization_id'],
+  ['inventory_movements', 'organization_id'],
+  ['stock_counts', 'organization_id'],
 ] as const;
+
+// Üyelerin okuyamadığı tablolar: denetim kaydını yalnızca yönetici, outbox'ı hiçbir istemci okuyamaz.
+const ALL_TABLES = [...TENANT_TABLES.map(([table]) => table), 'invitations', 'audit_logs', 'outbox_events'];
 
 interface Fixture {
   orgA: string;
@@ -52,11 +59,16 @@ interface Fixture {
   productA: string;
   productB: string;
   warehouseA: string;
+  warehouseB: string;
+  /** A şirketinin uygulanmış giriş işlemi (1 kalem, 1 hareket). */
+  operationA: string;
 }
 
 const PERMISSION_DENIED = '42501';
 const FOREIGN_KEY_VIOLATION = '23503';
 const CHECK_VIOLATION = '23514';
+const UNIQUE_VIOLATION = '23505';
+const GENERATED_ALWAYS = '428C9';
 
 class Rollback extends Error {}
 
@@ -110,8 +122,10 @@ async function createFixture(tx: TransactionSql): Promise<Fixture> {
     productA: randomUUID(),
     productB: randomUUID(),
     warehouseA: randomUUID(),
+    warehouseB: randomUUID(),
+    operationA: randomUUID(),
   };
-  const warehouseB = randomUUID();
+  const { warehouseB } = fx;
 
   const users = [fx.adminA, fx.employeeA, fx.inactiveA, fx.adminB, fx.outsider].map((id) => ({
     id,
@@ -156,7 +170,55 @@ async function createFixture(tx: TransactionSql): Promise<Fixture> {
     (${fx.orgA}, ${`A-${randomUUID()}`}, 'EMPLOYEE', now() + interval '1 day', ${fx.adminA}),
     (${fx.orgB}, ${`B-${randomUUID()}`}, 'EMPLOYEE', now() + interval '1 day', ${fx.adminB})`;
 
+  await createLedger(tx, {
+    org: fx.orgA,
+    product: fx.productA,
+    warehouse: fx.warehouseA,
+    actor: fx.adminA,
+    operation: fx.operationA,
+  });
+  await createLedger(tx, {
+    org: fx.orgB,
+    product: fx.productB,
+    warehouse: warehouseB,
+    actor: fx.adminB,
+    operation: randomUUID(),
+  });
+
   return fx;
+}
+
+interface LedgerInput {
+  org: string;
+  product: string;
+  warehouse: string;
+  actor: string;
+  operation: string;
+}
+
+/**
+ * Bir şirket için 3. hafta tablolarına örnek kayıt: uygulanmış bir giriş işlemi (kalemi ve hareketiyle),
+ * fark çıkmayan bir sayım, denetim kaydı ve outbox olayı. Stok satırı (10 adet) createFixture'da açılır.
+ */
+async function createLedger(tx: TransactionSql, input: LedgerInput): Promise<void> {
+  const { org, product, warehouse, actor, operation } = input;
+  const count = randomUUID();
+  await tx`insert into operations (id, organization_id, type, status, source, created_by, applied_by, applied_at) values
+    (${operation}, ${org}, 'STOCK_IN', 'APPLIED', 'SCREEN', ${actor}, ${actor}, now()),
+    (${count}, ${org}, 'COUNT', 'APPLIED', 'SCREEN', ${actor}, ${actor}, now())`;
+  await tx`insert into operation_items (organization_id, operation_id, line_no, product_id, warehouse_id, quantity) values
+    (${org}, ${operation}, 1, ${product}, ${warehouse}, '10'),
+    (${org}, ${count}, 1, ${product}, ${warehouse}, '10')`;
+  await tx`insert into inventory_movements
+      (organization_id, operation_id, line_no, warehouse_id, product_id, type, quantity_change, unit_factor,
+       unit_cost, quantity_after, average_cost_after)
+    values (${org}, ${operation}, 1, ${warehouse}, ${product}, 'IN', '10', '1', '0', '10', '0')`;
+  await tx`insert into stock_counts (organization_id, operation_id, line_no, warehouse_id, product_id, system_quantity, counted_quantity)
+    values (${org}, ${count}, 1, ${warehouse}, ${product}, '10', '10')`;
+  await tx`insert into audit_logs (organization_id, actor_id, action, entity_type, entity_id, source)
+    values (${org}, ${actor}, 'operation.applied', 'operation', ${operation}, 'SCREEN')`;
+  await tx`insert into outbox_events (organization_id, event_type, payload)
+    values (${org}, 'operation.applied', ${tx.json({ operationId: operation })})`;
 }
 
 /** Tablodaki görünür satırların şirket kimlikleri (tekilleştirilmiş). */
@@ -180,13 +242,21 @@ describe('İki şirket arasında veri izolasyonu (RLS)', () => {
     });
   });
 
-  it('davet kodlarını yalnızca o şirketin yöneticisi görür', async () => {
+  it.each(['invitations', 'audit_logs'])('%s: yalnızca o şirketin yöneticisi görür', async (table) => {
     await withFixture(async (tx, fx) => {
       const of = (userId: string): Promise<string[]> =>
-        asUser(tx, userId, (sp) => visibleOrganizations(sp, 'invitations', 'organization_id'));
+        asUser(tx, userId, (sp) => visibleOrganizations(sp, table, 'organization_id'));
       expect(await of(fx.adminA)).toEqual([fx.orgA]);
       expect(await of(fx.adminB)).toEqual([fx.orgB]);
       expect(await of(fx.employeeA)).toEqual([]);
+    });
+  });
+
+  it('outbox olaylarını oturum açmış hiçbir kullanıcı, yönetici bile okuyamaz', async () => {
+    await withFixture(async (tx, fx) => {
+      await expect(asUser(tx, fx.adminA, (sp) => sp`select 1 from outbox_events limit 1`)).rejects.toMatchObject({
+        code: PERMISSION_DENIED,
+      });
     });
   });
 
@@ -202,7 +272,7 @@ describe('İki şirket arasında veri izolasyonu (RLS)', () => {
 
   it('oturum açmamış istemci (anon) hiçbir tabloyu okuyamaz', async () => {
     await withFixture(async (tx) => {
-      for (const [table] of TENANT_TABLES) {
+      for (const table of ALL_TABLES) {
         await expect(as(tx, 'anon', null, (sp) => sp.unsafe(`select 1 from ${table} limit 1`))).rejects.toMatchObject({
           code: PERMISSION_DENIED,
         });
@@ -235,6 +305,18 @@ describe('Data API üzerinden yazma kapalı (veri yalnızca API üzerinden deği
         sp`insert into organization_users (organization_id, user_id, role) values (${fx.orgB}, ${fx.adminA}, 'ADMIN')`,
     ],
     ['kendi rolünü yükseltme', (sp, fx) => sp`update organization_users set role = 'ADMIN' where user_id = ${fx.employeeA}`],
+    // Stok yalnızca onay uç noktasından değişir: istemci işlem durumunu, hareketleri ve denetim kaydını değiştiremez.
+    ['işlemin durumunu değiştirme', (sp, fx) => sp`update operations set status = 'CANCELLED' where id = ${fx.operationA}`],
+    [
+      'stok hareketi ekleme',
+      (sp, fx) =>
+        sp`insert into inventory_movements
+            (organization_id, operation_id, line_no, warehouse_id, product_id, type, quantity_change, unit_factor,
+             unit_cost, quantity_after, average_cost_after)
+          values (${fx.orgA}, ${fx.operationA}, 1, ${fx.warehouseA}, ${fx.productA}, 'OUT', '-1', '1', '0', '9', '0')`,
+    ],
+    ['stok hareketini silme', (sp, fx) => sp`delete from inventory_movements where operation_id = ${fx.operationA}`],
+    ['denetim kaydını silme', (sp, fx) => sp`delete from audit_logs where organization_id = ${fx.orgA}`],
   ];
 
   it.each(writes)('%s reddedilir', async (_name, write) => {
@@ -258,6 +340,80 @@ describe('Veritabanı kısıtları (API hatası olsa bile)', () => {
     await withFixture(async (tx, fx) => {
       const update = tx.savepoint((sp) => sp`update inventory set quantity = -1 where product_id = ${fx.productA}`);
       await expect(update).rejects.toMatchObject({ code: CHECK_VIOLATION });
+    });
+  });
+});
+
+describe('Hareket ve işlem kısıtları', () => {
+  /** A şirketinin giriş işleminin 1. kalemi için hareket ekler; değerler verilmezse geçerli bir çıkış yazar. */
+  const insertMovement = (
+    sp: TransactionSql,
+    fx: Fixture,
+    values: { type?: string; change?: string; product?: string } = {},
+  ): Promise<unknown> =>
+    sp`insert into inventory_movements
+        (organization_id, operation_id, line_no, warehouse_id, product_id, type, quantity_change, unit_factor,
+         unit_cost, quantity_after, average_cost_after)
+      values (${fx.orgA}, ${fx.operationA}, 1, ${fx.warehouseA}, ${values.product ?? fx.productA},
+              ${values.type ?? 'OUT'}, ${values.change ?? '-1'}, '1', '0', '9', '0')`;
+
+  it('hareket türü ile miktarın yönü uyuşmalı (çıkış artı olamaz, giriş eksi olamaz)', async () => {
+    await withFixture(async (tx, fx) => {
+      // Fixture'daki IN hareketi silinmeden aynı kaleme ikinci hareket yazılamayacağı için önce o kaldırılır.
+      await tx`delete from inventory_movements where operation_id = ${fx.operationA}`;
+      await expect(tx.savepoint((sp) => insertMovement(sp, fx, { type: 'OUT', change: '5' }))).rejects.toMatchObject({
+        code: CHECK_VIOLATION,
+      });
+      await expect(tx.savepoint((sp) => insertMovement(sp, fx, { type: 'IN', change: '-5' }))).rejects.toMatchObject({
+        code: CHECK_VIOLATION,
+      });
+      await expect(tx.savepoint((sp) => insertMovement(sp, fx, { type: 'IN', change: '0' }))).rejects.toMatchObject({
+        code: CHECK_VIOLATION,
+      });
+    });
+  });
+
+  it('aynı kalem aynı depodaki stoğu ikinci kez değiştiremez (çift uygulama)', async () => {
+    await withFixture(async (tx, fx) => {
+      const second = tx.savepoint((sp) => insertMovement(sp, fx, { type: 'IN', change: '10' }));
+      await expect(second).rejects.toMatchObject({ code: UNIQUE_VIOLATION });
+    });
+  });
+
+  it('hareket başka şirketin ürününe bağlanamaz', async () => {
+    await withFixture(async (tx, fx) => {
+      await tx`delete from inventory_movements where operation_id = ${fx.operationA}`;
+      const insert = tx.savepoint((sp) => insertMovement(sp, fx, { product: fx.productB }));
+      await expect(insert).rejects.toMatchObject({ code: FOREIGN_KEY_VIOLATION });
+    });
+  });
+
+  it('bir işlem en fazla bir kez geri alınabilir', async () => {
+    await withFixture(async (tx, fx) => {
+      const reverse = (sp: TransactionSql): Promise<unknown> =>
+        sp`insert into operations (organization_id, type, source, reversed_operation_id)
+          values (${fx.orgA}, 'REVERSAL', 'SCREEN', ${fx.operationA})`;
+      await tx.savepoint(reverse);
+      await expect(tx.savepoint(reverse)).rejects.toMatchObject({ code: UNIQUE_VIOLATION });
+    });
+  });
+
+  it('ters kayıt, geri aldığı işlem olmadan açılamaz', async () => {
+    await withFixture(async (tx, fx) => {
+      const insert = tx.savepoint(
+        (sp) => sp`insert into operations (organization_id, type, source) values (${fx.orgA}, 'REVERSAL', 'SCREEN')`,
+      );
+      await expect(insert).rejects.toMatchObject({ code: CHECK_VIOLATION });
+    });
+  });
+
+  it('sayım farkını veritabanı hesaplar ve elle yazılamaz', async () => {
+    await withFixture(async (tx, fx) => {
+      await tx`update stock_counts set counted_quantity = '7' where organization_id = ${fx.orgA}`;
+      const [row] = await tx<{ difference: string }[]>`select difference from stock_counts where organization_id = ${fx.orgA}`;
+      expect(row?.difference).toBe('-3.000');
+      const write = tx.savepoint((sp) => sp`update stock_counts set difference = '0' where organization_id = ${fx.orgA}`);
+      await expect(write).rejects.toMatchObject({ code: GENERATED_ALWAYS });
     });
   });
 });

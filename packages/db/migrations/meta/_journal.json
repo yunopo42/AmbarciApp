@@ -22,6 +22,20 @@
       "when": 1792523087231,
       "tag": "0002_read_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792616939801,
+      "tag": "0003_operations_and_movements",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792616960537,
+      "tag": "0004_outbox_grants",
+      "breakpoints": true
     }
   ]
 }
