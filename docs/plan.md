@@ -36,23 +36,23 @@ Ses denemesinden çıkan karar (`eval/ses-denemesi.md`): ürün eşleştirme isi
 
 ## Hafta 2 — Veritabanı ve kimlik (12–22 Ekim)
 
-**Kapı:** İki şirket arasında veri sızıntısı yok (22 Ekim)
+**Kapı:** İki şirket arasında veri sızıntısı yok (22 Ekim) — **geçildi** (RLS ve API izolasyon testleri; `docs/raporlar/hafta-02.md`)
 
 1. haftadan devredenler:
 
-- [ ] Supabase projesi
-- [ ] README, 8 milestone
-- [ ] Claude API anahtarı ve harcama limiti; 20 örnek mesajla araç çağırma denemesi
-- [ ] Demo verisi: ABC Elektrik, 15–20 ürün, 2 depo, 1 araç deposu
+- [x] Supabase projesi
+- [x] README, 8 milestone
+- [x] Claude API anahtarı ve harcama limiti; 20 örnek mesajla araç çağırma denemesi
+- [x] Demo verisi: ABC Elektrik, 15–20 ürün, 2 depo, 1 araç deposu (başlangıç stokları 3. haftada)
 
 2. haftanın işleri:
 
-- [ ] Drizzle şeması ve migration'lar (ER diyagramındaki tablolar)
-- [ ] Supabase Auth: web ve mobilde giriş/çıkış
-- [ ] Şirket oluşturma, davet kodu, rol ve depo yetkisi
-- [ ] Backend'de JWT doğrulama ve yetki guard'ları
-- [ ] RLS politikaları; iki şirketli izolasyon testi
-- [ ] Ekran tasarımları (Stitch veya Figma, yalnızca görsel referans; üretilen kod kullanılmaz): mobil sohbet + işlem kartı, mobil stok listesi, web dashboard, web onay kuyruğu, web belge inceleme. Renk, yazı tipi, boşluk ve köşe değerleri `docs/tasarim.md` dosyasına yazılır.
+- [x] Drizzle şeması ve migration'lar: 2. ve 3. haftada gereken 10 tablo; hareket ve işlem tabloları 3. haftaya alındı
+- [x] Supabase Auth: web ve mobilde giriş/çıkış
+- [x] Şirket oluşturma, davet kodu, rol ve depo yetkisi
+- [x] Backend'de JWT doğrulama ve yetki guard'ları
+- [x] RLS politikaları; iki şirketli izolasyon testi
+- [x] Ekran tasarımları (Google Stitch, yalnızca görsel referans; üretilen kod kullanılmadı): mobil sohbet + işlem kartı, mobil stok listesi, web dashboard, web onay kuyruğu, web belge inceleme. Renk, yazı tipi, boşluk ve köşe değerleri `docs/tasarim.md` dosyasında.
 
 ## Hafta 3 — Manuel stok (23–25 Ekim)
 
@@ -60,6 +60,7 @@ Ses denemesinden çıkan karar (`eval/ses-denemesi.md`): ürün eşleştirme isi
 
 2. haftanın uzaması nedeniyle 23–25 Ekim'e sıkıştırıldı. 4. haftanın kapısı (telefonda canlı stok sorgusu) değişmedi.
 
+- [ ] Hareket, işlem, sayım, denetim ve outbox tabloları; demo verisine açılış stokları (2. haftadan kapsam kararıyla)
 - [ ] Ürün, birim, alternatif ad, depo ve cari yönetimi (web)
 - [ ] Excel/CSV ile ürün içe aktarma
 - [ ] Giriş, çıkış, transfer, sayım, fire ekranları ve stok transaction'ı
