@@ -1,3 +1,4 @@
+import type { DbExecutor } from '@ambarci/db';
 import type { Invitation, Member, OrganizationMembership, OrganizationRole } from '@ambarci/shared';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
@@ -97,5 +98,28 @@ export class OrganizationsService {
 
   hasWarehouseAccess(organizationId: string, membershipId: string, warehouseId: string): Promise<boolean> {
     return this.repository.hasWarehouseAccess(organizationId, membershipId, warehouseId);
+  }
+
+  /**
+   * Kullanıcı bu depolarda stok işlemi açıp onaylayabilir mi? Üyelik artık aktif değilse 403, çalışanın
+   * yetkisi olmayan depo varsa 403 WAREHOUSE_FORBIDDEN (hangi depolar olduğu details'te). Yöneticiler tüm
+   * depolarda yetkilidir. Rolü döner; çağıran rol kuralı (ör. açılış yalnızca yönetici) uygular.
+   */
+  async assertOperationAccess(
+    executor: DbExecutor,
+    organizationId: string,
+    userId: string,
+    warehouseIds: string[],
+  ): Promise<OrganizationRole> {
+    const access = await this.repository.findOperationAccess(executor, organizationId, userId, warehouseIds);
+    if (!access) {
+      throw new ApiException(HttpStatus.FORBIDDEN, 'ORGANIZATION_FORBIDDEN', 'Bu şirkete erişiminiz yok.');
+    }
+    if (access.role !== 'ADMIN' && access.deniedWarehouseIds.length > 0) {
+      throw new ApiException(HttpStatus.FORBIDDEN, 'WAREHOUSE_FORBIDDEN', 'Bu depoda işlem yetkiniz yok.', {
+        warehouseIds: access.deniedWarehouseIds,
+      });
+    }
+    return access.role;
   }
 }

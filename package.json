@@ -16,7 +16,7 @@
     "db:check": "pnpm --filter @ambarci/db check",
     "db:generate": "pnpm --filter @ambarci/db generate",
     "db:migrate": "pnpm --filter @ambarci/db migrate",
-    "db:seed": "pnpm --filter @ambarci/db seed",
+    "db:seed": "pnpm build:packages && pnpm --filter @ambarci/db seed && pnpm --filter @ambarci/api seed:opening",
     "db:test": "pnpm -r --workspace-concurrency=1 test:db"
   },
   "devDependencies": {

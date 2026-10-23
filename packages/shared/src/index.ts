@@ -3,4 +3,5 @@ export * from './auth.js';
 export * from './errors.js';
 export * from './health.js';
 export * from './inventory.js';
+export * from './operations.js';
 export * from './organizations.js';

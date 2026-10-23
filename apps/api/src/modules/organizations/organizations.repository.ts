@@ -1,5 +1,5 @@
 import { invitations, organizations, organizationUsers, userWarehouseAccess } from '@ambarci/db';
-import type { Database } from '@ambarci/db';
+import type { Database, DbExecutor } from '@ambarci/db';
 import type { Member, OrganizationMembership, OrganizationRole } from '@ambarci/shared';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, sql } from 'drizzle-orm';
@@ -209,4 +209,43 @@ export class OrganizationsRepository {
       .limit(1);
     return row !== undefined;
   }
+
+  /**
+   * Stok işlemi yetkisi tek sorguda: kullanıcının şirketteki aktif üyeliğinin rolü ve verilen depolardan
+   * yetkisi olmayanlar. Üyelik yoksa ya da pasifse null döner. executor, onay sırasında açık transaction'dır;
+   * böylece yetki kilit altında yeniden okunur.
+   */
+  async findOperationAccess(
+    executor: DbExecutor,
+    organizationId: string,
+    userId: string,
+    warehouseIds: string[],
+  ): Promise<OperationAccess | null> {
+    const requested = sql.join(
+      warehouseIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    );
+    const [row] = await executor.execute<{ role: OrganizationRole; denied: string[] }>(sql`
+      select ou.role,
+             array(
+               select w.id
+               from unnest(array[${requested}]::uuid[]) as w(id)
+               where not exists (
+                 select 1 from ${userWarehouseAccess} a
+                 where a.organization_id = ou.organization_id
+                   and a.organization_user_id = ou.id
+                   and a.warehouse_id = w.id
+               )
+             ) as denied
+      from ${organizationUsers} ou
+      where ou.organization_id = ${organizationId} and ou.user_id = ${userId} and ou.is_active
+      limit 1`);
+    return row ? { role: row.role, deniedWarehouseIds: row.denied } : null;
+  }
+}
+
+export interface OperationAccess {
+  role: OrganizationRole;
+  /** Kullanıcının user_warehouse_access'te kaydı olmayan depolar. Yöneticiler için dikkate alınmaz. */
+  deniedWarehouseIds: string[];
 }

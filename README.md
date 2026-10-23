@@ -2,7 +2,7 @@
 
 Ambarcı, saha çalışanlarının mobil uygulamadaki yapay zekâ asistanıyla yazarak veya konuşarak stok işlemi yapacağı, yöneticilerin ise web panelinden yöneteceği çok şirketli bir stok takip sistemidir. Asistan işlemi yalnızca önerecek; stok, kullanıcı öneriyi onayladığında değişecek. Proje bir bitirme projesidir (Senior Design Project) ve [8 haftalık plana](docs/plan.md) göre geliştirilmektedir.
 
-**Durum:** Geliştirme aşamasında. Şu an monorepo iskeleti, CI, web ve API yayını ile mobil development build hazırdır. Veritabanı, kimlik doğrulama, stok işlemleri ve asistan henüz yoktur.
+**Durum:** Geliştirme aşamasında. Monorepo iskeleti, CI, web ve API yayını, mobil development build, veritabanı ve şirketler arası izolasyon, kimlik doğrulama ve stok işlemlerinin API'si (onay transaction'ı) hazırdır. Web ve mobil stok ekranları ile asistan sonraki işlerde gelecek.
 
 ## Canlı bağlantılar
 
@@ -27,14 +27,14 @@ Web (Next.js) ─┘                    └──────────> Claud
 Tasarımın temel kuralları:
 
 - Asistan yalnızca okuma ve öneri araçlarını çağırabilecek; stok yazan bir aracı olmayacak. Öneri, onay bekleyen bir işlem kaydı oluşturacak. *(Henüz kodlanmadı.)*
-- Stok yalnızca kullanıcı onayladığında, onay uç noktasında tek bir veritabanı transaction'ıyla değişecek. *(Henüz kodlanmadı.)*
+- Stok yalnızca kullanıcı onayladığında, onay uç noktasında tek bir veritabanı transaction'ıyla değişir. Ekrandan açılan işlem de önce onay bekler. Ayrıntı: [docs/stok-islemleri.md](docs/stok-islemleri.md).
 - Şirket verisi birbirinden ayrılır. API'de aktif şirket `X-Organization-Id` başlığıyla gelir ve kullanıcının üyeliğiyle doğrulanır, her sorgu şirket kimliğiyle süzülür; veritabanında ayrıca RLS politikaları ve bileşik yabancı anahtarlar var. Ayrıntı: [docs/veritabani.md](docs/veritabani.md).
 
 | Katman | Teknoloji | Durum |
 | --- | --- | --- |
 | Mobil | Expo, Expo Router | İskelet, development build, ses tanıma deneme ekranı |
 | Web paneli | Next.js, Tailwind | İskelet, API durum kartı; Vercel'de yayında |
-| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi, depolar (şirket ve rol guard'larıyla); Render'da yayında |
+| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi, depolar (şirket ve rol guard'larıyla); stok işlemleri: açma, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog, stok, işlem, hareket, sayım, denetim ve outbox tabloları (16 tablo), RLS politikaları ve iki şirketli izolasyon testi |
 | Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |
@@ -60,6 +60,8 @@ docs/
   kararlar/        Mimari karar kayıtları (ADR)
   tasarim.md       Ekran tasarımları ve tasarım değerleri (renk, yazı, boşluk)
   tasarim/         Ekran görselleri (Google Stitch)
+  stok-islemleri.md  Onay transaction'ı, kilit sırası, maliyet hesabı, hata kodları
+  veritabani.md    Şema, kısıtlar ve şirketler arası izolasyon
   yayin.md         Render ve Vercel yayın adımları
   mobil-development-build.md
 .github/workflows/ CI: lint, typecheck, test, build
@@ -143,7 +145,7 @@ pnpm build
 | `pnpm db:check` | Veritabanına bağlanmayı dener |
 | `pnpm db:generate` | `packages/db/schema` içindeki şemadan yeni migration üretir |
 | `pnpm db:migrate` | Uygulanmamış migration'ları veritabanına uygular |
-| `pnpm db:seed` | Demo verisini (ABC Elektrik, Kuzey Tesisat) yükler; tekrar çalıştırmak kayıt çoğaltmaz |
+| `pnpm db:seed` | Demo verisini (ABC Elektrik, Kuzey Tesisat) ve ABC Elektrik'in açılış stoklarını (onaylanan açılış işlemleriyle) yükler; tekrar çalıştırmak kayıt ve stok çoğaltmaz |
 | `pnpm db:test` | RLS izolasyon, seed ve API (şirket, davet, iki şirket izolasyonu) testlerini gerçek veritabanında çalıştırır; testler kendi verisini geri alır ya da siler |
 
 Demo şirketine giriş yapabilmek için önce Supabase panelinde (**Authentication → Users**) kendine bir kullanıcı oluştur, e-postasını `.env` dosyasındaki `SEED_ADMIN_EMAIL` satırına yaz ve `pnpm db:seed` komutunu yeniden çalıştır. Bu kullanıcı ABC Elektrik'e yönetici olarak bağlanır.

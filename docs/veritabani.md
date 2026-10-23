@@ -71,7 +71,7 @@ Sohbet, `ai_runs`, belge ve `push_tokens` tabloları ilgili haftalarda yeni migr
 
 ## Stok defteri tabloları
 
-3. haftada eklenen tablolar (#32) stoğun nasıl değiştiğini kaydeder. Stoğu değiştiren kod (onay transaction'ı) #33'te gelir; bu bölüm verinin hangi kurallarla tutulduğunu anlatır. Ondalık hesapların nerede yapıldığı: ADR-003.
+3. haftada eklenen tablolar (#32) stoğun nasıl değiştiğini kaydeder. Bu bölüm verinin hangi kurallarla tutulduğunu anlatır; stoğu değiştiren onay transaction'ı (#33), kilit sırası ve maliyet hesabı [stok-islemleri.md](stok-islemleri.md) dosyasında. Ondalık hesapların nerede yapıldığı: ADR-003.
 
 **Bir işlemin yolu:**
 
@@ -186,7 +186,7 @@ Uygulanmış bir migration düzenlenmez; değişiklik yeni bir migration'la yap�
 Kararlar:
 
 - **Tekrar çalıştırılabilir.** Her kayıt doğal anahtarıyla eklenir ya da güncellenir (şirket: sabit kimlik, depo: ad, ürün: SKU, birim: ürün + birim, cari: VKN). İkinci çalıştırma kayıt çoğaltmaz; bunu `test/seed.spec.ts` doğrular.
-- **Başlangıç stoğu yok.** Stok yalnızca hareket kaydıyla değişmeli; hareket ve işlem tabloları 3. haftada gelince açılış stokları açılış işlemiyle girilecek.
+- **Açılış stoğu işlemle girer.** Katalogdan sonra `pnpm db:seed`, ABC Elektrik'in her deposu için bir açılış işlemi (`OPENING`) açar ve kullanıcı onayıyla aynı transaction'dan geçirir; stok doğrudan yazılmaz. Tekrar çalıştırınca açılış ikinci kez girmez (#33, [stok-islemleri.md](stok-islemleri.md#açılış-stoğu)). Bazı ürünler bilerek kritik eşiğin altında başlar.
 - **Kullanıcı hesabı açılmaz.** `SEED_ADMIN_EMAIL` verilirse o e-postayla Supabase Auth'ta zaten kayıtlı kullanıcı ABC Elektrik'e yönetici olarak bağlanır.
 - **Barkodlar gerçek bir ürüne ait değil.** Mağaza içi kullanıma ayrılmış `200` önekli, geçerli kontrol haneli EAN-13 kodlarıdır; 7. haftada etiket basıp okutulabilir.
 - **Cari VKN'leri kurgusal** (`999` önekli). TCKN kullanılmaz.
