@@ -1,7 +1,8 @@
 // Demo ve testlerde kullanılan kurgusal şirket verisi. Şirket, cari ve araç adları uydurmadır.
 // Miktar ve katsayılar NUMERIC kolonlara gittiği için metin olarak yazılır (JS number kullanılmaz).
 // Barkodlar mağaza içi kullanıma ayrılmış 200 önekli, geçerli kontrol haneli EAN-13 kodlarıdır.
-// Başlangıç stokları burada yok: stok yalnızca hareket kaydıyla değişir ve hareket tabloları 3. haftada gelir.
+// Açılış stokları (dosyanın sonunda) buradan doğrudan stoğa yazılmaz: stok yalnızca hareket kaydıyla değişir.
+// API'deki açılış betiği bunları açılış işlemi olarak açıp onay transaction'ından geçirir (pnpm db:seed).
 
 export interface DemoProduct {
   sku: string;
@@ -249,3 +250,58 @@ export const kuzeyTesisat: DemoCompany = {
 };
 
 export const demoCompanies: DemoCompany[] = [abcElektrik, kuzeyTesisat];
+
+/** Bir deponun açılış stoğu. Miktar ana birimde, birim maliyet ana birim başına (TL, kurgusal). */
+export interface DemoOpeningStock {
+  warehouse: string;
+  lines: { sku: string; quantity: string; unitCost: string }[];
+}
+
+/**
+ * ABC Elektrik'in açılış stokları. Her depo için bir açılış işlemi (OPENING) açılır ve onaylanır.
+ * Bazı ürünler bilerek kritik stok eşiğinin altında başlar (vavien anahtar, kaçak akım rölesi, LED panel,
+ * spiral boru); stok listesindeki "KRİTİK" rozeti demoda görünsün diye.
+ */
+export const abcElektrikOpeningStock: DemoOpeningStock[] = [
+  {
+    warehouse: 'Merkez Depo',
+    lines: [
+      { sku: 'KBL-NYM-325', quantity: '1200', unitCost: '28.50' },
+      { sku: 'KBL-NYM-315', quantity: '800', unitCost: '19.75' },
+      { sku: 'KBL-TTR-215', quantity: '300', unitCost: '14.20' },
+      { sku: 'KBL-NHX-325', quantity: '150', unitCost: '41.90' },
+      { sku: 'PRZ-TOP-B', quantity: '180', unitCost: '46.00' },
+      { sku: 'PRZ-UCL-15', quantity: '35', unitCost: '189.00' },
+      { sku: 'ANH-ADI-B', quantity: '120', unitCost: '38.50' },
+      { sku: 'ANH-VAV-B', quantity: '25', unitCost: '44.00' },
+      { sku: 'SGR-C16', quantity: '60', unitCost: '92.00' },
+      { sku: 'SGR-C25', quantity: '18', unitCost: '95.00' },
+      { sku: 'KAR-40-30', quantity: '4', unitCost: '640.00' },
+      { sku: 'LED-PNL-6060', quantity: '6', unitCost: '520.00' },
+      { sku: 'LED-AMP-9', quantity: '400', unitCost: '32.00' },
+      { sku: 'PRJ-LED-50', quantity: '12', unitCost: '410.00' },
+      { sku: 'BUA-SVA', quantity: '500', unitCost: '4.25' },
+      { sku: 'KNL-2516', quantity: '90', unitCost: '27.50' },
+      { sku: 'SPR-16', quantity: '150', unitCost: '6.80' },
+      { sku: 'KLM-6', quantity: '40', unitCost: '48.00' },
+    ],
+  },
+  {
+    warehouse: 'Ostim Depo',
+    lines: [
+      { sku: 'KBL-NYM-325', quantity: '300', unitCost: '28.50' },
+      { sku: 'PRZ-TOP-B', quantity: '60', unitCost: '46.00' },
+      { sku: 'LED-AMP-9', quantity: '100', unitCost: '32.00' },
+      { sku: 'SGR-C16', quantity: '24', unitCost: '92.00' },
+    ],
+  },
+  {
+    warehouse: 'Servis Aracı 1',
+    lines: [
+      { sku: 'KBL-NYM-325', quantity: '50', unitCost: '28.50' },
+      { sku: 'PRZ-TOP-B', quantity: '10', unitCost: '46.00' },
+      { sku: 'ANH-ADI-B', quantity: '10', unitCost: '38.50' },
+      { sku: 'SGR-C16', quantity: '6', unitCost: '92.00' },
+    ],
+  },
+];

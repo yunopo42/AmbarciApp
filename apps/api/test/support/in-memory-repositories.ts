@@ -138,6 +138,16 @@ export function inMemoryOrganizationsRepository(store: InMemoryStore): Organizat
     async hasWarehouseAccess(organizationId, membershipId, warehouseId) {
       return store.access.has(`${organizationId}:${membershipId}:${warehouseId}`);
     },
+    async findOperationAccess(_executor, organizationId, userId, warehouseIds) {
+      const row = membershipOf(userId, organizationId);
+      if (!row?.isActive) {
+        return null;
+      }
+      return {
+        role: row.role,
+        deniedWarehouseIds: warehouseIds.filter((id) => !store.access.has(`${organizationId}:${row.id}:${id}`)),
+      };
+    },
   };
 }
 
@@ -150,6 +160,11 @@ export function inMemoryWarehousesRepository(store: InMemoryStore): WarehousesRe
     async findById(organizationId, warehouseId) {
       const row = store.warehouses.find((item) => item.organizationId === organizationId && item.id === warehouseId);
       return row ? toWarehouse(row) : null;
+    },
+    async findStatuses(_executor, organizationId, warehouseIds) {
+      return store.warehouses
+        .filter((row) => row.organizationId === organizationId && warehouseIds.includes(row.id))
+        .map((row) => ({ id: row.id, isActive: row.isActive }));
     },
   };
 }

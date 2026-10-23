@@ -12,5 +12,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["src", "schema"]
+  // seed/demo-data.ts: API'deki açılış stoğu betiği demo verisini @ambarci/db/demo üzerinden okur.
+  "include": ["src", "schema", "seed/demo-data.ts"]
 }

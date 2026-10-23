@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
+    },
+    "./demo": {
+      "types": "./dist/seed/demo-data.d.ts",
+      "default": "./dist/seed/demo-data.js"
     }
   },
   "scripts": {
