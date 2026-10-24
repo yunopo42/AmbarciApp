@@ -230,8 +230,8 @@ Supabase projesi eu-west-1 (İrlanda), API Render'da Frankfurt'tadır (20 Ekim k
 **Yöntem.** Üç senaryo (1 kalem giriş, 5 kalem giriş, 1 kalem transfer), her biri 20 tekrar; ölçümden önce 3 ısınma onayı yapılır.
 - Sunucudaki transaction süresi, onay cevabının `Server-Timing` başlığından okunur (BEGIN'den COMMIT'e, `db;dur=…`).
 - Transaction başına SQL sayısı, bağlantıdan geçen sorgular sayılarak bulunur.
-- Yerel ölçüm: `pnpm --filter @ambarci/api measure:latency` (API bu bilgisayarda, Türkiye → İrlanda).
-- Render ölçümü: `pnpm --filter @ambarci/api measure:remote` (API Render'da, Frankfurt → İrlanda).
+- Yerel ölçüm: `pnpm measure:latency` (API bu bilgisayarda, Türkiye → İrlanda).
+- Render ölçümü: `pnpm measure:remote` (API Render'da, Frankfurt → İrlanda).
 - Ham sonuçlar `eval/gecikme/` altındadır.
 
 **Transaction başına sorgu sayısı:** BEGIN + işlemi kilitle + kalemler + yetki + birim çevrimi + stok satırlarını aç + kilitle + hareket başına 1 + APPLIED + denetim + outbox + COMMIT.
@@ -254,9 +254,22 @@ Supabase projesi eu-west-1 (İrlanda), API Render'da Frankfurt'tadır (20 Ekim k
 
 **Model:** transaction süresi ≈ sorgu sayısı × gidiş-dönüş süresi. Sorgu sayısı sabittir (veriden bağımsız). Gecikmeyi belirleyen, API ile veritabanı arasındaki mesafedir. Hazırlanmış ifadelerden sonra yerel ölçüm bu modele oturuyor: 12 × 81 ms ≈ 972 ms, ölçülen 991 ms.
 
-**Render (Frankfurt → İrlanda):** ölçüm, `Server-Timing` başlığını içeren bu sürüm Render'a yayınlandıktan sonra `measure:remote` ile yapılacak ve buraya eklenecek. Frankfurt–Dublin arası gidiş-dönüş Türkiye'den çok daha kısa olduğu için onay süresinin yerel ölçümün küçük bir kesri olması beklenir. Bu bir tahmindir, ölçüm değildir.
+**Render (Frankfurt → İrlanda):** asıl kullanımda API Render'da çalışır. Ölçüm, hazırlanmış ifadelerin yayınlandığı sürümde yapıldı.
 
-**Neden İrlanda'da bırakıldı?** Supabase projesi taşınamaz; yeniden kurmak gerekir (yeni proje, veri taşıma, anahtarların değişmesi). Render'da İrlanda bölgesi yok. Hazırlanmış ifadelerle sorgu başına tek gidiş-dönüşe inildi. Kalan seçenekler Render ölçümüne göre değerlendirilecek: transaction'daki sorguları birleştirmek (ör. denetim ve outbox kaydını tek ifadede yazmak) ya da projeyi Frankfurt'ta yeniden kurmak.
+| Render, 20 tekrar | Sorgu | Transaction: medyan / p95 | Sorgu başına (medyan) | İstek, bu bilgisayardan: medyan |
+| --- | --- | --- | --- | --- |
+| 1 kalem giriş | 12 | 269 / 276 ms | 22 ms | 377 ms |
+| 5 kalem giriş | 16 | 363 / 411 ms | 23 ms | 470 ms |
+| 1 kalem transfer | 13 | 294 / 364 ms | 23 ms | 405 ms |
+
+*24 Ekim 2026, `eval/gecikme/render-2026-10-24.json`. "Transaction" sunucudaki süredir (`Server-Timing`). "İstek", ölçümün yapıldığı bilgisayardan Render'a gidiş-dönüşü de içerir.*
+
+Sorgu başına süre üç senaryoda da 22–23 ms; model burada da tutuyor: transaction süresi ≈ sorgu sayısı × Frankfurt–İrlanda gidiş-dönüşü. Render'da hazırlanmamış sorgulu eski sürüm ölçülmedi. Modele göre yaklaşık iki katı (~540 ms) sürerdi; bu bir tahmindir.
+
+**Karar: proje İrlanda'da kalıyor.** Render'da 1 kalemli bir onay stok satırlarını ~270 ms, 5 kalemli bir onay ~360 ms kilitli tutuyor. Aynı ürüne aynı anda ikinci bir onay gelirse en fazla bu kadar bekler. Sahadaki kullanımda (bir depoda dakikada birkaç onay) bu bekleme fark edilmez; kullanıcının gördüğü süreyi asıl telefonla Frankfurt arasındaki ağ belirler.
+- **Supabase projesini Frankfurt'ta yeniden kurmak:** API ile veritabanı aynı bölgede olur ve sorgu başına süre birkaç milisaniyeye iner. Ama Supabase'de projenin bölgesi sonradan değiştirilemez. Yeni proje, veri ve kullanıcıların taşınması, bütün anahtarların değişmesi gerekir. Bu ölçümle bu maliyet gerekmiyor.
+- **Transaction'daki sorguları birleştirmek:** Ör. denetim ve outbox kaydını tek ifadede yazmak 1–2 sorgu kazandırır (~25–45 ms).
+- Bu iki seçenek, pilot denemede (7. hafta) kilit beklemesi ya da onay süresi sorun olursa yeniden değerlendirilir.
 
 **Kısıt:** Hazırlanmış ifadeler Supabase'in session pooler'ında (port 5432) çalışır, transaction pooler'da (6543) çalışmaz. `DATABASE_URL` her ortamda session pooler adresidir (`docs/yayin.md`).
 
@@ -271,5 +284,5 @@ Supabase projesi eu-west-1 (İrlanda), API Render'da Frankfurt'tadır (20 Ekim k
 - **"Aynı işlem iki kez uygulanırsa ne olur?"** Hareket tablosunda (işlem, kalem, depo) benzersizdir; ikinci uygulamanın ilk hareketi veritabanında reddedilir ve bütün transaction geri alınır. API ayrıca işlemi `FOR UPDATE` ile kilitleyip durumunu kontrol eder ve `Idempotency-Key` ile tekrar gelen isteğe aynı cevabı döner (#33). Veritabanı burada da son savunma hattıdır.
 - **"Stoğun doğru olduğunu nasıl bilirsiniz?"** Stok, hareketlerin toplamıdır. Hareket miktarı işaretli tutulduğu için bir depodaki ürünün hareketleri toplanınca `inventory.quantity` çıkmalıdır; her hareket ayrıca kendinden sonraki bakiyeyi saklar.
 - **"Kalemleri neden JSON alanında tutmadınız?"** JSON'da veritabanı ürünün, deponun ve birimin aynı şirkete ait olduğunu denetleyemezdi. Ayrı tabloda bunu bileşik yabancı anahtarlar yapıyor.
-- **"Veritabanı İrlanda'da, API Frankfurt'ta; bu bir sorun mu?"** Onay transaction'ı sabit sayıda sorgudan oluşur (1 kalemde 12) ve süresi yaklaşık sorgu sayısı × gidiş-dönüştür. Ölçümde her sorgunun iki gidiş-dönüş sürdüğü görüldü. Sorgular hazırlanmış ifade olarak gönderilince süre %45 kısaldı. Render'daki ölçüm bu bölümdeki tabloda.
+- **"Veritabanı İrlanda'da, API Frankfurt'ta; bu bir sorun mu?"** Onay transaction'ı sabit sayıda sorgudan oluşur (1 kalemde 12) ve süresi yaklaşık sorgu sayısı × gidiş-dönüştür. Ölçümde her sorgunun iki gidiş-dönüş sürdüğü görüldü. Sorgular hazırlanmış ifade olarak gönderilince süre %45 kısaldı. Render'da 1 kalemli onay ~270 ms sürüyor (sorgu başına ~22 ms); saha kullanımında fark edilmeyecek bir süre olduğu için proje taşınmadı.
 - **"Sayım farkı nasıl hesaplanıyor?"** Sistemdeki miktar onay anında kilitli stok satırından okunur, fark da veritabanında hesaplanan bir kolondur. Fark artıysa sayım fazlası, eksiyse sayım noksanı hareketi yazılır.

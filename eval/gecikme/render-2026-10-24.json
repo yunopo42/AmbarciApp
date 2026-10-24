@@ -1,0 +1,59 @@
+{
+  "label": "render",
+  "measuredAt": "2026-10-24T08:30:28.738Z",
+  "apiUrl": "https://ambarci-api.onrender.com",
+  "repeats": 20,
+  "results": [
+    {
+      "scenario": "1 kalem giriş",
+      "transaction": {
+        "n": 20,
+        "median": 269.3,
+        "p95": 275.9,
+        "min": 266.5,
+        "max": 286.3
+      },
+      "request": {
+        "n": 20,
+        "median": 377.4,
+        "p95": 388,
+        "min": 363.9,
+        "max": 394.8
+      }
+    },
+    {
+      "scenario": "5 kalem giriş",
+      "transaction": {
+        "n": 20,
+        "median": 363.1,
+        "p95": 411.4,
+        "min": 357.2,
+        "max": 431
+      },
+      "request": {
+        "n": 20,
+        "median": 470.4,
+        "p95": 520.1,
+        "min": 460,
+        "max": 530.5
+      }
+    },
+    {
+      "scenario": "1 kalem transfer",
+      "transaction": {
+        "n": 20,
+        "median": 294.3,
+        "p95": 363.9,
+        "min": 290.1,
+        "max": 388.3
+      },
+      "request": {
+        "n": 20,
+        "median": 404.8,
+        "p95": 463.6,
+        "min": 392,
+        "max": 485.1
+      }
+    }
+  ]
+}

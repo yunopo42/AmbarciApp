@@ -1,5 +1,5 @@
 // Onay transaction'ının yerelden ölçülen süresi ve transaction başına SQL ifadesi sayısı (#34). Bu bir test değil,
-// ölçümdür; pnpm db:test çalıştırmaz: pnpm --filter @ambarci/api measure:latency
+// ölçümdür; pnpm db:test çalıştırmaz: pnpm measure:latency
 //
 // API bu bilgisayarda çalışır, veritabanı Supabase'te (İrlanda): süre "buradan İrlanda'ya" gidiş-dönüşleri içerir.
 // Render (Frankfurt) ölçümü src/scripts/measure-confirm-remote.ts ile, aynı senaryolarla yapılır.
