@@ -188,6 +188,16 @@ export class StockLedgerRepository {
     return row?.quantity ?? '0';
   }
 
+  /** Ürünün herhangi bir depoda hareketi var mı (ana birimi değiştirilebilir mi). */
+  async productHasMovements(executor: DbExecutor, organizationId: string, productId: string): Promise<boolean> {
+    const [row] = await executor
+      .select({ id: inventoryMovements.id })
+      .from(inventoryMovements)
+      .where(and(eq(inventoryMovements.organizationId, organizationId), eq(inventoryMovements.productId, productId)))
+      .limit(1);
+    return row !== undefined;
+  }
+
   /** Bir işlemin hareketleri, kalem sırasıyla (aynı onay tekrar geldiğinde aynı cevabı vermek için). */
   async listByOperation(executor: DbExecutor, organizationId: string, operationId: string): Promise<Movement[]> {
     return executor.execute<Movement>(sql`
