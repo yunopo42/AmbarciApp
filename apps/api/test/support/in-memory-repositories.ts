@@ -78,12 +78,19 @@ export function inMemoryOrganizationsRepository(store: InMemoryStore): Organizat
     async createWithAdmin(name, userId): Promise<OrganizationMembership> {
       const id = store.addOrganization(name);
       store.addMember(id, userId, 'ADMIN');
-      return { id, name, role: 'ADMIN' };
+      return { id, name, role: 'ADMIN', warehouseIds: [] };
     },
     async listMemberships(userId) {
       return store.memberships
         .filter((row) => row.userId === userId && row.isActive)
-        .map((row) => ({ id: row.organizationId, name: store.organizations.get(row.organizationId) ?? '', role: row.role }));
+        .map((row) => ({
+          id: row.organizationId,
+          name: store.organizations.get(row.organizationId) ?? '',
+          role: row.role,
+          warehouseIds: store.warehouses
+            .filter((warehouse) => store.access.has(`${row.organizationId}:${row.id}:${warehouse.id}`))
+            .map((warehouse) => warehouse.id),
+        }));
     },
     async createInvitation(input) {
       store.addInvitation({ ...input, usedAt: null });
@@ -105,7 +112,7 @@ export function inMemoryOrganizationsRepository(store: InMemoryStore): Organizat
       store.addMember(invitation.organizationId, userId, invitation.role);
       invitation.usedAt = now;
       const name = store.organizations.get(invitation.organizationId) ?? '';
-      return { kind: 'accepted', organization: { id: invitation.organizationId, name, role: invitation.role } };
+      return { kind: 'accepted', organization: { id: invitation.organizationId, name, role: invitation.role, warehouseIds: [] } };
     },
     async listMembers(organizationId): Promise<Member[]> {
       return store.memberships
@@ -134,6 +141,11 @@ export function inMemoryOrganizationsRepository(store: InMemoryStore): Organizat
     },
     async revokeWarehouseAccess(organizationId, membershipId, warehouseId) {
       return store.access.delete(`${organizationId}:${membershipId}:${warehouseId}`);
+    },
+    async listWarehouseAccess(organizationId, membershipId) {
+      return store.warehouses
+        .filter((warehouse) => store.access.has(`${organizationId}:${membershipId}:${warehouse.id}`))
+        .map((warehouse) => warehouse.id);
     },
     async hasWarehouseAccess(organizationId, membershipId, warehouseId) {
       return store.access.has(`${organizationId}:${membershipId}:${warehouseId}`);
@@ -188,7 +200,7 @@ export function inMemoryWarehousesRepository(store: InMemoryStore): WarehousesRe
     async findStatuses(_executor, organizationId, warehouseIds) {
       return store.warehouses
         .filter((row) => row.organizationId === organizationId && warehouseIds.includes(row.id))
-        .map((row) => ({ id: row.id, isActive: row.isActive }));
+        .map((row) => ({ id: row.id, name: row.name, isActive: row.isActive }));
     },
   };
 }

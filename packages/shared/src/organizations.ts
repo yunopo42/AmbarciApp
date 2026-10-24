@@ -17,6 +17,11 @@ export const organizationMembershipSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   role: organizationRoleSchema,
+  /**
+   * Çalışanın stok işlemi yapabildiği depolar (user_warehouse_access). Yönetici bütün depolarda yetkilidir; onun
+   * için rol yeterlidir, liste boş gelir. Web formu depo seçeneklerini buna göre süzer; asıl kontrol API'de.
+   */
+  warehouseIds: z.array(z.uuid()),
 });
 export type OrganizationMembership = z.infer<typeof organizationMembershipSchema>;
 

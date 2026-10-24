@@ -18,6 +18,9 @@ export type UnitConversion = {
   lineNo: number;
   productFound: boolean;
   productActive: boolean;
+  /** Ürünün kodu ve adı (onay ekranı için); ürün bulunamadıysa null. */
+  sku: string | null;
+  productName: string | null;
   baseUnit: string | null;
   /** Birim bulunamadıysa false; ana birim adı verildiyse true. */
   unitFound: boolean;
@@ -30,8 +33,8 @@ export type UnitConversion = {
 };
 
 /**
- * Ürün, birim ve cari sorguları. Ürün yönetimi uçları #36'da bu modüle eklenecek; şimdilik stok işleminin
- * ihtiyaç duyduğu çevrim ve doğrulama sorguları var.
+ * Diğer modüllerin ihtiyaç duyduğu ürün, birim ve cari sorguları: stok işleminin birim çevrimi ve doğrulaması,
+ * onay ekranı için ürün ve cari adları. Ürün ve cari yönetimi ProductsRepository ve PartiesRepository'dedir.
  */
 @Injectable()
 export class CatalogRepository {
@@ -55,6 +58,8 @@ export class CatalogRepository {
       select l.line_no as "lineNo",
              p.id is not null as "productFound",
              coalesce(p.is_active, false) as "productActive",
+             p.sku as "sku",
+             p.name as "productName",
              p.base_unit as "baseUnit",
              (l.unit is null or l.unit = p.base_unit or u.unit is not null) as "unitFound",
              coalesce(u.factor, 1) as "unitFactor",
@@ -65,6 +70,24 @@ export class CatalogRepository {
       left join ${productUnits} u
         on u.organization_id = ${organizationId} and u.product_id = l.product_id and u.unit = l.unit
       order by l.line_no`);
+  }
+
+  async productExists(executor: DbExecutor, organizationId: string, productId: string): Promise<boolean> {
+    const [row] = await executor
+      .select({ id: products.id })
+      .from(products)
+      .where(and(eq(products.organizationId, organizationId), eq(products.id, productId)))
+      .limit(1);
+    return row !== undefined;
+  }
+
+  async findPartyName(executor: DbExecutor, organizationId: string, partyId: string): Promise<string | null> {
+    const [row] = await executor
+      .select({ name: parties.name })
+      .from(parties)
+      .where(and(eq(parties.organizationId, organizationId), eq(parties.id, partyId)))
+      .limit(1);
+    return row?.name ?? null;
   }
 
   async isActiveParty(executor: DbExecutor, organizationId: string, partyId: string): Promise<boolean> {

@@ -6,3 +6,4 @@ export * from './health.js';
 export * from './inventory.js';
 export * from './operations.js';
 export * from './organizations.js';
+export * from './stock.js';

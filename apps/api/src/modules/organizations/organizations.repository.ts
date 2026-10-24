@@ -51,16 +51,33 @@ export class OrganizationsRepository {
         throw new Error('Şirket oluşturulamadı.');
       }
       await tx.insert(organizationUsers).values({ organizationId: organization.id, userId, role: 'ADMIN' });
-      return { ...organization, role: 'ADMIN' };
+      return { ...organization, role: 'ADMIN', warehouseIds: [] };
     });
   }
 
+  /** Kullanıcının aktif üyelikleri ve her şirkette işlem yetkisi olan depoları (çalışan için). */
   async listMemberships(userId: string): Promise<OrganizationMembership[]> {
     return this.db
-      .select({ id: organizations.id, name: organizations.name, role: organizationUsers.role })
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        role: organizationUsers.role,
+        warehouseIds: sql<string[]>`coalesce(
+          array_agg(${userWarehouseAccess.warehouseId}) filter (where ${userWarehouseAccess.warehouseId} is not null),
+          '{}'
+        )`,
+      })
       .from(organizationUsers)
       .innerJoin(organizations, eq(organizations.id, organizationUsers.organizationId))
+      .leftJoin(
+        userWarehouseAccess,
+        and(
+          eq(userWarehouseAccess.organizationId, organizationUsers.organizationId),
+          eq(userWarehouseAccess.organizationUserId, organizationUsers.id),
+        ),
+      )
       .where(and(eq(organizationUsers.userId, userId), eq(organizationUsers.isActive, true)))
+      .groupBy(organizations.id, organizationUsers.id)
       .orderBy(asc(organizations.name));
   }
 
@@ -120,7 +137,8 @@ export class OrganizationsRepository {
       if (!organization) {
         throw new Error('Davetin şirketi bulunamadı.');
       }
-      return { kind: 'accepted', organization: { ...organization, role: invitation.role } };
+      // Yeni üyenin henüz depo yetkisi yok; yönetici Üyeler ekranından verir.
+      return { kind: 'accepted', organization: { ...organization, role: invitation.role, warehouseIds: [] } };
     });
   }
 
@@ -193,6 +211,17 @@ export class OrganizationsRepository {
       )
       .returning({ warehouseId: userWarehouseAccess.warehouseId });
     return deleted.length > 0;
+  }
+
+  /** Üyenin yetkili olduğu depolar (user_warehouse_access). */
+  async listWarehouseAccess(organizationId: string, membershipId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ warehouseId: userWarehouseAccess.warehouseId })
+      .from(userWarehouseAccess)
+      .where(
+        and(eq(userWarehouseAccess.organizationId, organizationId), eq(userWarehouseAccess.organizationUserId, membershipId)),
+      );
+    return rows.map((row) => row.warehouseId);
   }
 
   async hasWarehouseAccess(organizationId: string, membershipId: string, warehouseId: string): Promise<boolean> {

@@ -26,6 +26,7 @@ import {
   ConfirmOperationResultDto,
   CreateOperationDto,
   OperationDto,
+  OperationPreviewDto,
 } from './operations.dto.js';
 import { OperationsService } from './operations.service.js';
 import type { OperationActor } from './operations.service.js';
@@ -64,6 +65,22 @@ export class OperationsController {
     @Param('operationId', ParseUUIDPipe) operationId: string,
   ): Promise<OperationDto> {
     return this.operations.get(organization.id, operationId);
+  }
+
+  @Get(':operationId/preview')
+  @OrganizationScoped()
+  @ApiOperation({
+    summary:
+      'Onay ekranının özeti: kalemler, ana birim karşılıkları ve stoğun önce → sonra hâli (sunucuda hesaplanır; stok değişmez)',
+  })
+  @ApiOkResponse({ type: OperationPreviewDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  preview(
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organization: OrganizationContext,
+    @Param('operationId', ParseUUIDPipe) operationId: string,
+  ): Promise<OperationPreviewDto> {
+    return this.operations.preview(organization.id, actorOf(user, organization), operationId);
   }
 
   @Post(':operationId/confirm')

@@ -12,6 +12,7 @@ import type { FormEvent, JSX, KeyboardEvent } from 'react';
 import { useApi } from '@/components/api-provider';
 import { OrganizationGate } from '@/components/organization-gate';
 import { PageHeader } from '@/components/page-header';
+import { ProductMovements } from '@/components/product-movements';
 import { Alert } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -104,6 +105,7 @@ function ProductLoader({ productId, canEdit }: { productId: string; canEdit: boo
         description={canEdit ? `${query.data.sku} · ${query.data.name}` : 'Ürünü yalnızca şirket yöneticisi değiştirebilir.'}
       />
       <ProductForm product={query.data} canEdit={canEdit} />
+      <ProductMovements productId={productId} baseUnit={query.data.baseUnit} />
     </>
   );
 }

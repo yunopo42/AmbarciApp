@@ -96,6 +96,17 @@ export class OrganizationsService {
     }
   }
 
+  /**
+   * Üyenin görebileceği depolar: yönetici için null (süzme yok, bütün depolar), çalışan için yetkili olduğu depolar.
+   * Ürünün hareket geçmişi çalışana yalnızca bu depolardan gösterilir.
+   */
+  async visibleWarehouseIds(organization: { id: string; role: OrganizationRole; membershipId: string }): Promise<string[] | null> {
+    if (organization.role === 'ADMIN') {
+      return null;
+    }
+    return this.repository.listWarehouseAccess(organization.id, organization.membershipId);
+  }
+
   hasWarehouseAccess(organizationId: string, membershipId: string, warehouseId: string): Promise<boolean> {
     return this.repository.hasWarehouseAccess(organizationId, membershipId, warehouseId);
   }
