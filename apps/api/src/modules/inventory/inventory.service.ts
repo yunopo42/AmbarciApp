@@ -6,7 +6,7 @@ import { ApiException } from '../../common/api-exception.js';
 import { postgresErrorOf } from '../../common/postgres-error.js';
 import { DATABASE } from '../../database/database.module.js';
 import { StockLedgerRepository } from './stock-ledger.repository.js';
-import type { StockLevelRow } from './stock-ledger.repository.js';
+import type { ProductWarehouseStockRow, StockLevelRow } from './stock-ledger.repository.js';
 import { stockEffectsOf } from './stock-preview.js';
 import type { PreviewLine } from './stock-preview.js';
 import { WarehousesRepository } from './warehouses.repository.js';
@@ -57,6 +57,14 @@ export class InventoryService {
     products: { productId: string; minStock: string | null }[],
   ): Promise<StockLevelRow[]> {
     return this.ledger.stockLevels(this.db, organizationId, warehouseId, products);
+  }
+
+  productStockByWarehouse(
+    organizationId: string,
+    product: { productId: string; minStock: string | null },
+    warehouseIds: string[] | null,
+  ): Promise<ProductWarehouseStockRow[]> {
+    return this.ledger.productStockByWarehouse(this.db, organizationId, product, warehouseIds);
   }
 
   listProductMovements(

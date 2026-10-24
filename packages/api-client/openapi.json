@@ -1862,6 +1862,75 @@
         ]
       }
     },
+    "/v1/products/{productId}/stock": {
+      "get": {
+        "operationId": "StockController_productStock",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductStockDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Ürünün depolara göre stoğu ve toplamı; çalışan yalnızca yetkili olduğu depoları görür",
+        "tags": [
+          "stock"
+        ]
+      }
+    },
     "/v1/products/{productId}/movements": {
       "get": {
         "operationId": "StockController_productMovements",
@@ -3138,6 +3207,69 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "ProductWarehouseStockDto": {
+        "type": "object",
+        "properties": {
+          "warehouse": {
+            "$ref": "#/components/schemas/WarehouseDto"
+          },
+          "quantity": {
+            "type": "string",
+            "example": "120.000",
+            "description": "Ana birimde; depoda hareketi olmayan ürün için 0"
+          },
+          "averageCost": {
+            "type": "string",
+            "example": "10.0000"
+          },
+          "belowMinimum": {
+            "type": "boolean",
+            "description": "Kritik stok eşiği tanımlı ve miktar eşiğin altında"
+          }
+        },
+        "required": [
+          "warehouse",
+          "quantity",
+          "averageCost",
+          "belowMinimum"
+        ]
+      },
+      "ProductStockDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baseUnit": {
+            "type": "string",
+            "example": "adet"
+          },
+          "minStock": {
+            "type": "string",
+            "nullable": true,
+            "example": "50.000"
+          },
+          "total": {
+            "type": "string",
+            "example": "140.000",
+            "description": "Listelenen depoların toplamı"
+          },
+          "warehouses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductWarehouseStockDto"
+            }
+          }
+        },
+        "required": [
+          "productId",
+          "baseUnit",
+          "minStock",
+          "total",
+          "warehouses"
         ]
       },
       "ProductMovementDto": {

@@ -8,6 +8,7 @@ import {
   organizationMembershipSchema,
   productMovementListSchema,
   productSchema,
+  productStockSchema,
   warehouseStockSchema,
 } from '@ambarci/shared';
 import type { OperationPreview } from '@ambarci/shared';
@@ -160,5 +161,28 @@ describe('Stok okuma uçları ve onay önizlemesi (gerçek veritabanı)', () => 
     const foreign = await other.addProduct('B-ONLY');
     const notFound = await fx.call('get', `/v1/products/${foreign}/movements`).expect(404);
     expect(errorCode(notFound.body)).toBe('PRODUCT_NOT_FOUND');
+  });
+
+  it("ürünün depolara göre stoğu: toplam ve kritik eşik SQL'de; çalışan yalnızca yetkili deposunu görür", async () => {
+    // Merkez 40 (önceki testlerde 120 − 20 transfer − 60 çıkış), Ostim 20; eşik 50.
+    const seen = productStockSchema.parse((await fx.call('get', `/v1/products/${priz}/stock`).expect(200)).body);
+    expect(seen).toMatchObject({ baseUnit: 'adet', minStock: '50.000', total: '60.000' });
+    expect(seen.warehouses.map((row) => [row.warehouse.name, row.quantity, row.belowMinimum])).toEqual([
+      ['Merkez', '40.000', true],
+      ['Ostim', '20.000', true],
+    ]);
+
+    // Hiç hareketi olmayan ürün bütün aktif depolarda 0 görünür.
+    const empty = productStockSchema.parse((await fx.call('get', `/v1/products/${kablo}/stock`).expect(200)).body);
+    expect(empty).toMatchObject({ total: '0.000', minStock: null });
+    expect(empty.warehouses.map((row) => row.quantity)).toEqual(['0.000', '0.000']);
+
+    // Çalışanın yetkisi yalnızca Merkez'de: toplam da yalnızca Merkez'in.
+    const byEmployee = productStockSchema.parse((await fx.call('get', `/v1/products/${priz}/stock`, employee).expect(200)).body);
+    expect(byEmployee.total).toBe('40.000');
+    expect(byEmployee.warehouses.map((row) => row.warehouse.name)).toEqual(['Merkez']);
+
+    const foreign = await other.addProduct('B-STOK');
+    await fx.call('get', `/v1/products/${foreign}/stock`).expect(404);
   });
 });

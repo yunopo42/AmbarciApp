@@ -15,6 +15,7 @@ Ekrandan, asistandan (5. hafta) ya da içe aktarmadan (#39) gelen her işlem ön
 | `POST /v1/operations/{id}/cancel` | Onay bekleyen işlemi iptal eder (açan kişi ya da yönetici) |
 | `GET /v1/warehouses/{id}/stock` | Depodaki stok: aktif ürünler, miktar, ortalama maliyet, kritik eşik altında mı. Arama ve sayfalama ürün listesindekiyle aynı; depoda hareketi olmayan ürün 0 görünür |
 | `GET /v1/products/{id}/movements` | Ürünün hareketleri, en yeni önce; depo süzgeci ve sayfalama |
+| `GET /v1/products/{id}/stock` | Ürünün depolara göre stoğu ve toplamı (mobil ürün detayı; 4. haftada asistanın stok sorgusu). Çalışan yalnızca yetkili depoları görür, toplam da onların toplamıdır |
 
 İşlem türleri: giriş (`STOCK_IN`), çıkış (`STOCK_OUT`), transfer (`TRANSFER`), sayım (`COUNT`), fire (`WASTE`), açılış (`OPENING`, yalnızca yönetici). Ters kayıt (`REVERSAL`) 5. haftada gelir.
 
@@ -119,6 +120,7 @@ Kod: `operations.service.ts` (`preview`), `inventory/stock-preview.ts` ve `stock
 | `/operations/{id}` | Özet: kalem başına girilen miktar ve ana birim karşılığı, depo, stok önce → sonra (transferde iki depo), yeterli/yetersiz. "Onayla" ve "İptal et". Onaydan sonra yazılan hareketler ve yeni stok |
 | `/stock` | Depo bazında stok: depo seçimi, arama, sayfalama; miktar, kritik eşik, "Kritik"/"Yeterli" rozeti, ortalama maliyet |
 | `/products/{id}` | Ürün formunun altında hareket geçmişi (depo süzgeci, sayfalama) |
+| Mobil: stok listesi ve ürün detayı | Depo çipleri, arama, "KRİTİK"/"YETERLİ" rozeti, kaydırdıkça sonraki sayfa; ürün detayında depolara göre stok, birimler, alternatif adlar, son 10 hareket (#38) |
 
 - **Çift tıklama:** Özet sayfası açılınca bir `Idempotency-Key` (UUID) üretilir ve o sayfadaki bütün onay denemeleri aynı anahtarla gider. Düğme istek sürerken kapalıdır; yine de ikinci istek giderse API işlemi uygulanmış ve anahtarı aynı bulur, ilk cevabı döner. Stok bir kez değişir.
 - **Depo yetkisi:** Çalışanın yetkili olduğu depolar üyelik bilgisinde gelir (`GET /v1/organizations` → `warehouseIds`). Formdaki ve stok listesindeki depo seçenekleri buna göre süzülür; asıl kontrol API'de.

@@ -32,6 +32,9 @@ export type UnitConversion = {
   baseUnitCost: string | null;
 };
 
+/** Stok ekranlarının ihtiyaç duyduğu ürün bilgisi. */
+export type ProductSummary = { id: string; baseUnit: string; minStock: string | null };
+
 /**
  * Diğer modüllerin ihtiyaç duyduğu ürün, birim ve cari sorguları: stok işleminin birim çevrimi ve doğrulaması,
  * onay ekranı için ürün ve cari adları. Ürün ve cari yönetimi ProductsRepository ve PartiesRepository'dedir.
@@ -72,13 +75,14 @@ export class CatalogRepository {
       order by l.line_no`);
   }
 
-  async productExists(executor: DbExecutor, organizationId: string, productId: string): Promise<boolean> {
+  /** Ürünün ana birimi ve kritik stok eşiği; ürün bu şirkette yoksa null. */
+  async findProductSummary(executor: DbExecutor, organizationId: string, productId: string): Promise<ProductSummary | null> {
     const [row] = await executor
-      .select({ id: products.id })
+      .select({ id: products.id, baseUnit: products.baseUnit, minStock: products.minStock })
       .from(products)
       .where(and(eq(products.organizationId, organizationId), eq(products.id, productId)))
       .limit(1);
-    return row !== undefined;
+    return row ?? null;
   }
 
   async findPartyName(executor: DbExecutor, organizationId: string, partyId: string): Promise<string | null> {

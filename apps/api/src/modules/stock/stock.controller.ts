@@ -7,7 +7,7 @@ import { ApiErrorDto } from '../../common/api-error.dto.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import type { OrganizationContext } from '../organizations/organization-context.js';
 import { CurrentOrganization, OrganizationScoped } from '../organizations/organization.decorators.js';
-import { ProductMovementListDto, WarehouseStockDto } from './stock.dto.js';
+import { ProductMovementListDto, ProductStockDto, WarehouseStockDto } from './stock.dto.js';
 import { StockService } from './stock.service.js';
 
 /** Stoğu okuyan uçlar. Stok yalnızca işlem onayıyla değişir (POST /v1/operations/{id}/confirm). */
@@ -33,6 +33,20 @@ export class StockController {
     @Query(new ZodValidationPipe(stockListQuerySchema)) query: StockListQuery,
   ): Promise<WarehouseStockDto> {
     return this.stock.warehouseStock(organization.id, warehouseId, query);
+  }
+
+  @Get('products/:productId/stock')
+  @OrganizationScoped()
+  @ApiOperation({
+    summary: 'Ürünün depolara göre stoğu ve toplamı; çalışan yalnızca yetkili olduğu depoları görür',
+  })
+  @ApiOkResponse({ type: ProductStockDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  productStock(
+    @CurrentOrganization() organization: OrganizationContext,
+    @Param('productId', ParseUUIDPipe) productId: string,
+  ): Promise<ProductStockDto> {
+    return this.stock.productStock(organization, productId);
   }
 
   @Get('products/:productId/movements')

@@ -1,6 +1,6 @@
 import { inventory, inventoryMovements, stockCounts, warehouses } from '@ambarci/db';
 import type { DbExecutor } from '@ambarci/db';
-import type { Movement, MovementType, ProductMovement } from '@ambarci/shared';
+import type { Movement, MovementType, ProductMovement, WarehouseType } from '@ambarci/shared';
 import { Injectable } from '@nestjs/common';
 import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
@@ -280,6 +280,41 @@ export class StockLedgerRepository {
   }
 
   /**
+   * Ürünün depolara göre stoğu. Satırı olmayan depo 0 döner; pasif depo yalnızca stoğu varsa listelenir.
+   * `warehouseIds` verilirse yalnızca o depolar (çalışanın yetkili depoları). Toplam ve kritik eşik karşılaştırması
+   * SQL'de, NUMERIC ile.
+   */
+  async productStockByWarehouse(
+    executor: DbExecutor,
+    organizationId: string,
+    product: { productId: string; minStock: string | null },
+    warehouseIds: string[] | null,
+  ): Promise<ProductWarehouseStockRow[]> {
+    if (warehouseIds?.length === 0) {
+      return [];
+    }
+    const visible = warehouseIds
+      ? sql`and w.id in (${sql.join(
+          warehouseIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})`
+      : sql``;
+    return executor.execute<ProductWarehouseStockRow>(sql`
+      select w.id, w.name, w.type, w.is_active as "isActive",
+             round(coalesce(i.quantity, 0), 3) as quantity,
+             round(coalesce(i.average_cost, 0), 4) as "averageCost",
+             (${product.minStock}::numeric is not null and coalesce(i.quantity, 0) < ${product.minStock}::numeric) as "belowMinimum",
+             round(sum(coalesce(i.quantity, 0)) over (), 3) as total
+      from ${warehouses} w
+      left join ${inventory} i
+        on i.organization_id = w.organization_id and i.warehouse_id = w.id and i.product_id = ${product.productId}
+      where w.organization_id = ${organizationId}
+        and (w.is_active or coalesce(i.quantity, 0) > 0)
+        ${visible}
+      order by w.name`);
+  }
+
+  /**
    * Ürünün hareketleri, en yeni önce. `warehouseIds` verilirse yalnızca o depolardaki hareketler (çalışan yalnızca
    * yetkili olduğu depoları görür); `warehouseId` ekranın depo süzgecidir.
    */
@@ -345,6 +380,18 @@ export type PreviewedEffect = {
   before: string;
   after: string;
   sufficient: boolean;
+};
+
+export type ProductWarehouseStockRow = {
+  id: string;
+  name: string;
+  type: WarehouseType;
+  isActive: boolean;
+  quantity: string;
+  averageCost: string;
+  belowMinimum: boolean;
+  /** Bütün satırlarda aynı: listelenen depoların toplamı. */
+  total: string;
 };
 
 export type StockLevelRow = {
