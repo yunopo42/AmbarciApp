@@ -146,7 +146,9 @@ pnpm build
 | `pnpm db:generate` | `packages/db/schema` içindeki şemadan yeni migration üretir |
 | `pnpm db:migrate` | Uygulanmamış migration'ları veritabanına uygular |
 | `pnpm db:seed` | Demo verisini (ABC Elektrik, Kuzey Tesisat) ve ABC Elektrik'in açılış stoklarını (onaylanan açılış işlemleriyle) yükler; tekrar çalıştırmak kayıt ve stok çoğaltmaz |
-| `pnpm db:test` | RLS izolasyon, seed ve API (şirket, davet, iki şirket izolasyonu) testlerini gerçek veritabanında çalıştırır; testler kendi verisini geri alır ya da siler |
+| `pnpm db:test` | RLS izolasyon, seed ve API (şirket, davet, iki şirket izolasyonu, stok transaction'ı, eşzamanlı onay ve rollback) testlerini gerçek veritabanında çalıştırır; testler kendi verisini geri alır ya da siler |
+| `pnpm --filter @ambarci/api measure:latency` | Onay transaction'ının bu bilgisayardan süresini ve sorgu sayısını ölçer; sonuç `eval/gecikme/` altına yazılır |
+| `pnpm --filter @ambarci/api measure:remote` | Aynı ölçümü çalışan bir API'ye (varsayılan Render) karşı yapar; `.env` içinde `MEASURE_EMAIL` ve `MEASURE_PASSWORD` ister |
 
 Demo şirketine giriş yapabilmek için önce Supabase panelinde (**Authentication → Users**) kendine bir kullanıcı oluştur, e-postasını `.env` dosyasındaki `SEED_ADMIN_EMAIL` satırına yaz ve `pnpm db:seed` komutunu yeniden çalıştır. Bu kullanıcı ABC Elektrik'e yönetici olarak bağlanır.
 

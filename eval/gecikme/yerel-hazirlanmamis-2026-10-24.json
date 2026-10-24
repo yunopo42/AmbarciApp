@@ -1,0 +1,69 @@
+{
+  "label": "yerel-hazirlanmamis",
+  "measuredAt": "2026-10-24T07:57:39.352Z",
+  "apiUrl": "bu bilgisayar (Supabase eu-west-1)",
+  "repeats": 20,
+  "roundTrip": {
+    "n": 20,
+    "median": 80,
+    "p95": 87,
+    "min": 78.4,
+    "max": 97.9
+  },
+  "results": [
+    {
+      "scenario": "1 kalem giriş",
+      "transaction": {
+        "n": 20,
+        "median": 1793.9,
+        "p95": 1908.4,
+        "min": 1765.2,
+        "max": 1938.2
+      },
+      "request": {
+        "n": 20,
+        "median": 1987.3,
+        "p95": 2085.2,
+        "min": 1934,
+        "max": 2105.1
+      },
+      "statements": 12
+    },
+    {
+      "scenario": "5 kalem giriş",
+      "transaction": {
+        "n": 20,
+        "median": 2447.3,
+        "p95": 2502.6,
+        "min": 2413.5,
+        "max": 2534
+      },
+      "request": {
+        "n": 20,
+        "median": 2623.8,
+        "p95": 2714.1,
+        "min": 2583.3,
+        "max": 2721
+      },
+      "statements": 16
+    },
+    {
+      "scenario": "1 kalem transfer",
+      "transaction": {
+        "n": 20,
+        "median": 1950,
+        "p95": 1995.4,
+        "min": 1911.3,
+        "max": 2062.2
+      },
+      "request": {
+        "n": 20,
+        "median": 2121.1,
+        "p95": 2161.9,
+        "min": 2082.2,
+        "max": 2230.9
+      },
+      "statements": 13
+    }
+  ]
+}
