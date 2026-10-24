@@ -1,10 +1,16 @@
 'use client';
 
 import type { Invitation, OrganizationRole } from '@ambarci/shared';
+import { Copy } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent, JSX } from 'react';
 
 import { useApi } from '@/components/api-provider';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input, NativeSelect } from '@/components/ui/input';
 import { errorMessage } from '@/lib/api-client';
 import { formatDateTime, ROLE_LABELS } from '@/lib/labels';
 
@@ -43,39 +49,42 @@ export function InvitationGenerator(): JSX.Element {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
-      <h2 className="font-semibold">Davet kodu üret</h2>
+    <Card>
+      <CardHeader>
+        <CardTitle>Davet kodu üret</CardTitle>
+        <CardDescription>Kod tek kullanımlıktır ve seçilen süre sonunda geçersiz olur.</CardDescription>
+      </CardHeader>
       <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span>Rol</span>
-          <select name="role" defaultValue="EMPLOYEE" className="rounded border px-2 py-2">
+        <Field id="invitation-role" label="Rol" className="w-44">
+          <NativeSelect id="invitation-role" name="role" defaultValue="EMPLOYEE">
             <option value="EMPLOYEE">{ROLE_LABELS.EMPLOYEE}</option>
             <option value="ADMIN">{ROLE_LABELS.ADMIN}</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span>Geçerlilik (gün)</span>
-          <input name="expiresInDays" type="number" min={1} max={30} defaultValue={7} required className="w-24 rounded border px-2 py-2" />
-        </label>
-        <button type="submit" disabled={pending} className="rounded border px-4 py-2 font-medium">
+          </NativeSelect>
+        </Field>
+        <Field id="invitation-days" label="Geçerlilik (gün)" className="w-36">
+          <Input id="invitation-days" name="expiresInDays" type="number" min={1} max={30} defaultValue={7} required />
+        </Field>
+        <Button type="submit" disabled={pending}>
           {pending ? 'Üretiliyor…' : 'Kod üret'}
-        </button>
+        </Button>
       </form>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <Alert>{error}</Alert> : null}
       {invitation ? (
-        <div className="flex flex-col gap-2" aria-live="polite">
-          <p>
-            Kod: <strong className="font-mono text-lg tracking-widest">{invitation.code}</strong>
+        <div className="flex flex-col gap-2 rounded-md border border-divider bg-canvas p-4" aria-live="polite">
+          <p className="flex flex-wrap items-center gap-3">
+            <span className="text-text-muted">Kod:</span>
+            <strong className="text-headline-md tracking-widest text-primary tabular-nums">{invitation.code}</strong>
+            <Button variant="secondary" size="sm" onClick={() => void copyCode(invitation.code)}>
+              <Copy aria-hidden />
+              {copied ? 'Kopyalandı' : 'Kodu kopyala'}
+            </Button>
           </p>
-          <p className="text-sm">
+          <p className="text-text-muted">
             {ROLE_LABELS[invitation.role]} olarak katılım için, {formatDateTime(invitation.expiresAt)} tarihine kadar
             ve bir kez kullanılabilir. Kodu yalnızca davet ettiğin kişiyle paylaş.
           </p>
-          <button type="button" onClick={() => void copyCode(invitation.code)} className="self-start rounded border px-3 py-1">
-            {copied ? 'Kopyalandı' : 'Kodu kopyala'}
-          </button>
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }

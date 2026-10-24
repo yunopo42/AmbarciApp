@@ -8,10 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function WarehousesPage(): JSX.Element {
-  return (
-    <>
-      <h1 className="text-xl font-semibold">Depolar</h1>
-      <WarehouseList />
-    </>
-  );
+  return <WarehouseList />;
 }

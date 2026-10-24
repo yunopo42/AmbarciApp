@@ -1,6 +1,6 @@
 # Katalog ve depo yönetimi
 
-Bu belge ürün (stok kartı), birim, alternatif ad, depo ve cari yönetiminin kurallarını anlatır. İlgili iş: #36 (API; web ekranları aynı işin ikinci adımında). Tablolar ve kısıtlar: [veritabani.md](veritabani.md).
+Bu belge ürün (stok kartı), birim, alternatif ad, depo ve cari yönetiminin kurallarını anlatır. İlgili iş: #36 (API ve web ekranları). Tablolar ve kısıtlar: [veritabani.md](veritabani.md).
 
 ## Uç noktalar
 
@@ -34,6 +34,23 @@ Kodlar: `apps/api/src/modules/catalog/` (ürün ve cari), `apps/api/src/modules/
 7. **Türkçe arama.** PostgreSQL'in `ILIKE`'ı büyük "I"yı "i"ye çevirir, oysa Türkçede küçüğü "ı"dır: "YANGIN" araması "yangın"ı bulmazdı. Arama metni ve kolon aynı biçime getirilir: I, İ, ı ve i harflerinin hepsi "i" olur, sonra küçük harfe çevrilir (`apps/api/src/common/search.ts`). Böylece "YANGIN", "yangın" ve İngilizce klavyeyle yazılan "yangin" aynı ürünü bulur. `%` ve `_` gibi özel karakterler düz karakter olarak aranır. Benzerlik araması (yazım hatalarına dayanıklı, `pg_trgm`) 4. haftada asistanın ürün arama aracıyla gelir.
 
 8. **Sayılar metin.** Katsayı (`"12"`), kritik stok (`"50"`) ve vergi numarası metin olarak taşınır ve sayıya çevrilmez (ADR-003). Katsayı en fazla 6 ondalık hanelidir ve sıfırdan büyük olmalıdır; ana birim ek birim olarak yazılamaz; aynı birim ya da ad iki kez yazılamaz. Bu son iki kontrolde büyük/küçük harf ve Türkçe I/İ farkı gözetilmez.
+
+## Web ekranları
+
+| Sayfa | Ne var |
+| --- | --- |
+| `/products` | Ürün tablosu: SKU, ad ve alternatif adlar, ana ve ek birimler, barkod, kritik stok, durum. Arama, durum süzgeci (aktif, pasif, tümü), 25'erli sayfalama |
+| `/products/new`, `/products/{id}` | Ürün formu: bilgiler, ek birimler (birim, katsayı, barkod; satır ekle/kaldır), alternatif adlar (ekle/kaldır), aktif kutusu |
+| `/warehouses` | Depo tablosu (sayfalamasız, pasifler rozetle); ekleme ve düzenleme penceresi: ad, tür, aktif |
+| `/parties` | Cari tablosu: arama, tür ve durum süzgeci, sayfalama; ekleme ve düzenleme penceresi: ad, tür, VKN/TCKN, aktif |
+
+- **Rol:** "Yeni …" ve "Düzenle" düğmeleri yalnızca yöneticiye görünür. Çalışan ürün sayfasını açarsa form salt okunur gelir. Bu yalnızca arayüz kolaylığıdır; asıl yetki API'de (`403 ROLE_FORBIDDEN`).
+- **Aynı şema iki yerde çalışır:** Form gönderilmeden önce `packages/shared` içindeki şemayla (`productInputSchema`, `warehouseInputSchema`, `partyInputSchema`) tarayıcıda kontrol edilir; hata alanın altında gösterilir. API aynı şemayla bir kez daha kontrol eder.
+- **API hatası alana bağlanır:** `409` kodları ilgili alanın altına yazılır (`PRODUCT_SKU_TAKEN` → SKU, `BASE_UNIT_LOCKED` → ana birim, `UNIT_IN_USE` → ek birimler, `WAREHOUSE_NAME_TAKEN` → ad, `PARTY_TAX_ID_TAKEN` → VKN/TCKN). Mesaj API'nin Türkçe mesajıdır (`apps/web/lib/form-errors.ts`).
+- **Ondalık yazımı:** Katsayı ve kritik stok alanına "12,5" yazılabilir; gönderilirken "12.5" olur. Ekranda "1.412,5" biçiminde gösterilir. Hepsi metin üzerinde yapılır, sayıya çevrilmez (`apps/web/lib/format.ts`, ADR-003).
+- **Arama ve sayfalama:** Arama kutusu yazmayı bırakınca (300 ms) istek atar. Süzgeç değişince ilk sayfaya dönülür. Yeni sayfa gelene kadar önceki sayfa soluk görünür (`keepPreviousData`).
+- **Kayıttan sonra:** Liste sorguları geçersiz sayılır ve sunucudan yeniden okunur. Depo değişince üyelerin depo yetkisi tablosu da güncellenir.
+- **Tablo:** TanStack Table 9 (`apps/web/components/ui/data-table.tsx`). Sayfalama elle (`manualPagination`): tablo, API'nin döndüğü sayfayı çizer, sayfa sayısını `total`'dan hesaplar.
 
 ## Testler
 

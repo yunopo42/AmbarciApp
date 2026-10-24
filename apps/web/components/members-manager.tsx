@@ -7,21 +7,19 @@ import type { JSX } from 'react';
 
 import { useApi } from '@/components/api-provider';
 import { InvitationGenerator } from '@/components/invitation-generator';
-import { useOrganizations } from '@/components/organization-provider';
+import { OrganizationGate } from '@/components/organization-gate';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { CardDescription, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { errorMessage } from '@/lib/api-client';
 import { ROLE_LABELS } from '@/lib/labels';
 
 /** Yönetici ekranı: davet kodu üretme, üyeler ve çalışanların depo yetkileri. */
 export function MembersManager(): JSX.Element {
-  const { active } = useOrganizations();
-  if (!active) {
-    return <p>Önce ana sayfadan bir şirket kur ya da bir şirkete katıl.</p>;
-  }
-  if (active.role !== 'ADMIN') {
-    return <p>Bu sayfa yalnızca şirket yöneticilerine açık.</p>;
-  }
   // Şirket değişince şirket katmanı (istemci ve önbellek) baştan kurulur.
-  return <MembersPanel />;
+  return <OrganizationGate adminOnly>{() => <MembersPanel />}</OrganizationGate>;
 }
 
 function MembersPanel(): JSX.Element {
@@ -52,62 +50,73 @@ function MembersPanel(): JSX.Element {
   const failed = members.isError ? members.error : warehouses.isError ? warehouses.error : null;
 
   return (
-    <div className="flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <InvitationGenerator />
       <section className="flex flex-col gap-3">
-        <h2 className="font-semibold">Üyeler ve depo yetkileri</h2>
-        <p className="text-sm">
-          Yöneticiler tüm depolarda işlem yapabilir. Çalışanlar yalnızca işaretli depolarda işlem yapabilir.
-        </p>
-        {members.isPending || warehouses.isPending ? <p aria-live="polite">Üyeler yükleniyor…</p> : null}
-        {failed ? <p role="alert">{errorMessage(failed)}</p> : null}
-        {actionError ? <p role="alert">{actionError}</p> : null}
+        <div className="flex flex-col gap-1">
+          <CardTitle>Üyeler ve depo yetkileri</CardTitle>
+          <CardDescription>
+            Yöneticiler tüm depolarda işlem yapabilir. Çalışanlar yalnızca işaretli depolarda işlem yapabilir.
+          </CardDescription>
+        </div>
+        {members.isPending || warehouses.isPending ? (
+          <p aria-live="polite" className="text-text-muted">
+            Üyeler yükleniyor…
+          </p>
+        ) : null}
+        {failed ? <Alert>{errorMessage(failed)}</Alert> : null}
+        {actionError ? <Alert>{actionError}</Alert> : null}
         {members.data && warehouses.data ? (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b">
-                  <th className="p-2">Üye</th>
-                  <th className="p-2">Rol</th>
-                  {warehouses.data.map((warehouse) => (
-                    <th key={warehouse.id} className="p-2">
-                      {warehouse.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {members.data.map((member) => (
-                  <tr key={member.id} className="border-b">
-                    <td className="p-2">
-                      {member.email ?? member.userId}
-                      {member.isActive ? '' : ' (pasif)'}
-                    </td>
-                    <td className="p-2">{ROLE_LABELS[member.role]}</td>
+          <Table aria-label="Üyeler ve depo yetkileri">
+            <TableHeader>
+              <TableRow className="h-auto border-0">
+                <TableHead>Üye</TableHead>
+                <TableHead>Rol</TableHead>
+                {warehouses.data.map((warehouse) => (
+                  <TableHead key={warehouse.id} className="text-center">
+                    {warehouse.name}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.data.map((member) => {
+                const memberName = member.email ?? member.userId;
+                return (
+                  <TableRow key={member.id}>
+                    <TableCell>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-body-md-medium">{memberName}</span>
+                        {member.isActive ? null : <Badge variant="muted">Pasif</Badge>}
+                      </span>
+                    </TableCell>
+                    <TableCell>{ROLE_LABELS[member.role]}</TableCell>
                     {warehouses.data.map((warehouse) => {
                       const key = `${member.id}:${warehouse.id}`;
                       const granted = member.warehouseIds.includes(warehouse.id);
                       return (
-                        <td key={warehouse.id} className="p-2">
+                        <TableCell key={warehouse.id} className="text-center">
                           {member.role === 'ADMIN' ? (
-                            <span className="text-sm">Tümü</span>
+                            <span className="text-text-muted">Tümü</span>
                           ) : (
-                            <input
-                              type="checkbox"
-                              aria-label={`${member.email ?? member.userId}: ${warehouse.name} yetkisi`}
-                              checked={granted}
-                              disabled={busyKey === key}
-                              onChange={(event) => void toggleAccess(member, warehouse.id, event.target.checked)}
-                            />
+                            // Görünen kutu 22 px, tıklanabilir alan 48 px (docs/tasarim.md, onay kutusu).
+                            <label className="inline-flex size-12 cursor-pointer items-center justify-center">
+                              <Checkbox
+                                aria-label={`${memberName}: ${warehouse.name} yetkisi`}
+                                checked={granted}
+                                disabled={busyKey === key}
+                                onChange={(event) => void toggleAccess(member, warehouse.id, event.target.checked)}
+                              />
+                            </label>
                           )}
-                        </td>
+                        </TableCell>
                       );
                     })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         ) : null}
       </section>
     </div>

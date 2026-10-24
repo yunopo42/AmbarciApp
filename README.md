@@ -2,7 +2,7 @@
 
 Ambarcı, saha çalışanlarının mobil uygulamadaki yapay zekâ asistanıyla yazarak veya konuşarak stok işlemi yapacağı, yöneticilerin ise web panelinden yöneteceği çok şirketli bir stok takip sistemidir. Asistan işlemi yalnızca önerecek; stok, kullanıcı öneriyi onayladığında değişecek. Proje bir bitirme projesidir (Senior Design Project) ve [8 haftalık plana](docs/plan.md) göre geliştirilmektedir.
 
-**Durum:** Geliştirme aşamasında. Monorepo iskeleti, CI, web ve API yayını, mobil development build, veritabanı ve şirketler arası izolasyon, kimlik doğrulama ve stok işlemlerinin API'si (onay transaction'ı) hazırdır. Web ve mobil stok ekranları ile asistan sonraki işlerde gelecek.
+**Durum:** Geliştirme aşamasında. Monorepo iskeleti, CI, web ve API yayını, mobil development build, veritabanı ve şirketler arası izolasyon, kimlik doğrulama, stok işlemlerinin API'si (onay transaction'ı) ve web'de ürün, depo ve cari yönetimi hazırdır. Web ve mobil stok ekranları ile asistan sonraki işlerde gelecek.
 
 ## Canlı bağlantılar
 
@@ -12,7 +12,7 @@ Ambarcı, saha çalışanlarının mobil uygulamadaki yapay zekâ asistanıyla y
 | API sağlık kontrolü (Render) | [ambarci-api.onrender.com/v1/health](https://ambarci-api.onrender.com/v1/health) |
 | API belgesi (Swagger) | [ambarci-api.onrender.com/docs](https://ambarci-api.onrender.com/docs) |
 
-Web panelinde şimdilik yalnızca API durumunu gösteren bir kart vardır. API ücretsiz planda çalıştığı için 15 dakika istek almazsa uyur; ilk istekte yaklaşık bir dakika beklemek gerekebilir.
+Web panelinde giriş, şirket ve üye yönetimi ile ürün, depo ve cari ekranları vardır. API ücretsiz planda çalıştığı için 15 dakika istek almazsa uyur; ilk istekte yaklaşık bir dakika beklemek gerekebilir.
 
 ## Mimari özet
 
@@ -33,9 +33,9 @@ Tasarımın temel kuralları:
 | Katman | Teknoloji | Durum |
 | --- | --- | --- |
 | Mobil | Expo, Expo Router | İskelet, development build, ses tanıma deneme ekranı |
-| Web paneli | Next.js, Tailwind, TanStack Query | Giriş, şirket, davet, üyeler ve depolar; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
+| Web paneli | Next.js, Tailwind, shadcn/ui, TanStack Query, TanStack Table | Giriş, şirket, davet, üyeler; ürün (birim ve alternatif adlarıyla), depo ve cari yönetimi (arama ve sayfalamalı tablolar); tasarım değerleri `docs/tasarim.md`'den; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
 | API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi (şirket ve rol guard'larıyla); ürün, birim, alternatif ad, depo ve cari yönetimi; stok işlemleri: açma, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; Render'da yayında |
-| Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
+| Ortak şemalar | Zod | Sağlık, hata, kullanıcı, şirket, katalog ve stok işlemi şemaları; API ve web formları aynı şemayla doğrular |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog, stok, işlem, hareket, sayım, denetim ve outbox tabloları (16 tablo), RLS politikaları ve iki şirketli izolasyon testi |
 | Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |
 | Asistan | Claude API | Planlandı (4. hafta) |

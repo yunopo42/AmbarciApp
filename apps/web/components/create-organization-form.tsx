@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { FormEvent, JSX } from 'react';
 
 import { useApi } from '@/components/api-provider';
 import { useOrganizations } from '@/components/organization-provider';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { errorMessage } from '@/lib/api-client';
 
 /** Şirket kurar; kuran kullanıcı yönetici olur ve yeni şirket aktif şirket yapılır. */
@@ -15,6 +20,8 @@ export function CreateOrganizationForm(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const pending = create.isPending;
+  // Form ana sayfada iki kez görünebilir (kullanıcının şirketi varken); alan kimlikleri çakışmasın.
+  const nameId = useId();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -34,18 +41,21 @@ export function CreateOrganizationForm(): JSX.Element {
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-3 rounded border p-4">
-      <h2 className="font-semibold">Şirketini kur</h2>
-      <p className="text-sm">Şirketi kuran kişi yönetici olur; çalışanlarını davet koduyla eklersin.</p>
-      <label className="flex flex-col gap-1">
-        <span>Şirket adı</span>
-        <input name="name" minLength={2} maxLength={100} required className="rounded border px-3 py-2" />
-      </label>
-      {error ? <p role="alert">{error}</p> : null}
-      {created ? <p aria-live="polite">{created}</p> : null}
-      <button type="submit" disabled={pending} className="rounded border px-4 py-2 font-medium">
-        {pending ? 'Kuruluyor…' : 'Şirketi kur'}
-      </button>
-    </form>
+    <Card>
+      <CardHeader>
+        <CardTitle>Şirketini kur</CardTitle>
+        <CardDescription>Şirketi kuran kişi yönetici olur; çalışanlarını davet koduyla eklersin.</CardDescription>
+      </CardHeader>
+      <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-4">
+        <Field id={nameId} label="Şirket adı">
+          <Input id={nameId} name="name" minLength={2} maxLength={100} required />
+        </Field>
+        {error ? <Alert>{error}</Alert> : null}
+        {created ? <Alert variant="applied">{created}</Alert> : null}
+        <Button type="submit" disabled={pending} className="self-start">
+          {pending ? 'Kuruluyor…' : 'Şirketi kur'}
+        </Button>
+      </form>
+    </Card>
   );
 }

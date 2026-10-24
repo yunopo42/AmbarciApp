@@ -4,14 +4,13 @@ import { ApiSessionCard } from '@/components/api-session-card';
 import { ApiStatusCard } from '@/components/api-status-card';
 import { Dashboard } from '@/components/dashboard';
 
-// Ekran tasarımı docs/tasarim.md ile gelecek (#20).
 export default function HomePage(): JSX.Element {
   return (
     <>
       <Dashboard />
-      <details className="w-full max-w-3xl rounded border p-4">
-        <summary className="cursor-pointer">Bağlantı durumu</summary>
-        <div className="mt-4 flex flex-wrap justify-center gap-4">
+      <details className="rounded-lg border border-border bg-card p-4 shadow-1">
+        <summary className="cursor-pointer text-body-md-medium text-primary">Bağlantı durumu</summary>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <ApiStatusCard />
           <ApiSessionCard />
         </div>

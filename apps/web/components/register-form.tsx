@@ -6,9 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { FormEvent, JSX } from 'react';
 
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-// Tasarım değerleri (renk, yazı tipi, boşluk) docs/tasarim.md hazırlanınca uygulanacak (#20).
 export function RegisterForm(): JSX.Element {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -48,54 +52,56 @@ export function RegisterForm(): JSX.Element {
 
   if (notice) {
     return (
-      <section className="flex w-full max-w-sm flex-col gap-4 rounded border p-6" aria-live="polite">
-        <p>{notice}</p>
-        <Link href="/login" className="underline">
+      <Card className="w-full max-w-sm p-6" aria-live="polite">
+        <Alert variant="applied">{notice}</Alert>
+        <Link href="/login" className="text-body-md-medium text-primary-action underline">
           Giriş sayfasına dön
         </Link>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="flex w-full max-w-sm flex-col gap-4 rounded border p-6">
-      <h2 className="text-lg font-semibold">Hesap oluştur</h2>
-      <label className="flex flex-col gap-1">
-        <span>E-posta</span>
-        <input name="email" type="email" autoComplete="email" required className="rounded border px-3 py-2" />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span>Şifre (en az {MIN_PASSWORD_LENGTH} karakter)</span>
-        <input
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          minLength={MIN_PASSWORD_LENGTH}
-          required
-          className="rounded border px-3 py-2"
-        />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span>Şifre (tekrar)</span>
-        <input
-          name="passwordRepeat"
-          type="password"
-          autoComplete="new-password"
-          minLength={MIN_PASSWORD_LENGTH}
-          required
-          className="rounded border px-3 py-2"
-        />
-      </label>
-      {error ? <p role="alert">{error}</p> : null}
-      <button type="submit" disabled={pending} className="rounded border px-4 py-2 font-medium">
-        {pending ? 'Hesap oluşturuluyor…' : 'Hesap oluştur'}
-      </button>
-      <p className="text-sm">
+    <Card className="w-full max-w-sm p-6">
+      <CardHeader>
+        <CardTitle>Hesap oluştur</CardTitle>
+      </CardHeader>
+      <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-4">
+        <Field id="email" label="E-posta">
+          <Input id="email" name="email" type="email" autoComplete="email" required />
+        </Field>
+        <Field id="password" label="Şifre" hint={`En az ${MIN_PASSWORD_LENGTH} karakter.`}>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            minLength={MIN_PASSWORD_LENGTH}
+            required
+            aria-describedby="password-hint"
+          />
+        </Field>
+        <Field id="passwordRepeat" label="Şifre (tekrar)">
+          <Input
+            id="passwordRepeat"
+            name="passwordRepeat"
+            type="password"
+            autoComplete="new-password"
+            minLength={MIN_PASSWORD_LENGTH}
+            required
+          />
+        </Field>
+        {error ? <Alert>{error}</Alert> : null}
+        <Button type="submit" disabled={pending}>
+          {pending ? 'Hesap oluşturuluyor…' : 'Hesap oluştur'}
+        </Button>
+      </form>
+      <p className="text-text-muted">
         Hesabın var mı?{' '}
-        <Link href="/login" className="underline">
+        <Link href="/login" className="text-body-md-medium text-primary-action underline">
           Giriş yap
         </Link>
       </p>
-    </form>
+    </Card>
   );
 }
