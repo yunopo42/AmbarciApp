@@ -108,13 +108,34 @@ Her işlemin bir sürümü vardır (`version`, başlangıçta 1). Onay isteği k
 | `apps/api/test/operations-rules.spec.ts` | CI | Durum makinesi, kilit sırası (ters sıralı iki işlem aynı sırayı üretir), işlem şeması |
 | `apps/api/test/operations.e2e.spec.ts` | CI | Şema hataları, depo yetkisi, açılış rolü, Idempotency-Key zorunluluğu |
 | `apps/api/test-db/operations.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Beş işlem türü, birim çevrimi, ortalama maliyet, sayımın onay anındaki farkı, yetersiz stok (hiçbir şey yazılmaz), aynı onayın tekrarı, sürüm, başka şirket, depo yetkisi, açılış betiğinin tekrarı, stok = hareketlerin toplamı |
+| `apps/api/test-db/concurrency.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Eşzamanlı çıkış, deadlock tehlikesi ve kilit sırası, aynı anda gelen çift onay, çok kalemli rollback (aşağıda) |
+| `apps/api/test-db/latency.measure.ts` | Gerçek veritabanı, ölçüm (`measure:latency`) | Onay süresi ve transaction başına sorgu sayısı ([veritabani.md](veritabani.md#bölgeler-arası-gecikme-ve-onay-süresi)) |
 
-Eşzamanlı çıkış, çok kalemli rollback ve bölgeler arası gecikme ölçümü #34'te.
+## Eşzamanlılık ve geri alma (testlerle)
+
+Yarışı rastlantıya bırakmamak için testler aynı yöntemi kullanır (`test-db/support/stock-fixture.ts`, `raceWhileLocked`):
+1. Test, ilgili satırı kendi transaction'ında `FOR UPDATE` ile kilitler.
+2. İki onay isteğini gönderir.
+3. PostgreSQL'de ikisinin de kilit beklediğini görür (`pg_stat_activity`).
+4. Kilidi bırakır.
+
+İki istek böylece her çalıştırmada gerçekten aynı anda aynı satıra yarışır.
+
+| Senaryo | Beklenen ve doğrulanan |
+| --- | --- |
+| 10 adet stoktan iki ayrı 7 adetlik çıkış aynı anda | Biri 200, öteki 409 `INSUFFICIENT_STOCK` (mevcut: 3); stok 3, tek çıkış hareketi |
+| Ters sırayla kilitleyen iki ham transaction (A→B, B→A) | PostgreSQL döngüyü görür ve birini `40P01` (deadlock) hatasıyla geri alır. Uygulamanın değil, korunduğumuz tehlikenin gösterimi |
+| Kalemleri ters sırada olan iki işlem ([A, B] ve [B, A]) aynı anda | İkisi de 200. Kilitler ürün kimliği sırasıyla alındığı için ikisi de önce A'yı bekler, döngü oluşmaz |
+| Aynı işleme aynı anda iki onay, aynı `Idempotency-Key` | İkisi de 200 ve aynı cevap; stok bir kez değişir; 1 hareket, 1 denetim, 1 outbox kaydı |
+| Aynı işleme aynı anda iki onay, farklı anahtar | Biri 200, öteki 409 `OPERATION_ALREADY_APPLIED`; stok bir kez değişir |
+| Üç kalemli transfer; 2. kalem yetmiyor | 409; kaynak stok ve ortalama maliyet aynı, hedef depoda açılan stok satırları da geri alındı; hareket, denetim, outbox yok; işlem onay bekliyor |
+| İki kalemli giriş; stok ve maliyet yazıldıktan sonra son adımda hata (anahtar başka işlemde kullanılmış) | 409 `IDEMPOTENCY_KEY_REUSED`; yazılmış stok, ortalama maliyet ve hareketler geri alındı: transaction sınırı bütün adımları kapsıyor |
 
 ## Savunmada sorulabilecek sorular
 
 - **"İki kişi aynı anda son 5 prizi çıkarmaya çalışırsa ne olur?"** İkisi de stok satırını `FOR UPDATE` ile kilitlemek ister; biri bekler. Birincisi stoğu 0'a indirip bitirince ikincisi kilidi alır, `quantity >= 5` koşulu artık sağlanmaz ve `409 INSUFFICIENT_STOCK` alır. Stok eksiye düşmez; düşmeye çalışsa `CHECK` kısıtı da reddeder.
-- **"Deadlock nasıl önleniyor?"** Bütün transaction'lar stok satırlarını aynı sırayla (ürün, sonra depo kimliği) kilitler. Kilit bekleme döngüsü ancak iki transaction satırları farklı sırayla kilitlerse oluşur.
+- **"Deadlock nasıl önleniyor?"** Bütün transaction'lar stok satırlarını aynı sırayla (ürün, sonra depo kimliği) kilitler. Kilit bekleme döngüsü ancak iki transaction satırları farklı sırayla kilitlerse oluşur. Testte iki ham transaction ters sırayla kilitleyince PostgreSQL birini `40P01` ile geri aldı; uygulamada kalemleri ters sırada olan iki işlem aynı anda onaylanınca ikisi de tamamlandı.
+- **"Eşzamanlılık testinin gerçekten yarıştığını nasıl biliyorsunuz?"** Test satırı önce kendisi kilitler ve iki isteğin de kilidi beklediğini `pg_stat_activity`'de görmeden kilidi bırakmaz. İstekler sırayla değil, aynı anda aynı kilidi bekler.
 - **"Ağ koptu, kullanıcı Onayla'ya tekrar bastı; stok iki kez düşer mi?"** Hayır. İstemci aynı `Idempotency-Key`'i gönderir; API işlemi `APPLIED` ve anahtarı aynı bulur, ilk cevabı tekrar döner.
 - **"Ortalama maliyeti neden JavaScript'te hesaplamadınız?"** Kayan nokta ondalık sayıyı tam tutamaz. Hesap, değerin zaten kilitli olduğu satırda, kolonla aynı `NUMERIC` tipinde ve tek yuvarlama kuralıyla SQL'de yapılır (ADR-003).
 - **"Sayımda sistemdeki miktar ne zaman okunuyor?"** Onay anında, kilitli satırdan. Sayım açıldıktan sonra çıkış olduysa fark ona göre hesaplanır; testte 115 → 112 örneği var.

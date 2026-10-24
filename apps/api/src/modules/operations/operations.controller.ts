@@ -1,6 +1,6 @@
 import { confirmOperationSchema, createOperationSchema, IDEMPOTENCY_HEADER, idempotencyKeySchema } from '@ambarci/shared';
 import type { AuthUser, ConfirmOperationInput, CreateOperationInput } from '@ambarci/shared';
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Res } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -13,6 +13,7 @@ import {
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 
 import { ApiErrorDto } from '../../common/api-error.dto.js';
 import { ApiException } from '../../common/api-exception.js';
@@ -74,7 +75,15 @@ export class OperationsController {
   })
   @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'Her onay denemesi için istemcinin ürettiği anahtar (UUID önerilir)' })
   @ApiBody({ type: ConfirmOperationDto })
-  @ApiOkResponse({ type: ConfirmOperationResultDto })
+  @ApiOkResponse({
+    type: ConfirmOperationResultDto,
+    headers: {
+      'Server-Timing': {
+        description: "Onay transaction'ının sunucudaki süresi, ör. db;dur=182.4 (ms)",
+        schema: { type: 'string' },
+      },
+    },
+  })
   @ApiNotFoundResponse({ type: ApiErrorDto })
   @ApiConflictResponse({
     type: ApiErrorDto,
@@ -87,14 +96,15 @@ export class OperationsController {
     @Param('operationId', ParseUUIDPipe) operationId: string,
     @Headers(IDEMPOTENCY_HEADER) idempotencyKey: string | undefined,
     @Body(new ZodValidationPipe(confirmOperationSchema)) body: ConfirmOperationInput,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<ConfirmOperationResultDto> {
-    return this.operations.confirm(
-      organization.id,
-      actorOf(user, organization),
-      operationId,
-      body,
-      parseIdempotencyKey(idempotencyKey),
-    );
+    const key = parseIdempotencyKey(idempotencyKey);
+    const started = performance.now();
+    return this.operations.confirm(organization.id, actorOf(user, organization), operationId, body, key).finally(() => {
+      // Onay transaction'ının sunucudaki süresi (BEGIN'den COMMIT'e; hata cevabında da). İstemci ağ gecikmesini
+      // bundan ayırabilir; bölgeler arası gecikme ölçümü (#34) bu başlığı okur.
+      response.setHeader('Server-Timing', `db;dur=${(performance.now() - started).toFixed(1)};desc="onay transaction"`);
+    });
   }
 
   @Post(':operationId/cancel')

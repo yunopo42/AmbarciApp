@@ -35,6 +35,9 @@ ve Render eski sürümü yayında tutar (#17'de `SUPABASE_URL` için yaşandı).
 - Service role anahtarı RLS'yi atlar; `DATABASE_URL` veritabanına tam erişim verir. İkisi ve Claude anahtarı
   yalnızca backend'de durur. `NEXT_PUBLIC_` ve `EXPO_PUBLIC_` önekli değişkenler web ve mobil paketine gömülür
   ve herkes tarafından okunabilir; bu öneklerle gizli değer tanımlanmaz.
+- API sorguları hazırlanmış ifade (prepared statement) olarak gönderir (`packages/db/src/client.ts`, #34). Bu,
+  Supabase'in session pooler'ında (port 5432) çalışır, **transaction pooler'da (port 6543) çalışmaz**; `DATABASE_URL`
+  her ortamda session pooler adresidir.
 - Render yalnızca IPv4 kullandığı için `DATABASE_URL` olarak Supabase'in **Session pooler** adresi (port 5432)
   girilir; doğrudan bağlantı adresi (`db.<proje>.supabase.co`) IPv6'dır.
 - Supabase projesi eu-west-1 (İrlanda), API ise Render'da Frankfurt'tadır; Render'da İrlanda bölgesi yoktur.

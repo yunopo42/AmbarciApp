@@ -223,6 +223,43 @@ Kararlar:
 
 Guard, rol, depo yetkisi ve davet kurallarının ayrıntılı senaryoları veritabanı olmadan CI'da çalışır (`apps/api/test/organizations.e2e.spec.ts`).
 
+## Bölgeler arası gecikme ve onay süresi
+
+Supabase projesi eu-west-1 (İrlanda), API Render'da Frankfurt'tadır (20 Ekim kararı, `docs/yayin.md`). Onay transaction'ı stok satırlarının kilidini COMMIT'e kadar tutar. Veritabanına giden her sorgu bir gidiş-dönüş beklediği için bölgeler arası gecikme, kilidin tutulduğu süreye doğrudan eklenir. Kilit ne kadar uzun tutulursa aynı ürüne gelen başka bir onay o kadar uzun bekler. #34'te bu süre ölçüldü.
+
+**Yöntem.** Üç senaryo (1 kalem giriş, 5 kalem giriş, 1 kalem transfer), her biri 20 tekrar; ölçümden önce 3 ısınma onayı yapılır.
+- Sunucudaki transaction süresi, onay cevabının `Server-Timing` başlığından okunur (BEGIN'den COMMIT'e, `db;dur=…`).
+- Transaction başına SQL sayısı, bağlantıdan geçen sorgular sayılarak bulunur.
+- Yerel ölçüm: `pnpm --filter @ambarci/api measure:latency` (API bu bilgisayarda, Türkiye → İrlanda).
+- Render ölçümü: `pnpm --filter @ambarci/api measure:remote` (API Render'da, Frankfurt → İrlanda).
+- Ham sonuçlar `eval/gecikme/` altındadır.
+
+**Transaction başına sorgu sayısı:** BEGIN + işlemi kilitle + kalemler + yetki + birim çevrimi + stok satırlarını aç + kilitle + hareket başına 1 + APPLIED + denetim + outbox + COMMIT.
+
+| Senaryo | Sorgu |
+| --- | --- |
+| 1 kalem giriş | 12 |
+| 5 kalem giriş | 16 |
+| 1 kalem transfer (iki hareket) | 13 |
+
+**Bulgu: her sorgu iki gidiş-dönüş sürüyordu.** İlk yerel ölçümde 1 kalemli onay 1.794 ms sürdü. Yalın gidiş-dönüş (`select 1`) 80 ms olduğuna göre 12 sorgu için ~960 ms beklenirdi; ölçülen bunun iki katıydı. Nedeni: Drizzle'ın postgres.js sürücüsü sorguları hazırlanmamış (`prepare: false`) gönderir. postgres.js hazırlanmamış parametreli sorguda önce parametre tiplerini sorar, cevabı bekler, sonra sorguyu çalıştırır. Ayrı bir denemede parametreli sorgu hazırlanmış olarak 81 ms, hazırlanmamış olarak 159 ms sürdü. `packages/db/src/client.ts` içindeki `preparedByDefault` sarmalayıcısı sorguları hazırlanmış ifade (prepared statement) olarak gönderir. İfade bağlantı başına önbelleğe alınır ve aynı sorgunun sonraki çalıştırmaları tek gidiş-dönüş sürer.
+
+| Yerel (Türkiye → İrlanda), 20 tekrar | Sorgu | Önce: medyan / p95 | Sonra: medyan / p95 | Fark |
+| --- | --- | --- | --- | --- |
+| 1 kalem giriş | 12 | 1.794 / 1.908 ms | 991 / 1.046 ms | −%45 |
+| 5 kalem giriş | 16 | 2.447 / 2.503 ms | 1.335 / 1.517 ms | −%45 |
+| 1 kalem transfer | 13 | 1.950 / 1.995 ms | 1.077 / 1.329 ms | −%45 |
+
+*24 Ekim 2026; yalın gidiş-dönüş medyanı 80–81 ms. "Önce" ölçümü: `eval/gecikme/yerel-hazirlanmamis-2026-10-24.json`, "sonra": `eval/gecikme/yerel-2026-10-24.json`.*
+
+**Model:** transaction süresi ≈ sorgu sayısı × gidiş-dönüş süresi. Sorgu sayısı sabittir (veriden bağımsız). Gecikmeyi belirleyen, API ile veritabanı arasındaki mesafedir. Hazırlanmış ifadelerden sonra yerel ölçüm bu modele oturuyor: 12 × 81 ms ≈ 972 ms, ölçülen 991 ms.
+
+**Render (Frankfurt → İrlanda):** ölçüm, `Server-Timing` başlığını içeren bu sürüm Render'a yayınlandıktan sonra `measure:remote` ile yapılacak ve buraya eklenecek. Frankfurt–Dublin arası gidiş-dönüş Türkiye'den çok daha kısa olduğu için onay süresinin yerel ölçümün küçük bir kesri olması beklenir. Bu bir tahmindir, ölçüm değildir.
+
+**Neden İrlanda'da bırakıldı?** Supabase projesi taşınamaz; yeniden kurmak gerekir (yeni proje, veri taşıma, anahtarların değişmesi). Render'da İrlanda bölgesi yok. Hazırlanmış ifadelerle sorgu başına tek gidiş-dönüşe inildi. Kalan seçenekler Render ölçümüne göre değerlendirilecek: transaction'daki sorguları birleştirmek (ör. denetim ve outbox kaydını tek ifadede yazmak) ya da projeyi Frankfurt'ta yeniden kurmak.
+
+**Kısıt:** Hazırlanmış ifadeler Supabase'in session pooler'ında (port 5432) çalışır, transaction pooler'da (6543) çalışmaz. `DATABASE_URL` her ortamda session pooler adresidir (`docs/yayin.md`).
+
 ## Savunmada sorulabilecek sorular
 
 - **"Bir şirket başka şirketin verisini nasıl göremiyor?"** Dört katman var (yukarıdaki tablo). Data API yolunu RLS ve rol yetkileri kapatır; API yolunu her sorgudaki şirket filtresi; programlama hatalarına karşı da bileşik anahtarlar ve CHECK kısıtları devrededir. RLS katmanı 38 testle doğrulandı.
@@ -234,4 +271,5 @@ Guard, rol, depo yetkisi ve davet kurallarının ayrıntılı senaryoları verit
 - **"Aynı işlem iki kez uygulanırsa ne olur?"** Hareket tablosunda (işlem, kalem, depo) benzersizdir; ikinci uygulamanın ilk hareketi veritabanında reddedilir ve bütün transaction geri alınır. API ayrıca işlemi `FOR UPDATE` ile kilitleyip durumunu kontrol eder ve `Idempotency-Key` ile tekrar gelen isteğe aynı cevabı döner (#33). Veritabanı burada da son savunma hattıdır.
 - **"Stoğun doğru olduğunu nasıl bilirsiniz?"** Stok, hareketlerin toplamıdır. Hareket miktarı işaretli tutulduğu için bir depodaki ürünün hareketleri toplanınca `inventory.quantity` çıkmalıdır; her hareket ayrıca kendinden sonraki bakiyeyi saklar.
 - **"Kalemleri neden JSON alanında tutmadınız?"** JSON'da veritabanı ürünün, deponun ve birimin aynı şirkete ait olduğunu denetleyemezdi. Ayrı tabloda bunu bileşik yabancı anahtarlar yapıyor.
+- **"Veritabanı İrlanda'da, API Frankfurt'ta; bu bir sorun mu?"** Onay transaction'ı sabit sayıda sorgudan oluşur (1 kalemde 12) ve süresi yaklaşık sorgu sayısı × gidiş-dönüştür. Ölçümde her sorgunun iki gidiş-dönüş sürdüğü görüldü. Sorgular hazırlanmış ifade olarak gönderilince süre %45 kısaldı. Render'daki ölçüm bu bölümdeki tabloda.
 - **"Sayım farkı nasıl hesaplanıyor?"** Sistemdeki miktar onay anında kilitli stok satırından okunur, fark da veritabanında hesaplanan bir kolondur. Fark artıysa sayım fazlası, eksiyse sayım noksanı hareketi yazılır.
