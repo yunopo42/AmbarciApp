@@ -21,3 +21,33 @@ allowBuilds:
   '@scarf/scarf': false
   esbuild: false
   unrs-resolver: false
+
+# Güvenlik (#45): @nestjs/platform-express 12.2.0, multer'ı tam olarak 2.4.0'a sabitliyor. multer 2.4.0'da
+# yüksek düzeyli bir açık var; düzeltme 2.5.0'da (aynı ana sürüm, geriye uyumlu). Override yalnızca Nest'in
+# getirdiği multer'ı etkiler. Nest sabitlediği sürümü 2.5.0 ya da üstüne çıkarınca bu bölüm kaldırılır.
+overrides:
+  '@nestjs/platform-express>multer': ^2.5.0
+
+# pnpm, bir günden yeni yayımlanmış paketleri kurmaz (tedarik zinciri saldırılarına karşı bekleme süresi).
+# Next.js 16.4.3 güvenlik düzeltmesi kurulduğunda (#45, 24 Ekim 2026) bir günlük değildi; pnpm bu tam sürümleri
+# listeye kendisi ekledi. Liste yalnızca bu sürümleri kapsar, başka hiçbir sürüm için korumayı gevşetmez.
+minimumReleaseAgeExclude:
+  - '@next/env@16.4.3'
+  - '@next/eslint-plugin-next@16.4.3'
+  - '@next/swc-darwin-arm64@16.4.3'
+  - '@next/swc-darwin-x64@16.4.3'
+  - '@next/swc-linux-arm64-gnu@16.4.3'
+  - '@next/swc-linux-arm64-musl@16.4.3'
+  - '@next/swc-linux-x64-gnu@16.4.3'
+  - '@next/swc-linux-x64-musl@16.4.3'
+  - '@next/swc-win32-arm64-msvc@16.4.3'
+  - '@next/swc-win32-x64-msvc@16.4.3'
+  - eslint-config-next@16.4.3
+  - next@16.4.3
+
+# openapi-typescript (packages/api-client, yalnızca geliştirmede tip üretir) TypeScript 5 istiyor; depo TypeScript 6
+# kullanıyor. Üretim TypeScript 6 ile denendi ve sorunsuz çalışıyor (ADR-005). openapi-typescript TypeScript 6'yı
+# resmen desteklediğinde bu kural kaldırılır.
+peerDependencyRules:
+  allowedVersions:
+    openapi-typescript>typescript: '6'

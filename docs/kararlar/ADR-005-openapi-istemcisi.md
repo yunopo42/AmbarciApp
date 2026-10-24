@@ -1,6 +1,6 @@
 # ADR-005: OpenAPI istemcisi: `openapi-typescript` + `openapi-fetch` + `openapi-react-query`
 
-- **Durum:** Kabul edildi (22 Ekim 2026); uygulama #35 (24 Ekim 2026). Uygulamada taslaktan ayrılan üç nokta "Karar" bölümünde işaretli.
+- **Durum:** Kabul edildi (22 Ekim 2026); uygulama #35 (24 Ekim 2026). Uygulamada taslaktan ayrılan iki nokta "Karar" bölümünde işaretli.
 - **İlgili iş:** #35
 
 ## Bağlam
@@ -34,7 +34,7 @@ Teknik araştırma (`docs/teknik-arastirma.md`, 1. hafta) sunucu durumu için Ta
 - **Ayrılan nokta 2: aktif şirket başlığı OpenAPI'de güvenlik şeması.** `X-Organization-Id` her uçta zorunlu başlık parametresi olarak belgelenseydi, üretilen tipler onu her çağrıda elle istemeyi zorunlu kılardı ve "tek yerde ekleme" mümkün olmazdı. Başlık `apiKey` türünde bir güvenlik şeması olarak tanımlandı (`apps/api/src/app.setup.ts`). Değeri yine API'de üyelikle doğrulanır; Swagger arayüzünde "Authorize" penceresinden bir kez girilir. Onaydaki `Idempotency-Key` ise bilerek zorunlu başlık parametresi kaldı: her onay denemesinde çağıran yeni bir anahtar üretmeli.
 - **Şirket başına istemci ve önbellek.** Sorgu anahtarları başlıkları içermez. Tek bir önbellekte, şirket değiştirildiğinde önceki şirketin cevabı yenisinin ekranında görünebilirdi. Web'de aktif şirket için ayrı bir istemci ve ayrı bir `QueryClient` kurulur ve şirket değişince ikisi baştan kurulur (`apps/web/components/api-provider.tsx`).
 - **`pnpm gen:api`:** Nest uygulamasını porta bağlamadan ve veritabanına bağlanmadan oluşturur (`apps/api/src/scripts/generate-openapi.ts`). Swagger belgesini `openapi.json`'a yazar, ardından tipleri üretir. Aynı girdiyle iki üretim birebir aynı çıktı verir. CI bu komutu çalıştırır ve dosyalarda fark varsa başarısız olur; API değişip istemci güncellenmezse birleşme engellenir.
-- **Ayrılan nokta 3: TypeScript peer uyarısı çıkmadı.** pnpm, `openapi-typescript`'i TypeScript 6.0.3 ile kurdu ve uyarı vermedi. Taslaktaki `peerDependencyRules` ayarına gerek kalmadı.
+- **TypeScript peer uyarısı:** pnpm, `openapi-typescript`'i TypeScript 6.0.3 ile kurar ve peer uyarısı verir. #35'te bu uyarı gözden kaçtı ve burada yanlışlıkla "uyarı çıkmadı" yazıldı; #45'te düzeltildi. Uyarı, taslakta öngörüldüğü gibi `pnpm-workspace.yaml` içinde `peerDependencyRules.allowedVersions` ile, gerekçesi yorumda yazılarak kabul edildi.
 - **Cevap doğrulaması:** Web eskiden cevapları Zod ile ayrıştırıyordu. Tipli istemciyle cevap tipi derleme anında bilinir; cevaplar kendi API'mizden geldiği için çalışma zamanında yeniden ayrıştırılmaz. İstek gövdesi API'de Zod ile doğrulanmaya devam eder.
 - **Kapsam dışı:** sohbetin SSE akışı (4. hafta) bu istemciden geçmez; mobilde `expo/fetch` ile ayrı yazılır.
 
