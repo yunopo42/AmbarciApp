@@ -10,10 +10,13 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@ambarci/api-client": "workspace:*",
     "@ambarci/shared": "workspace:*",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "catalog:",
+    "@tanstack/react-query": "^5.104.5",
     "next": "16.4.0",
+    "openapi-react-query": "^0.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

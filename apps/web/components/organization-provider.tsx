@@ -1,11 +1,11 @@
 'use client';
 
-import { organizationMembershipListSchema } from '@ambarci/shared';
 import type { OrganizationMembership } from '@ambarci/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { JSX, ReactNode } from 'react';
 
-import { apiRequest, errorMessage } from '@/lib/api';
+import { OrganizationApiProvider, useApi } from '@/components/api-provider';
+import { errorMessage } from '@/lib/api-client';
 
 interface OrganizationState {
   status: 'loading' | 'ready' | 'error';
@@ -39,76 +39,62 @@ function storeId(organizationId: string): void {
   }
 }
 
-type LoadResult =
-  | { kind: 'ok'; organizations: OrganizationMembership[]; activeId: string | null }
-  | { kind: 'error'; message: string };
-
-/** Şirket listesini çeker ve aktif şirketi seçer: istenen (ya da hatırlanan) şirket, yoksa ilki. */
-async function loadOrganizations(preferredId?: string): Promise<LoadResult> {
-  try {
-    const organizations = await apiRequest('/v1/organizations', { schema: organizationMembershipListSchema });
-    const wanted = preferredId ?? readStoredId();
-    const next = organizations.find((organization) => organization.id === wanted) ?? organizations[0] ?? null;
-    if (next) {
-      storeId(next.id);
-    }
-    return { kind: 'ok', organizations, activeId: next?.id ?? null };
-  } catch (reason) {
-    return { kind: 'error', message: errorMessage(reason) };
-  }
-}
-
+/**
+ * Kullanıcının şirketlerini yükler ve aktif şirketi tutar: seçilen (ya da hatırlanan) şirket, yoksa ilki. Alt ağaç
+ * aktif şirketin istemcisi ve önbelleğiyle sarılır; şirket değişince o katman baştan kurulur.
+ */
 export function OrganizationProvider({ children }: { children: ReactNode }): JSX.Element {
-  const [status, setStatus] = useState<OrganizationState['status']>('loading');
-  const [error, setError] = useState<string | null>(null);
-  const [organizations, setOrganizations] = useState<OrganizationMembership[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // Bu sağlayıcı şirket katmanının üstünde: şirket listesi şirketten bağımsız istemciyle çekilir.
+  const { $api } = useApi();
+  const query = $api.useQuery('get', '/v1/organizations');
+  const { refetch } = query;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const apply = useCallback((result: LoadResult): void => {
-    if (result.kind === 'error') {
-      setStatus('error');
-      setError(result.message);
-      return;
-    }
-    setOrganizations(result.organizations);
-    setActiveId(result.activeId);
-    setStatus('ready');
-    setError(null);
-  }, []);
-
-  const reload = useCallback(
-    async (preferredId?: string): Promise<void> => apply(await loadOrganizations(preferredId)),
-    [apply],
-  );
+  const organizations = useMemo(() => query.data ?? [], [query.data]);
+  const active = useMemo(() => {
+    const wanted = selectedId ?? (organizations.length > 0 ? readStoredId() : null);
+    return organizations.find((organization) => organization.id === wanted) ?? organizations[0] ?? null;
+  }, [organizations, selectedId]);
 
   useEffect(() => {
-    let current = true;
-    void loadOrganizations().then((result) => {
-      if (current) {
-        apply(result);
+    if (active) {
+      storeId(active.id);
+    }
+  }, [active]);
+
+  const reload = useCallback(
+    async (preferredId?: string): Promise<void> => {
+      if (preferredId) {
+        setSelectedId(preferredId);
       }
-    });
-    return () => {
-      current = false;
-    };
-  }, [apply]);
+      await refetch();
+    },
+    [refetch],
+  );
 
   const value = useMemo<OrganizationState>(
     () => ({
-      status,
-      error,
+      status: query.isPending ? 'loading' : query.isError ? 'error' : 'ready',
+      error: query.isError ? errorMessage(query.error) : null,
       organizations,
-      active: organizations.find((organization) => organization.id === activeId) ?? null,
-      selectOrganization: (organizationId: string) => {
-        setActiveId(organizationId);
-        storeId(organizationId);
-      },
+      active,
+      selectOrganization: setSelectedId,
       reload,
     }),
-    [status, error, organizations, activeId, reload],
+    [query.isPending, query.isError, query.error, organizations, active, reload],
   );
 
-  return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;
+  return (
+    <OrganizationContext.Provider value={value}>
+      {active ? (
+        <OrganizationApiProvider key={active.id} organizationId={active.id}>
+          {children}
+        </OrganizationApiProvider>
+      ) : (
+        children
+      )}
+    </OrganizationContext.Provider>
+  );
 }
 
 export function useOrganizations(): OrganizationState {

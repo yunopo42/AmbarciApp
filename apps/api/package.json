@@ -13,7 +13,8 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "seed:opening": "nest build && node dist/scripts/seed-opening-stock.js",
     "measure:latency": "vitest run --config vitest.measure.config.ts",
-    "measure:remote": "nest build && node dist/scripts/measure-confirm-remote.js"
+    "measure:remote": "nest build && node dist/scripts/measure-confirm-remote.js",
+    "gen:openapi": "nest build && node dist/scripts/generate-openapi.js"
   },
   "dependencies": {
     "@ambarci/db": "workspace:*",

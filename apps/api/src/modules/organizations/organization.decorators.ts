@@ -1,10 +1,10 @@
-import { ORGANIZATION_HEADER } from '@ambarci/shared';
 import type { OrganizationRole } from '@ambarci/shared';
 import { applyDecorators, createParamDecorator, SetMetadata, UseGuards } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiForbiddenResponse, ApiHeader } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiForbiddenResponse, ApiSecurity } from '@nestjs/swagger';
 
 import { ApiErrorDto } from '../../common/api-error.dto.js';
+import { ORGANIZATION_SECURITY } from '../../common/openapi.js';
 import type { OrganizationContext, OrganizationRequest } from './organization-context.js';
 import { OrganizationGuard, RolesGuard, ROLES_KEY, WarehouseAccessGuard, WAREHOUSE_PARAM_KEY } from './organization.guards.js';
 
@@ -24,7 +24,8 @@ export function OrganizationScoped(options: OrganizationScopeOptions = {}): Meth
     SetMetadata(ROLES_KEY, options.roles ?? []),
     SetMetadata(WAREHOUSE_PARAM_KEY, options.warehouseParam),
     UseGuards(OrganizationGuard, RolesGuard, WarehouseAccessGuard),
-    ApiHeader({ name: ORGANIZATION_HEADER, required: true, description: 'Aktif şirketin kimliği' }),
+    // Başlık parametre olarak değil güvenlik şeması olarak belgelenir (app.setup.ts, createOpenApiDocument).
+    ApiSecurity(ORGANIZATION_SECURITY),
     ApiBadRequestResponse({ type: ApiErrorDto, description: 'Şirket seçilmemiş ya da kimlik geçersiz' }),
     ApiForbiddenResponse({ type: ApiErrorDto, description: 'Şirkete, role ya da depoya erişim yok' }),
   );

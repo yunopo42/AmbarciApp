@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    // Web ve mobil tarayıcı/React Native ortamında çalışır: fetch, Request ve Headers tipleri DOM kütüphanesinden.
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src"]
+}

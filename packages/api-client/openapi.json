@@ -1,0 +1,1486 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/v1/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token yok, geçersiz veya süresi dolmuş",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Oturumdaki kullanıcıyı döner",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Servisin ayakta olduğunu doğrular",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/organizations": {
+      "post": {
+        "operationId": "OrganizationsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrganizationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationMembershipDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Şirket oluşturur; oluşturan kullanıcı şirketin yöneticisi (ADMIN) olur",
+        "tags": [
+          "organizations"
+        ]
+      },
+      "get": {
+        "operationId": "OrganizationsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrganizationMembershipDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Kullanıcının aktif üyesi olduğu şirketler ve rolleri",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/v1/invitations": {
+      "post": {
+        "operationId": "InvitationsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Aktif şirket için tek kullanımlık, süreli davet kodu üretir (yalnızca yönetici)",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
+    "/v1/invitations/accept": {
+      "post": {
+        "operationId": "InvitationsController_accept",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationMembershipDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Kod bulunamadı",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Kod kullanılmış ya da zaten üyesiniz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Kodun süresi dolmuş",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Davet koduyla şirkete katılır; kod bir kez kullanılabilir",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
+    "/v1/members": {
+      "get": {
+        "operationId": "MembersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "organization": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aktif şirketin üyeleri, rolleri ve depo yetkileri (yalnızca yönetici)",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/v1/members/{memberId}/warehouses/{warehouseId}": {
+      "put": {
+        "operationId": "MembersController_grant",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Üye ya da depo bu şirkette yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "organization": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Çalışana depoda işlem yetkisi verir (yalnızca yönetici)",
+        "tags": [
+          "members"
+        ]
+      },
+      "delete": {
+        "operationId": "MembersController_revoke",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bu üyenin bu depoda yetkisi yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "organization": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Çalışanın depo yetkisini kaldırır (yalnızca yönetici)",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/v1/warehouses": {
+      "get": {
+        "operationId": "WarehousesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WarehouseDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Aktif şirketin depoları",
+        "tags": [
+          "warehouses"
+        ]
+      }
+    },
+    "/v1/warehouses/{warehouseId}": {
+      "get": {
+        "operationId": "WarehousesController_get",
+        "parameters": [
+          {
+            "name": "warehouseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Depo ayrıntısı; çalışan yalnızca yetkili olduğu depoyu görür (stok bilgisi 3. haftada eklenecek)",
+        "tags": [
+          "warehouses"
+        ]
+      }
+    },
+    "/v1/operations": {
+      "post": {
+        "operationId": "OperationsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOperationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Kalemlerde ürün, birim ya da depo geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Stok işlemi açar (giriş, çıkış, transfer, sayım, fire, açılış); onay bekler, stok değişmez",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/{operationId}": {
+      "get": {
+        "operationId": "OperationsController_get",
+        "parameters": [
+          {
+            "name": "operationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "İşlem ve kalemleri",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/{operationId}/confirm": {
+      "post": {
+        "operationId": "OperationsController_confirm",
+        "parameters": [
+          {
+            "name": "operationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Her onay denemesi için istemcinin ürettiği anahtar (UUID önerilir)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmOperationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "Server-Timing": {
+                "description": "Onay transaction'ının sunucudaki süresi, ör. db;dur=182.4 (ms)",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmOperationResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stok yetersiz, işlem onay beklemiyor, sürüm değişmiş ya da anahtar başka işlemde kullanılmış",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Kalemlerde ürün, birim ya da depo artık geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "İşlemi onaylar ve stoğu tek transaction'da değiştirir; aynı Idempotency-Key ile tekrar gelen istek aynı cevabı alır",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/{operationId}/cancel": {
+      "post": {
+        "operationId": "OperationsController_cancel",
+        "parameters": [
+          {
+            "name": "operationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "İşlem onay beklemiyor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Onay bekleyen işlemi iptal eder (işlemi açan kişi ya da yönetici)",
+        "tags": [
+          "operations"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Ambarcı API",
+    "description": "Ambarcı saha stok asistanı REST API",
+    "version": "v1",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      },
+      "organization": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Organization-Id",
+        "description": "Aktif şirketin kimliği; API kullanıcının o şirketteki üyeliğini doğrular"
+      }
+    },
+    "schemas": {
+      "AuthUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Supabase Auth kullanıcı kimliği"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "example": "saha@ornek.com"
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ]
+      },
+      "ApiErrorDetailDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "AUTH_REQUIRED"
+          },
+          "message": {
+            "type": "string",
+            "example": "Oturum açmanız gerekiyor."
+          },
+          "details": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "ApiErrorDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiErrorDetailDto"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "HealthResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "CreateOrganizationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "example": "ABC Elektrik"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "OrganizationMembershipDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "ABC Elektrik"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "EMPLOYEE"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role"
+        ]
+      },
+      "CreateInvitationDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "EMPLOYEE"
+            ],
+            "default": "EMPLOYEE"
+          },
+          "expiresInDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 7,
+            "description": "Kodun geçerli olacağı gün sayısı"
+          }
+        }
+      },
+      "InvitationDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "K7M2XQ9RTA",
+            "description": "Tek kullanımlık davet kodu"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "EMPLOYEE"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "code",
+          "role",
+          "expiresAt"
+        ]
+      },
+      "AcceptInvitationDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "K7M2XQ9RTA",
+            "description": "Büyük/küçük harf, boşluk ve tire farkı yok sayılır"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "MemberDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Üyelik kimliği"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Supabase Auth kullanıcı kimliği"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "EMPLOYEE"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "warehouseIds": {
+            "description": "Çalışanın işlem yapabileceği depolar",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "email",
+          "role",
+          "isActive",
+          "warehouseIds"
+        ]
+      },
+      "WarehouseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Merkez Depo"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "WAREHOUSE",
+              "BRANCH",
+              "VEHICLE"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "isActive"
+        ]
+      },
+      "OperationItemInputDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "warehouseId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Girişte malın girdiği; çıkış, fire ve sayımda ilgili; transferde çıktığı depo"
+          },
+          "targetWarehouseId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Yalnızca transferde: malın gittiği depo"
+          },
+          "quantity": {
+            "type": "string",
+            "example": "3",
+            "description": "Metin olarak ondalık sayı, ayırıcı nokta (ör. \"12.5\"); en fazla 3 ondalık hane. Sayımda sayılan miktar (0 olabilir)"
+          },
+          "unit": {
+            "type": "string",
+            "example": "koli",
+            "description": "Girilen birim; verilmezse ürünün ana birimi"
+          },
+          "unitCost": {
+            "type": "string",
+            "example": "120.00",
+            "description": "Yalnızca giriş ve açılışta: girilen birim başına maliyet"
+          }
+        },
+        "required": [
+          "productId",
+          "warehouseId",
+          "quantity"
+        ]
+      },
+      "CreateOperationDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "STOCK_IN",
+              "STOCK_OUT",
+              "TRANSFER",
+              "COUNT",
+              "WASTE",
+              "OPENING"
+            ]
+          },
+          "partyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Cari: girişte tedarikçi, çıkışta müşteri"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationItemInputDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "items"
+        ]
+      },
+      "OperationItemDto": {
+        "type": "object",
+        "properties": {
+          "lineNo": {
+            "type": "number",
+            "example": 1
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "warehouseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetWarehouseId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "quantity": {
+            "type": "string",
+            "example": "3.000",
+            "description": "Girilen birimde"
+          },
+          "unit": {
+            "type": "string",
+            "example": "koli",
+            "nullable": true,
+            "description": "Boşsa ürünün ana birimi"
+          },
+          "unitCost": {
+            "type": "string",
+            "example": "120.0000",
+            "nullable": true
+          }
+        },
+        "required": [
+          "lineNo",
+          "productId",
+          "warehouseId",
+          "targetWarehouseId",
+          "quantity",
+          "unit",
+          "unitCost"
+        ]
+      },
+      "OperationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "STOCK_IN",
+              "STOCK_OUT",
+              "TRANSFER",
+              "COUNT",
+              "WASTE",
+              "OPENING",
+              "REVERSAL"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "NEEDS_CLARIFICATION",
+              "PENDING_CONFIRMATION",
+              "APPLIED",
+              "REVERSED",
+              "CANCELLED",
+              "EXPIRED",
+              "FAILED"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "SCREEN",
+              "CHAT",
+              "DOCUMENT",
+              "IMPORT",
+              "SYSTEM"
+            ]
+          },
+          "version": {
+            "type": "number",
+            "example": 1
+          },
+          "partyId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "appliedBy": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "appliedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status",
+          "source",
+          "version",
+          "partyId",
+          "note",
+          "createdBy",
+          "appliedBy",
+          "appliedAt",
+          "createdAt",
+          "items"
+        ]
+      },
+      "ConfirmOperationDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Kullanıcının gördüğü sürüm; işlem bu arada düzenlendiyse onay reddedilir"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "MovementDto": {
+        "type": "object",
+        "properties": {
+          "lineNo": {
+            "type": "number",
+            "example": 1
+          },
+          "warehouseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "IN",
+              "OUT",
+              "TRANSFER_OUT",
+              "TRANSFER_IN",
+              "COUNT_SURPLUS",
+              "COUNT_SHORTAGE",
+              "WASTE",
+              "REVERSAL"
+            ]
+          },
+          "quantityChange": {
+            "type": "string",
+            "example": "-36.000",
+            "description": "Ana birimde, işaretli: giriş +, çıkış −"
+          },
+          "unitCost": {
+            "type": "string",
+            "example": "10.0000",
+            "description": "Ana birim başına maliyet"
+          },
+          "quantityAfter": {
+            "type": "string",
+            "example": "84.000",
+            "description": "Hareketten sonraki stok"
+          },
+          "averageCostAfter": {
+            "type": "string",
+            "example": "10.0000",
+            "description": "Hareketten sonraki hareketli ortalama maliyet"
+          }
+        },
+        "required": [
+          "lineNo",
+          "warehouseId",
+          "productId",
+          "type",
+          "quantityChange",
+          "unitCost",
+          "quantityAfter",
+          "averageCostAfter"
+        ]
+      },
+      "ConfirmOperationResultDto": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/OperationDto"
+          },
+          "movements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovementDto"
+            }
+          }
+        },
+        "required": [
+          "operation",
+          "movements"
+        ]
+      }
+    }
+  }
+}

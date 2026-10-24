@@ -1,40 +1,35 @@
 'use client';
 
-import { organizationMembershipSchema } from '@ambarci/shared';
 import { useState } from 'react';
 import type { FormEvent, JSX } from 'react';
 
+import { useApi } from '@/components/api-provider';
 import { useOrganizations } from '@/components/organization-provider';
-import { apiRequest, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/api-client';
 import { ROLE_LABELS } from '@/lib/labels';
 
 /** Yöneticinin verdiği davet koduyla şirkete katılır; katılınan şirket aktif şirket yapılır. */
 export function JoinOrganizationForm(): JSX.Element {
   const { reload } = useOrganizations();
+  const { $api } = useApi();
+  const accept = $api.useMutation('post', '/v1/invitations/accept');
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const pending = accept.isPending;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const formElement = event.currentTarget;
     const code = String(new FormData(formElement).get('code') ?? '');
-    setPending(true);
     setError(null);
     setJoined(null);
     try {
-      const organization = await apiRequest('/v1/invitations/accept', {
-        method: 'POST',
-        body: { code },
-        schema: organizationMembershipSchema,
-      });
+      const organization = await accept.mutateAsync({ body: { code } });
       setJoined(`${organization.name} şirketine ${ROLE_LABELS[organization.role].toLocaleLowerCase('tr-TR')} olarak katıldın.`);
       formElement.reset();
       await reload(organization.id);
     } catch (reason) {
       setError(errorMessage(reason));
-    } finally {
-      setPending(false);
     }
   }
 
