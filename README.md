@@ -34,7 +34,7 @@ Tasarımın temel kuralları:
 | --- | --- | --- |
 | Mobil | Expo, Expo Router | İskelet, development build, ses tanıma deneme ekranı |
 | Web paneli | Next.js, Tailwind, TanStack Query | Giriş, şirket, davet, üyeler ve depolar; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
-| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi, depolar (şirket ve rol guard'larıyla); stok işlemleri: açma, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; Render'da yayında |
+| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi (şirket ve rol guard'larıyla); ürün, birim, alternatif ad, depo ve cari yönetimi; stok işlemleri: açma, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog, stok, işlem, hareket, sayım, denetim ve outbox tabloları (16 tablo), RLS politikaları ve iki şirketli izolasyon testi |
 | Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |
@@ -60,6 +60,7 @@ docs/
   kararlar/        Mimari karar kayıtları (ADR)
   tasarim.md       Ekran tasarımları ve tasarım değerleri (renk, yazı, boşluk)
   tasarim/         Ekran görselleri (Google Stitch)
+  katalog.md       Ürün, birim, depo ve cari yönetiminin kuralları
   stok-islemleri.md  Onay transaction'ı, kilit sırası, maliyet hesabı, hata kodları
   veritabani.md    Şema, kısıtlar ve şirketler arası izolasyon
   yayin.md         Render ve Vercel yayın adımları

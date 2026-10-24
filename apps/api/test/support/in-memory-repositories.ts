@@ -153,6 +153,15 @@ export function inMemoryOrganizationsRepository(store: InMemoryStore): Organizat
 
 export function inMemoryWarehousesRepository(store: InMemoryStore): WarehousesRepositoryContract {
   const toWarehouse = ({ id, name, type, isActive }: WarehouseRow): Warehouse => ({ id, name, type, isActive });
+  // Gerçek veritabanındaki warehouses_org_name_key kısıtının hatasını taklit eder (postgres.js hata biçimi).
+  const assertUniqueName = (organizationId: string, name: string, exceptId?: string): void => {
+    const taken = store.warehouses.some(
+      (row) => row.organizationId === organizationId && row.name === name && row.id !== exceptId,
+    );
+    if (taken) {
+      throw Object.assign(new Error('duplicate key'), { code: '23505', constraint_name: 'warehouses_org_name_key' });
+    }
+  };
   return {
     async listByOrganization(organizationId) {
       return store.warehouses.filter((row) => row.organizationId === organizationId).map(toWarehouse);
@@ -160,6 +169,21 @@ export function inMemoryWarehousesRepository(store: InMemoryStore): WarehousesRe
     async findById(organizationId, warehouseId) {
       const row = store.warehouses.find((item) => item.organizationId === organizationId && item.id === warehouseId);
       return row ? toWarehouse(row) : null;
+    },
+    async create(organizationId, input) {
+      assertUniqueName(organizationId, input.name);
+      const row: WarehouseRow = { id: randomUUID(), organizationId, ...input };
+      store.warehouses.push(row);
+      return toWarehouse(row);
+    },
+    async update(organizationId, warehouseId, input) {
+      const row = store.warehouses.find((item) => item.organizationId === organizationId && item.id === warehouseId);
+      if (!row) {
+        return null;
+      }
+      assertUniqueName(organizationId, input.name, warehouseId);
+      Object.assign(row, input);
+      return toWarehouse(row);
     },
     async findStatuses(_executor, organizationId, warehouseIds) {
       return store.warehouses

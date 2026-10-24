@@ -135,7 +135,8 @@ export interface paths {
         /** Aktif şirketin depoları */
         get: operations["WarehousesController_list"];
         put?: never;
-        post?: never;
+        /** Depo, şube ya da araç deposu ekler (yalnızca yönetici) */
+        post: operations["WarehousesController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -151,7 +152,80 @@ export interface paths {
         };
         /** Depo ayrıntısı; çalışan yalnızca yetkili olduğu depoyu görür (stok bilgisi 3. haftada eklenecek) */
         get: operations["WarehousesController_get"];
+        /** Depoyu günceller ya da pasife alır (yalnızca yönetici; depo silinmez) */
+        put: operations["WarehousesController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ürünler; ad, SKU, barkod ya da alternatif adda arama ve sayfalama */
+        get: operations["ProductsController_list"];
         put?: never;
+        /** Ürün ekler (yalnızca yönetici) */
+        post: operations["ProductsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/products/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ürün, birimleri ve alternatif adları */
+        get: operations["ProductsController_get"];
+        /** Ürünü, birimlerini ve adlarını günceller ya da pasife alır (yalnızca yönetici; silinmez) */
+        put: operations["ProductsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cariler; ad ya da vergi numarasında arama, türe göre süzme ve sayfalama */
+        get: operations["PartiesController_list"];
+        put?: never;
+        /** Cari ekler (yalnızca yönetici) */
+        post: operations["PartiesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parties/{partyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cari */
+        get: operations["PartiesController_get"];
+        /** Cariyi günceller ya da pasife alır (yalnızca yönetici; silinmez) */
+        put: operations["PartiesController_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -317,6 +391,23 @@ export interface components {
             /** @description Çalışanın işlem yapabileceği depolar */
             warehouseIds: string[];
         };
+        WarehouseInputDto: {
+            /**
+             * @description Şirket içinde benzersiz
+             * @example Ostim Depo
+             */
+            name: string;
+            /**
+             * @default WAREHOUSE
+             * @enum {string}
+             */
+            type: "WAREHOUSE" | "BRANCH" | "VEHICLE";
+            /**
+             * @description Depo silinmez; pasife almak için false
+             * @default true
+             */
+            isActive: boolean;
+        };
         WarehouseDto: {
             /** Format: uuid */
             id: string;
@@ -324,6 +415,117 @@ export interface components {
             name: string;
             /** @enum {string} */
             type: "WAREHOUSE" | "BRANCH" | "VEHICLE";
+            isActive: boolean;
+        };
+        ProductUnitDto: {
+            /** @example koli */
+            unit: string;
+            /** @example 12.000000 */
+            factor: string;
+            barcode: string | null;
+        };
+        ProductDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example PRZ-TOP-B */
+            sku: string;
+            /** @example Topraklı priz, beyaz */
+            name: string;
+            /** @example adet */
+            baseUnit: string;
+            barcode: string | null;
+            /** @example 50.000 */
+            minStock: string | null;
+            isActive: boolean;
+            units: components["schemas"]["ProductUnitDto"][];
+            aliases: string[];
+        };
+        ProductListDto: {
+            items: components["schemas"]["ProductDto"][];
+            /** @description Süzgece uyan toplam kayıt */
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ProductUnitInputDto: {
+            /**
+             * @description Ana birim dışında bir birim
+             * @example koli
+             */
+            unit: string;
+            /**
+             * @description Bu birimin kaç ana birim ettiği; metin, en fazla 6 ondalık
+             * @example 12
+             */
+            factor: string;
+            /** @example 2000000000053 */
+            barcode?: string | null;
+        };
+        ProductInputDto: {
+            /**
+             * @description Şirket içinde benzersiz ürün kodu
+             * @example PRZ-TOP-B
+             */
+            sku: string;
+            /** @example Topraklı priz, beyaz */
+            name: string;
+            /**
+             * @description Hareketi olan ürünün ana birimi değiştirilemez
+             * @example adet
+             */
+            baseUnit: string;
+            /** @example 2000000000053 */
+            barcode?: string | null;
+            /**
+             * @description Kritik stok eşiği (ana birimde)
+             * @example 50
+             */
+            minStock?: string | null;
+            /** @description Liste tamamen değiştirilir */
+            units?: components["schemas"]["ProductUnitInputDto"][];
+            /**
+             * @example [
+             *       "priz",
+             *       "topraklı priz"
+             *     ]
+             */
+            aliases?: string[];
+            /**
+             * @description Ürün silinmez; pasife almak için false
+             * @default true
+             */
+            isActive: boolean;
+        };
+        PartyDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Anadolu Kablo Toptan */
+            name: string;
+            /** @enum {string} */
+            type: "SUPPLIER" | "CUSTOMER";
+            taxId: string | null;
+            isActive: boolean;
+        };
+        PartyListDto: {
+            items: components["schemas"]["PartyDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        PartyInputDto: {
+            /** @example Anadolu Kablo Toptan */
+            name: string;
+            /** @enum {string} */
+            type: "SUPPLIER" | "CUSTOMER";
+            /**
+             * @description VKN 10, TCKN 11 hane
+             * @example 9990000011
+             */
+            taxId?: string | null;
+            /**
+             * @description Cari silinmez; pasife almak için false
+             * @default true
+             */
             isActive: boolean;
         };
         OperationItemInputDto: {
@@ -815,6 +1017,56 @@ export interface operations {
             };
         };
     };
+    WarehousesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WarehouseInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehouseDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Bu adla bir depo zaten var */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     WarehousesController_get: {
         parameters: {
             query?: never;
@@ -853,6 +1105,467 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    WarehousesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                warehouseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WarehouseInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarehouseDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Bu adla bir depo zaten var */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProductsController_list: {
+        parameters: {
+            query?: {
+                /** @description En fazla 100 */
+                pageSize?: number;
+                page?: number;
+                status?: "active" | "inactive" | "all";
+                search?: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductListDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProductsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description SKU ya da barkod başka üründe kullanılıyor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProductsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ProductsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description SKU/barkod kullanılıyor, kullanılmış birim silinmek isteniyor ya da hareketi olan ürünün ana birimi değişiyor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PartiesController_list: {
+        parameters: {
+            query?: {
+                /** @description En fazla 100 */
+                pageSize?: number;
+                page?: number;
+                status?: "active" | "inactive" | "all";
+                type?: "SUPPLIER" | "CUSTOMER";
+                search?: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyListDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PartiesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartyInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Vergi numarası başka caride kullanılıyor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PartiesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PartiesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartyInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Vergi numarası başka caride kullanılıyor */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

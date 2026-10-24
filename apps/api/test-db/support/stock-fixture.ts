@@ -41,6 +41,10 @@ export interface StockFixture {
   main: string;
   branch: string;
   addProduct: (sku: string) => Promise<string>;
+  /** Şirkete yeni bir üye ekler (kullanıcı kimliğini döner); close() onu da siler. */
+  addMember: (role: 'ADMIN' | 'EMPLOYEE') => Promise<string>;
+  /** Verilen kullanıcı adına (varsayılan: yönetici) şirkete bağlı istek. Senkron, bkz. confirm. */
+  call: (method: 'get' | 'post' | 'put', path: string, userId?: string) => request.Test;
   open: (type: string, items: Item[]) => Promise<Operation>;
   /** Senkron: supertest isteği "thenable"dır; await edilirse .expect() çağrılmadan gönderilir. */
   confirm: (operation: Operation, key?: string) => request.Test;
@@ -77,8 +81,12 @@ export async function createStockFixture(options: StockFixtureOptions): Promise<
 
   const app = await createTestApp({ accessTokenVerifier: tokens.verifier, overrides: options.overrides });
 
-  const post = (path: string): request.Test =>
-    request(app.getHttpServer()).post(path).set('Authorization', `Bearer ${token}`).set(ORGANIZATION_HEADER, org);
+  const tokenOf = new Map<string, string>([[admin, token]]);
+  const call = (method: 'get' | 'post' | 'put', path: string, userId: string = admin): request.Test => {
+    const agent = request(app.getHttpServer());
+    return agent[method](path).set('Authorization', `Bearer ${tokenOf.get(userId) ?? ''}`).set(ORGANIZATION_HEADER, org);
+  };
+  const post = (path: string): request.Test => call('post', path);
 
   const confirm = (operation: Operation, key: string = randomUUID()): request.Test =>
     post(`/v1/operations/${operation.id}/confirm`).set(IDEMPOTENCY_HEADER, key).send({ version: operation.version });
@@ -101,6 +109,14 @@ export async function createStockFixture(options: StockFixtureOptions): Promise<
         values (${id}, ${org}, ${sku}, ${`Test ürünü ${sku}`}, 'adet')`);
       return id;
     },
+    async addMember(role) {
+      const userId = randomUUID();
+      await db.execute(sql`insert into auth.users (id, email) values (${userId}, ${`stok-${userId}@test.invalid`})`);
+      await db.execute(sql`insert into organization_users (organization_id, user_id, role) values (${org}, ${userId}, ${role})`);
+      tokenOf.set(userId, await tokens.tokenFor(userId));
+      return userId;
+    },
+    call,
     open,
     confirm,
     async apply(type, items) {
@@ -135,15 +151,19 @@ export async function createStockFixture(options: StockFixtureOptions): Promise<
         'operation_items',
         'operations',
         'inventory',
+        'product_aliases',
         'product_units',
         'products',
+        'parties',
+        'user_warehouse_access',
         'organization_users',
         'warehouses',
       ]) {
         await db.execute(sql`delete from ${sql.identifier(table)} where organization_id = ${org}`);
       }
       await db.execute(sql`delete from organizations where id = ${org}`);
-      await db.execute(sql`delete from auth.users where id = ${admin}`);
+      const users = sql.join([...tokenOf.keys()].map((id) => sql`${id}`), sql`, `);
+      await db.execute(sql`delete from auth.users where id in (${users})`);
       await connection.close();
     },
   };
