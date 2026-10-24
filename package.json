@@ -17,7 +17,9 @@
     "db:generate": "pnpm --filter @ambarci/db generate",
     "db:migrate": "pnpm --filter @ambarci/db migrate",
     "db:seed": "pnpm build:packages && pnpm --filter @ambarci/db seed && pnpm --filter @ambarci/api seed:opening",
-    "db:test": "pnpm -r --workspace-concurrency=1 test:db"
+    "db:test": "pnpm -r --workspace-concurrency=1 test:db",
+    "measure:latency": "pnpm build:packages && pnpm --filter @ambarci/api measure:latency",
+    "measure:remote": "pnpm build:packages && pnpm --filter @ambarci/api measure:remote"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

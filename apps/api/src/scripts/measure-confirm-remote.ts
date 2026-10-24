@@ -1,5 +1,5 @@
 // Onay transaction'ının çalışan bir API'deki (varsayılan: Render, Frankfurt) süresini ölçer (#34):
-//   pnpm --filter @ambarci/api measure:remote
+//   pnpm measure:remote
 //
 // Kendi bilgisayarında çalışır. Geçici bir şirket, depo ve ürünleri doğrudan veritabanına ekler (katalog uçları
 // henüz yok), ölçüm kullanıcısıyla Supabase'e giriş yapar, işlemleri hedef API'ye HTTP ile açıp onaylar ve her

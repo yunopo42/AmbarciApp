@@ -41,8 +41,8 @@ ve Render eski sürümü yayında tutar (#17'de `SUPABASE_URL` için yaşandı).
 - Render yalnızca IPv4 kullandığı için `DATABASE_URL` olarak Supabase'in **Session pooler** adresi (port 5432)
   girilir; doğrudan bağlantı adresi (`db.<proje>.supabase.co`) IPv6'dır.
 - Supabase projesi eu-west-1 (İrlanda), API ise Render'da Frankfurt'tadır; Render'da İrlanda bölgesi yoktur.
-  Bu yüzden her veritabanı sorgusuna bölgeler arası gidiş-dönüş süresi eklenir. Proje 20 Ekim kararıyla
-  İrlanda'da bırakıldı; gecikme 3. haftadaki transaction testlerinde ölçülecek.
+  Bu yüzden her veritabanı sorgusuna bölgeler arası gidiş-dönüş süresi eklenir (Render'dan ölçülen: sorgu başına
+  ~22 ms, 1 kalemli onay transaction'ı ~270 ms; `docs/veritabani.md`, #34). Proje bu ölçümle İrlanda'da kaldı.
 - Web paneli ve mobil uygulama Supabase adresini ve anon anahtarını kendi önekli değişkenleriyle alır:
   `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Vercel, yukarıdaki tablo) ve
   `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Mobil development build'de bu değerler
