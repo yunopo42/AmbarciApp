@@ -1,1 +1,117 @@
 @import 'tailwindcss';
+
+/*
+ * Tasarım değerleri: docs/tasarim.md ile birebir aynıdır; değer değişecekse önce o dosya güncellenir.
+ *
+ * Tailwind'in hazır renk, yazı boyutu, köşe ve gölge ölçekleri kapatılır (`initial`). Böylece bileşenlerde yalnızca
+ * buradaki anlamsal adlar kullanılabilir: bg-primary, text-text-muted, text-body-md, rounded-lg, shadow-1. Örneğin
+ * `bg-blue-500` yazılırsa hiçbir stil üretilmez; tasarım dışı bir renk sessizce ekrana giremez.
+ *
+ * Boşluk ölçeği Tailwind'in 4 px'lik adımıdır: space-xs 4 px = 1, sm 8 px = 2, md 16 px = 4, lg 24 px = 6,
+ * xl 32 px = 8 (p-4, gap-6...).
+ */
+@theme {
+  --color-*: initial;
+
+  /* Ana renk ve metin */
+  --color-primary: #1e3a8a;
+  --color-primary-action: #1d4ed8;
+  --color-on-primary: #ffffff;
+  --color-primary-soft: #eff4ff;
+  --color-text: #0b1c30;
+  --color-text-muted: #444651;
+  --color-text-subtle: #757682;
+
+  /* Zeminler ve kenarlıklar */
+  --color-canvas: #f8fafc;
+  --color-card: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-divider: #f1f5f9;
+
+  /* Durum renkleri: metin, dolgu (nokta, grafik), zemin (soft), kenarlık */
+  --color-pending: #d97706;
+  --color-pending-fill: #f59e0b;
+  --color-pending-soft: #fef3c7;
+  --color-pending-border: #fde68a;
+  --color-applied: #059669;
+  --color-applied-fill: #10b981;
+  --color-applied-soft: #ecfdf5;
+  --color-applied-border: #a7f3d0;
+  --color-critical: #dc2626;
+  --color-critical-fill: #dc2626;
+  --color-critical-soft: #fef2f2;
+  --color-critical-border: #fecaca;
+
+  /* Pencere (dialog) arkasındaki karartma: text rengi, %40 saydam */
+  --color-overlay: rgb(11 28 48 / 0.4);
+
+  /* Yazı tipi: Inter, app/layout.tsx'te next/font ile yüklenir ve --font-inter değişkenine yazılır. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Yazı ölçeği: boyut / satır yüksekliği / ağırlık / harf aralığı (1rem = 16 px) */
+  --text-*: initial;
+  --text-headline-lg: 2rem;
+  --text-headline-lg--line-height: 2.5rem;
+  --text-headline-lg--font-weight: 700;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-md: 1.5rem;
+  --text-headline-md--line-height: 2rem;
+  --text-headline-md--font-weight: 600;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-headline-sm: 1.25rem;
+  --text-headline-sm--line-height: 1.75rem;
+  --text-headline-sm--font-weight: 600;
+  --text-title-md: 1.125rem;
+  --text-title-md--line-height: 1.5rem;
+  --text-title-md--font-weight: 600;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5rem;
+  --text-body-lg--font-weight: 400;
+  --text-body-lg-bold: 1rem;
+  --text-body-lg-bold--line-height: 1.5rem;
+  --text-body-lg-bold--font-weight: 600;
+  --text-body-md: 0.875rem;
+  --text-body-md--line-height: 1.25rem;
+  --text-body-md--font-weight: 400;
+  --text-body-md-medium: 0.875rem;
+  --text-body-md-medium--line-height: 1.25rem;
+  --text-body-md-medium--font-weight: 500;
+  --text-label-lg: 0.9375rem;
+  --text-label-lg--line-height: 1.25rem;
+  --text-label-lg--font-weight: 600;
+  --text-label-lg--letter-spacing: 0.01em;
+  --text-label-md: 0.8125rem;
+  --text-label-md--line-height: 1.125rem;
+  --text-label-md--font-weight: 600;
+  --text-label-md--letter-spacing: 0.02em;
+  --text-label-sm: 0.6875rem;
+  --text-label-sm--line-height: 0.875rem;
+  --text-label-sm--font-weight: 700;
+  --text-label-sm--letter-spacing: 0.04em;
+
+  /* Köşe yarıçapı; rounded-full (9999 px) Tailwind'de hazır gelir. */
+  --radius-*: initial;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Gölge (derinlik) seviyeleri 1–3 */
+  --shadow-*: initial;
+  --shadow-1: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --shadow-2: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.04);
+  --shadow-3: 0 10px 15px -3px rgb(15 23 42 / 0.12);
+
+  /* Web içeriğinin en fazla genişliği: max-w-page */
+  --container-page: 80rem;
+}
+
+@layer base {
+  /* Kenarlık rengi verilmeyen her `border` sınıfı tasarımın kenarlık rengini alır. */
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    border-color: var(--color-border);
+  }
+}

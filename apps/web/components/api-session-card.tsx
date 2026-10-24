@@ -3,6 +3,8 @@
 import type { JSX } from 'react';
 
 import { useApi } from '@/components/api-provider';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { API_URL, errorMessage } from '@/lib/api-client';
 
 /**
@@ -25,9 +27,15 @@ export function ApiSessionCard(): JSX.Element {
   }
 
   return (
-    <section aria-live="polite" className="rounded border p-4 text-center">
-      <h2 className="font-semibold">API oturumu</h2>
-      <p>{message}</p>
-    </section>
+    <Card aria-live="polite">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-title-md">
+          API oturumu
+          {query.isSuccess ? <Badge variant="applied">Doğrulandı</Badge> : null}
+          {query.isError ? <Badge variant="critical">Hata</Badge> : null}
+        </CardTitle>
+        <CardDescription>{message}</CardDescription>
+      </CardHeader>
+    </Card>
   );
 }

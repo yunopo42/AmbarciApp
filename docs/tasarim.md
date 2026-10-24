@@ -117,12 +117,15 @@ Koyu gölge kullanılmaz; derinlik ince kenarlık ve hafif gölgeyle verilir.
 | 2 | `0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04)` + `border-strong` kenarlık | Yapışkan üst çubuk, alttan açılan panel, filtre penceresi |
 | 3 | `0 10px 15px -3px rgba(15, 23, 42, 0.12)` | Uyarı ve onay pencereleri |
 
+Pencere (dialog) açıkken arkasındaki sayfa `overlay` ile karartılır: `text` rengi (`#0B1C30`) %40 saydamlıkta. *(24 Ekim 2026'da web formları için eklendi; Stitch ekranlarında karşılığı yoktu.)*
+
 ## Bileşen kuralları
 
 | Bileşen | Kural |
 | --- | --- |
 | Ana düğme | Zemin `primary`, üzerine gelince `primary-action`; metin `on-primary`, `label-lg`; en az 48 px yükseklik, yatay 20 px iç boşluk, köşe 8 px; mobil panellerde tam genişlik |
 | İkincil düğme | Zemin `card`, kenarlık 1 px `border-strong`, metin `primary`; en az 48 px |
+| Küçük düğme (web) | Tablo satırındaki "Düzenle", sayfalama ve "Kopyala" gibi sık tekrar eden düğmeler: `label-md`, en az 40 px yükseklik, yatay 12 px. Mobilde kullanılmaz (dokunma hedefi 48 px). *(24 Ekim 2026'da eklendi.)* |
 | Tehlikeli düğme | İptal, Reddet: kritik renk. Geri alınamaz işlemde dolu zemin, yan seçenek olarak kenarlıklı |
 | Giriş alanı | En az 48 px, kenarlık 1,5 px `border-strong`, köşe 8 px; odakta 2 px `primary-action` halka; hata durumunda kritik kenarlık ve altında 13 px açıklama |
 | Kart | Zemin `card`, kenarlık `border`, köşe 12 px, iç boşluk 16 px, gölge seviye 1 |
@@ -148,5 +151,20 @@ Stitch bazı ekranlara projenin kapsamı dışında kalan ya da mimarisiyle çel
 ## Uygulama notları
 
 - **Tek kaynak:** Değerler, kod yazılırken tek bir yerde tanımlanır: web için Tailwind'in `@theme` değişkenleri (`apps/web/app/globals.css`), mobil için bir tema dosyası. İkisi bu tabloyla aynı kalır; değer değişince önce bu dosya güncellenir.
-- **Mevcut ekranlar:** Şu anki giriş, kayıt, şirket ve üye ekranları sade Tailwind sınıflarıyla yazıldı. 3. haftada stok ekranlarıyla birlikte bu değerlere geçirilecek.
 - **Koyu tema:** Şimdilik yok; yalnızca açık tema tasarlandı.
+
+### Web'de (Tailwind) kullanılan adlar
+
+`apps/web/app/globals.css` Tailwind'in hazır renk, yazı boyutu, köşe ve gölge ölçeklerini kapatır (`--color-*: initial` gibi). Bileşende `bg-blue-500` ya da `text-sm` yazılırsa stil üretilmez; yalnızca aşağıdaki adlar çalışır.
+
+| Değer | Tailwind sınıfı |
+| --- | --- |
+| Renkler | Tablodaki adla: `bg-primary`, `hover:bg-primary-action`, `text-on-primary`, `bg-primary-soft`, `text-text`, `text-text-muted`, `text-text-subtle`, `bg-canvas`, `bg-card`, `border-border`, `border-border-strong`, `border-divider`, `bg-overlay` |
+| Durum renkleri | Onay bekliyor `pending`, uygulandı/yeterli `applied`, kritik/hata `critical`; metin adın kendisi, dolgu `-fill`, zemin `-soft`, kenarlık `-border` (ör. `text-pending`, `bg-pending-soft`, `border-pending-border`) |
+| Yazı | Ölçekteki adla; boyut, satır yüksekliği, ağırlık ve harf aralığı birlikte gelir: `text-headline-lg`, `text-body-md`, `text-label-sm`… Sayılar `tabular-nums` |
+| Boşluk | Tailwind'in 4 px'lik adımı: `space-xs` = 1, `space-sm` = 2, `space-md` = 4, `space-lg` = 6, `space-xl` = 8 (ör. `p-4` = 16 px, `gap-6` = 24 px) |
+| Köşe | `rounded-sm` 4 px, `rounded-md` 8 px, `rounded-lg` 12 px, `rounded-full` |
+| Gölge | `shadow-1`, `shadow-2`, `shadow-3` |
+| İçerik genişliği | `max-w-page` (1280 px) |
+
+Bileşenler shadcn/ui kalıbıyla `apps/web/components/ui/` altında yazıldı (düğme, giriş alanı, açılır liste, onay kutusu, kart, rozet, tablo, pencere, uyarı). shadcn CLI kullanılmadı: `shadcn init` `globals.css`'e kendi renk paletini yazıyor; bileşenler bu dosyadaki adlarla elle uyarlandı. `lib/utils.ts` içindeki `cn`, çakışan sınıfları ayıklayan tailwind-merge'e buradaki yazı ve gölge adlarını tanıtır.

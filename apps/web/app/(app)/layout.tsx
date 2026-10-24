@@ -1,10 +1,10 @@
 import type { JSX, ReactNode } from 'react';
 
-import { AppHeader } from '@/components/app-header';
+import { AppShell } from '@/components/app-shell';
 import { OrganizationProvider } from '@/components/organization-provider';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-// Oturum isteyen sayfaların ortak düzeni: üst menü ve aktif şirket bağlamı.
+// Oturum isteyen sayfaların ortak düzeni: sol menü ve aktif şirket bağlamı.
 // Oturum yoksa bu sayfalara proxy.ts nedeniyle hiç gelinmez.
 export default async function AppLayout({ children }: { children: ReactNode }): Promise<JSX.Element> {
   const supabase = await createSupabaseServerClient();
@@ -13,8 +13,7 @@ export default async function AppLayout({ children }: { children: ReactNode }): 
 
   return (
     <OrganizationProvider>
-      <AppHeader email={email} />
-      <main className="flex flex-col items-center gap-6 p-4">{children}</main>
+      <AppShell email={email}>{children}</AppShell>
     </OrganizationProvider>
   );
 }

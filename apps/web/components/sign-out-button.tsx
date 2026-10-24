@@ -1,9 +1,11 @@
 'use client';
 
+import { LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { JSX } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export function SignOutButton(): JSX.Element {
@@ -19,8 +21,9 @@ export function SignOutButton(): JSX.Element {
   }
 
   return (
-    <button type="button" onClick={() => void handleClick()} disabled={pending} className="rounded border px-4 py-2">
+    <Button variant="secondary" size="sm" onClick={() => void handleClick()} disabled={pending}>
+      <LogOut aria-hidden />
       {pending ? 'Çıkış yapılıyor…' : 'Çıkış yap'}
-    </button>
+    </Button>
   );
 }

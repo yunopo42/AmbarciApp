@@ -3,6 +3,8 @@
 import type { JSX } from 'react';
 
 import { useApi } from '@/components/api-provider';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { API_URL, errorMessage } from '@/lib/api-client';
 
 /** API'nin ayakta olup olmadığı (oturum gerektirmeyen /v1/health). */
@@ -22,10 +24,16 @@ export function ApiStatusCard(): JSX.Element {
   }
 
   return (
-    <section aria-live="polite" className="rounded border p-4 text-center">
-      <h2 className="font-semibold">API durumu</h2>
-      <p>{message}</p>
-      {API_URL ? <p className="text-sm">{API_URL}</p> : null}
-    </section>
+    <Card aria-live="polite">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-title-md">
+          API durumu
+          {query.isSuccess ? <Badge variant="applied">Çalışıyor</Badge> : null}
+          {query.isError || !API_URL ? <Badge variant="critical">Ulaşılamıyor</Badge> : null}
+        </CardTitle>
+        <CardDescription>{message}</CardDescription>
+      </CardHeader>
+      {API_URL ? <p className="break-all text-label-md font-normal text-text-subtle">{API_URL}</p> : null}
+    </Card>
   );
 }

@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { FormEvent, JSX } from 'react';
 
 import { useApi } from '@/components/api-provider';
 import { useOrganizations } from '@/components/organization-provider';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { errorMessage } from '@/lib/api-client';
 import { ROLE_LABELS } from '@/lib/labels';
 
@@ -16,6 +21,7 @@ export function JoinOrganizationForm(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState<string | null>(null);
   const pending = accept.isPending;
+  const codeId = useId();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -34,18 +40,29 @@ export function JoinOrganizationForm(): JSX.Element {
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-3 rounded border p-4">
-      <h2 className="font-semibold">Davet koduyla katıl</h2>
-      <p className="text-sm">Yöneticinden aldığın kodu gir. Büyük/küçük harf ve tire farkı önemli değil.</p>
-      <label className="flex flex-col gap-1">
-        <span>Davet kodu</span>
-        <input name="code" autoComplete="off" minLength={8} maxLength={32} required className="rounded border px-3 py-2 uppercase" />
-      </label>
-      {error ? <p role="alert">{error}</p> : null}
-      {joined ? <p aria-live="polite">{joined}</p> : null}
-      <button type="submit" disabled={pending} className="rounded border px-4 py-2 font-medium">
-        {pending ? 'Katılınıyor…' : 'Katıl'}
-      </button>
-    </form>
+    <Card>
+      <CardHeader>
+        <CardTitle>Davet koduyla katıl</CardTitle>
+        <CardDescription>Yöneticinden aldığın kodu gir. Büyük/küçük harf ve tire farkı önemli değil.</CardDescription>
+      </CardHeader>
+      <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-4">
+        <Field id={codeId} label="Davet kodu">
+          <Input
+            id={codeId}
+            name="code"
+            autoComplete="off"
+            minLength={8}
+            maxLength={32}
+            required
+            className="tracking-widest uppercase tabular-nums"
+          />
+        </Field>
+        {error ? <Alert>{error}</Alert> : null}
+        {joined ? <Alert variant="applied">{joined}</Alert> : null}
+        <Button type="submit" disabled={pending} className="self-start">
+          {pending ? 'Katılınıyor…' : 'Katıl'}
+        </Button>
+      </form>
+    </Card>
   );
 }
