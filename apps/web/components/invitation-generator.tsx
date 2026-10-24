@@ -1,39 +1,35 @@
 'use client';
 
-import { invitationSchema } from '@ambarci/shared';
 import type { Invitation, OrganizationRole } from '@ambarci/shared';
 import { useState } from 'react';
 import type { FormEvent, JSX } from 'react';
 
-import { apiRequest, errorMessage } from '@/lib/api';
+import { useApi } from '@/components/api-provider';
+import { errorMessage } from '@/lib/api-client';
 import { formatDateTime, ROLE_LABELS } from '@/lib/labels';
 
-/** Yönetici için tek kullanımlık, süreli davet kodu üretir. */
-export function InvitationGenerator({ organizationId }: { organizationId: string }): JSX.Element {
+/** Yönetici için tek kullanımlık, süreli davet kodu üretir (aktif şirket adına). */
+export function InvitationGenerator(): JSX.Element {
+  const { $api } = useApi();
+  const create = $api.useMutation('post', '/v1/invitations');
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [pending, setPending] = useState(false);
+  const pending = create.isPending;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setPending(true);
     setError(null);
     setCopied(false);
     try {
       setInvitation(
-        await apiRequest('/v1/invitations', {
-          method: 'POST',
-          organizationId,
+        await create.mutateAsync({
           body: { role: String(form.get('role')) as OrganizationRole, expiresInDays: Number(form.get('expiresInDays')) },
-          schema: invitationSchema,
         }),
       );
     } catch (reason) {
       setError(errorMessage(reason));
-    } finally {
-      setPending(false);
     }
   }
 

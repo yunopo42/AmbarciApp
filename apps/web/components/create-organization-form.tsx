@@ -1,40 +1,35 @@
 'use client';
 
-import { organizationMembershipSchema } from '@ambarci/shared';
 import { useState } from 'react';
 import type { FormEvent, JSX } from 'react';
 
+import { useApi } from '@/components/api-provider';
 import { useOrganizations } from '@/components/organization-provider';
-import { apiRequest, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/api-client';
 
 /** Şirket kurar; kuran kullanıcı yönetici olur ve yeni şirket aktif şirket yapılır. */
 export function CreateOrganizationForm(): JSX.Element {
   const { reload } = useOrganizations();
+  const { $api } = useApi();
+  const create = $api.useMutation('post', '/v1/organizations');
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const pending = create.isPending;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const formElement = event.currentTarget;
     const name = String(new FormData(formElement).get('name') ?? '');
-    setPending(true);
     setError(null);
     setCreated(null);
     try {
-      const organization = await apiRequest('/v1/organizations', {
-        method: 'POST',
-        body: { name },
-        schema: organizationMembershipSchema,
-      });
+      const organization = await create.mutateAsync({ body: { name } });
       // Kullanıcının zaten şirketi varsa form ekranda kalır; sonuç gösterilip form temizlenir.
       setCreated(`${organization.name} kuruldu ve aktif şirket yapıldı.`);
       formElement.reset();
       await reload(organization.id);
     } catch (reason) {
       setError(errorMessage(reason));
-    } finally {
-      setPending(false);
     }
   }
 

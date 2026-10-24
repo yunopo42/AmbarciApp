@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import type { JSX, ReactNode } from 'react';
 
+import { ApiProvider } from '@/components/api-provider';
+
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -11,7 +13,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }): JSX.Element {
   return (
     <html lang="tr">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <ApiProvider>{children}</ApiProvider>
+      </body>
     </html>
   );
 }

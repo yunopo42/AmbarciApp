@@ -33,7 +33,7 @@ Tasarımın temel kuralları:
 | Katman | Teknoloji | Durum |
 | --- | --- | --- |
 | Mobil | Expo, Expo Router | İskelet, development build, ses tanıma deneme ekranı |
-| Web paneli | Next.js, Tailwind | İskelet, API durum kartı; Vercel'de yayında |
+| Web paneli | Next.js, Tailwind, TanStack Query | Giriş, şirket, davet, üyeler ve depolar; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
 | API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi, depolar (şirket ve rol guard'larıyla); stok işlemleri: açma, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata ve kullanıcı şemaları |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog, stok, işlem, hareket, sayım, denetim ve outbox tabloları (16 tablo), RLS politikaları ve iki şirketli izolasyon testi |
@@ -52,7 +52,7 @@ apps/
 packages/
   shared/          Ortak Zod şemaları ve tipler
   db/              Drizzle şeması, migration'lar ve RLS testleri
-  api-client/      OpenAPI'den üretilecek istemci (henüz boş)
+  api-client/      OpenAPI'den üretilen tipli istemci (pnpm gen:api; ADR-005)
 eval/              Deneme ve değerlendirme sonuçları
 docs/
   plan.md          8 haftalık plan
@@ -134,6 +134,12 @@ pnpm test
 
 ```bash
 pnpm build
+```
+
+API'de bir uç ya da DTO değiştiyse istemciyi yeniden üret ve üretilen dosyaları (`packages/api-client/openapi.json`, `packages/api-client/src/schema.ts`) aynı commit'e ekle. CI, istemci güncel değilse durur.
+
+```bash
+pnpm gen:api
 ```
 
 ### Veritabanı komutları

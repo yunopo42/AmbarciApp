@@ -98,7 +98,7 @@ ve Render eski sürümü yayında tutar (#17'de `SUPABASE_URL` için yaşandı).
 
 - `NEXT_PUBLIC_API_URL` build sırasında sayfaya gömülür. Değeri değiştirirsen Vercel'de **Deployments** sayfasından son deploy'u **Redeploy** etmen gerekir.
 - `WEB_ORIGIN` tek bir adres kabul eder. Vercel'in her dal için ürettiği önizleme adresleri farklı olduğundan, önizlemelerde kart "API'ye ulaşılamadı" gösterir; bu beklenen davranıştır.
-- Render yalnızca API'yi etkileyen dosyalar değişince yeniden yayınlar (`render.yaml` içindeki `buildFilter`). Vercel de yalnızca web'i veya `packages/shared` paketini etkileyen commit'lerde build alır.
+- Render yalnızca API'yi etkileyen dosyalar değişince yeniden yayınlar (`render.yaml` içindeki `buildFilter`). Vercel de yalnızca web'i ya da web'in kullandığı paketleri (`packages/shared`, `packages/api-client`) etkileyen commit'lerde build alır.
 - `sync: false` olan değişkenler yalnızca Blueprint ilk oluşturulurken sorulur. Sonradan eklenen gizli değişkenler Render panelinden elle girilir.
 
 ## Sorun giderme

@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "pnpm build:packages && pnpm -r --parallel dev",
     "build": "pnpm -r build",
-    "build:packages": "pnpm --filter @ambarci/shared --filter @ambarci/db build",
+    "build:packages": "pnpm --filter @ambarci/shared --filter @ambarci/db --filter @ambarci/api-client build",
+    "gen:api": "pnpm --filter @ambarci/shared --filter @ambarci/db build && pnpm --filter @ambarci/api gen:openapi && pnpm --filter @ambarci/api-client generate",
     "lint": "pnpm build:packages && pnpm -r lint",
     "typecheck": "pnpm build:packages && pnpm -r typecheck",
     "test": "pnpm build:packages && pnpm -r test",

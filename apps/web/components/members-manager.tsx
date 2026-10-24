@@ -1,19 +1,15 @@
 'use client';
 
-import { memberListSchema, warehouseListSchema } from '@ambarci/shared';
-import type { Member, Warehouse } from '@ambarci/shared';
-import { useEffect, useState } from 'react';
+import type { Member } from '@ambarci/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import type { JSX } from 'react';
 
+import { useApi } from '@/components/api-provider';
 import { InvitationGenerator } from '@/components/invitation-generator';
 import { useOrganizations } from '@/components/organization-provider';
-import { apiRequest, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/api-client';
 import { ROLE_LABELS } from '@/lib/labels';
-
-type LoadState =
-  | { kind: 'loading' }
-  | { kind: 'ready'; members: Member[]; warehouses: Warehouse[] }
-  | { kind: 'error'; message: string };
 
 /** Yönetici ekranı: davet kodu üretme, üyeler ve çalışanların depo yetkileri. */
 export function MembersManager(): JSX.Element {
@@ -24,54 +20,28 @@ export function MembersManager(): JSX.Element {
   if (active.role !== 'ADMIN') {
     return <p>Bu sayfa yalnızca şirket yöneticilerine açık.</p>;
   }
-  // Şirket değişince ekran sıfırdan kurulur.
-  return <MembersPanel key={active.id} organizationId={active.id} />;
+  // Şirket değişince şirket katmanı (istemci ve önbellek) baştan kurulur.
+  return <MembersPanel />;
 }
 
-function MembersPanel({ organizationId }: { organizationId: string }): JSX.Element {
-  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+function MembersPanel(): JSX.Element {
+  const { $api } = useApi();
+  const queryClient = useQueryClient();
+  const members = $api.useQuery('get', '/v1/members');
+  const warehouses = $api.useQuery('get', '/v1/warehouses');
+  const grant = $api.useMutation('put', '/v1/members/{memberId}/warehouses/{warehouseId}');
+  const revoke = $api.useMutation('delete', '/v1/members/{memberId}/warehouses/{warehouseId}');
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    let current = true;
-    Promise.all([
-      apiRequest('/v1/members', { organizationId, schema: memberListSchema }),
-      apiRequest('/v1/warehouses', { organizationId, schema: warehouseListSchema }),
-    ])
-      .then(([members, warehouses]) => current && setState({ kind: 'ready', members, warehouses }))
-      .catch((reason: unknown) => current && setState({ kind: 'error', message: errorMessage(reason) }));
-    return () => {
-      current = false;
-    };
-  }, [organizationId]);
-
-  async function toggleAccess(member: Member, warehouseId: string, grant: boolean): Promise<void> {
-    const key = `${member.id}:${warehouseId}`;
-    setBusyKey(key);
+  async function toggleAccess(member: Member, warehouseId: string, granted: boolean): Promise<void> {
+    setBusyKey(`${member.id}:${warehouseId}`);
     setActionError(null);
     try {
-      await apiRequest(`/v1/members/${member.id}/warehouses/${warehouseId}`, {
-        method: grant ? 'PUT' : 'DELETE',
-        organizationId,
-      });
-      setState((previous) =>
-        previous.kind !== 'ready'
-          ? previous
-          : {
-              ...previous,
-              members: previous.members.map((item) =>
-                item.id !== member.id
-                  ? item
-                  : {
-                      ...item,
-                      warehouseIds: grant
-                        ? [...item.warehouseIds, warehouseId]
-                        : item.warehouseIds.filter((id) => id !== warehouseId),
-                    },
-              ),
-            },
-      );
+      const params = { path: { memberId: member.id, warehouseId } };
+      await (granted ? grant : revoke).mutateAsync({ params });
+      // Üye listesi sunucudan yeniden okunur; ekrandaki işaretler veritabanındaki yetkiyle aynı kalır.
+      await queryClient.invalidateQueries({ queryKey: $api.queryOptions('get', '/v1/members').queryKey });
     } catch (reason) {
       setActionError(errorMessage(reason));
     } finally {
@@ -79,25 +49,27 @@ function MembersPanel({ organizationId }: { organizationId: string }): JSX.Eleme
     }
   }
 
+  const failed = members.isError ? members.error : warehouses.isError ? warehouses.error : null;
+
   return (
     <div className="flex w-full max-w-4xl flex-col gap-6">
-      <InvitationGenerator organizationId={organizationId} />
+      <InvitationGenerator />
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">Üyeler ve depo yetkileri</h2>
         <p className="text-sm">
           Yöneticiler tüm depolarda işlem yapabilir. Çalışanlar yalnızca işaretli depolarda işlem yapabilir.
         </p>
-        {state.kind === 'loading' ? <p aria-live="polite">Üyeler yükleniyor…</p> : null}
-        {state.kind === 'error' ? <p role="alert">{state.message}</p> : null}
+        {members.isPending || warehouses.isPending ? <p aria-live="polite">Üyeler yükleniyor…</p> : null}
+        {failed ? <p role="alert">{errorMessage(failed)}</p> : null}
         {actionError ? <p role="alert">{actionError}</p> : null}
-        {state.kind === 'ready' ? (
+        {members.data && warehouses.data ? (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b">
                   <th className="p-2">Üye</th>
                   <th className="p-2">Rol</th>
-                  {state.warehouses.map((warehouse) => (
+                  {warehouses.data.map((warehouse) => (
                     <th key={warehouse.id} className="p-2">
                       {warehouse.name}
                     </th>
@@ -105,14 +77,14 @@ function MembersPanel({ organizationId }: { organizationId: string }): JSX.Eleme
                 </tr>
               </thead>
               <tbody>
-                {state.members.map((member) => (
+                {members.data.map((member) => (
                   <tr key={member.id} className="border-b">
                     <td className="p-2">
                       {member.email ?? member.userId}
                       {member.isActive ? '' : ' (pasif)'}
                     </td>
                     <td className="p-2">{ROLE_LABELS[member.role]}</td>
-                    {state.warehouses.map((warehouse) => {
+                    {warehouses.data.map((warehouse) => {
                       const key = `${member.id}:${warehouse.id}`;
                       const granted = member.warehouseIds.includes(warehouse.id);
                       return (

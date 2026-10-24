@@ -40,5 +40,12 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # API'nin OpenAPI belgesi değişip istemci (packages/api-client) yeniden üretilmediyse burada durur.
+      # Düzeltmek için: pnpm gen:api, sonra üretilen dosyaları commit et (ADR-005).
+      - name: API istemcisi güncel mi
+        run: |
+          pnpm gen:api
+          git diff --exit-code -- packages/api-client
+
       - name: Build
         run: pnpm build
