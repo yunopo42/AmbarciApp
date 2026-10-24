@@ -96,7 +96,7 @@ export const recordStatusFilterSchema = z.enum(['active', 'inactive', 'all']);
 export type RecordStatusFilter = z.infer<typeof recordStatusFilterSchema>;
 
 /** Sayfalama: sorgu parametreleri metin gelir, sayıya çevrilir (bunlar miktar değil, sayfa numarası). */
-const pageQuery = {
+export const pageQuery = {
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 };

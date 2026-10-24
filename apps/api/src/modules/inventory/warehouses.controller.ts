@@ -99,7 +99,7 @@ export class WarehousesController {
   @Get(':warehouseId')
   @OrganizationScoped({ warehouseParam: 'warehouseId' })
   @ApiOperation({
-    summary: 'Depo ayrıntısı; çalışan yalnızca yetkili olduğu depoyu görür (stok bilgisi 3. haftada eklenecek)',
+    summary: 'Depo ayrıntısı; çalışan yalnızca yetkili olduğu depoyu görür (stok: GET /v1/warehouses/{id}/stock)',
   })
   @ApiOkResponse({ type: WarehouseDto })
   @ApiNotFoundResponse({ type: ApiErrorDto })

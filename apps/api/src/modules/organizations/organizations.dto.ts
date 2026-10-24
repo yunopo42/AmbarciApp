@@ -27,6 +27,13 @@ export class OrganizationMembershipDto implements OrganizationMembership {
 
   @ApiProperty({ enum: ROLES })
   role!: OrganizationRole;
+
+  @ApiProperty({
+    type: [String],
+    format: 'uuid',
+    description: 'Çalışanın stok işlemi yapabildiği depolar; yönetici bütün depolarda yetkilidir (liste boş gelir)',
+  })
+  warehouseIds!: string[];
 }
 
 export class CreateInvitationDto {

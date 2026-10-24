@@ -724,7 +724,7 @@
             "organization": []
           }
         ],
-        "summary": "Depo ayrıntısı; çalışan yalnızca yetkili olduğu depoyu görür (stok bilgisi 3. haftada eklenecek)",
+        "summary": "Depo ayrıntısı; çalışan yalnızca yetkili olduğu depoyu görür (stok: GET /v1/warehouses/{id}/stock)",
         "tags": [
           "warehouses"
         ]
@@ -1503,6 +1503,75 @@
         ]
       }
     },
+    "/v1/operations/{operationId}/preview": {
+      "get": {
+        "operationId": "OperationsController_preview",
+        "parameters": [
+          {
+            "name": "operationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationPreviewDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Onay ekranının özeti: kalemler, ana birim karşılıkları ve stoğun önce → sonra hâli (sunucuda hesaplanır; stok değişmez)",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
     "/v1/operations/{operationId}/confirm": {
       "post": {
         "operationId": "OperationsController_confirm",
@@ -1697,6 +1766,196 @@
           "operations"
         ]
       }
+    },
+    "/v1/warehouses/{warehouseId}/stock": {
+      "get": {
+        "operationId": "StockController_warehouseStock",
+        "parameters": [
+          {
+            "name": "warehouseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "En fazla 100",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Ad, SKU, barkod ya da alternatif ad",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseStockDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Depodaki stok: aktif ürünler ve miktarları; çalışan yalnızca yetkili olduğu depoyu görür",
+        "tags": [
+          "stock"
+        ]
+      }
+    },
+    "/v1/products/{productId}/movements": {
+      "get": {
+        "operationId": "StockController_productMovements",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "En fazla 100",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "warehouseId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductMovementListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Ürünün hareket geçmişi, en yeni önce; çalışan yalnızca yetkili olduğu depoların hareketlerini görür",
+        "tags": [
+          "stock"
+        ]
+      }
     }
   },
   "info": {
@@ -1818,12 +2077,21 @@
               "ADMIN",
               "EMPLOYEE"
             ]
+          },
+          "warehouseIds": {
+            "description": "Çalışanın stok işlemi yapabildiği depolar; yönetici bütün depolarda yetkilidir (liste boş gelir)",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         },
         "required": [
           "id",
           "name",
-          "role"
+          "role",
+          "warehouseIds"
         ]
       },
       "CreateInvitationDto": {
@@ -2492,6 +2760,214 @@
           "items"
         ]
       },
+      "WarehouseRefDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Merkez Depo"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "StockEffectDto": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "type": "string",
+            "example": "120.000",
+            "description": "Onaydan önce, ana birimde"
+          },
+          "after": {
+            "type": "string",
+            "example": "84.000",
+            "description": "İşlem onaylanırsa, ana birimde"
+          },
+          "sufficient": {
+            "type": "boolean",
+            "description": "Stok bu kalemi karşılıyor mu (sonraki miktar eksiye düşmüyor)"
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "sufficient"
+        ]
+      },
+      "OperationPreviewLineDto": {
+        "type": "object",
+        "properties": {
+          "lineNo": {
+            "type": "number",
+            "example": 1
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sku": {
+            "type": "string",
+            "example": "PRZ-TOP-B"
+          },
+          "productName": {
+            "type": "string",
+            "example": "Topraklı priz, beyaz"
+          },
+          "baseUnit": {
+            "type": "string",
+            "example": "adet"
+          },
+          "quantity": {
+            "type": "string",
+            "example": "3",
+            "description": "Girilen birimde"
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true,
+            "example": "koli",
+            "description": "Boşsa ana birim"
+          },
+          "baseQuantity": {
+            "type": "string",
+            "example": "36.000",
+            "description": "Ana birimde; sayımda sayılan miktar"
+          },
+          "unitCost": {
+            "type": "string",
+            "nullable": true,
+            "description": "Girilen birim başına maliyet (giriş ve açılış)"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/WarehouseRefDto"
+          },
+          "targetWarehouse": {
+            "nullable": true,
+            "description": "Yalnızca transferde",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WarehouseRefDto"
+              }
+            ]
+          },
+          "stock": {
+            "nullable": true,
+            "description": "Yalnızca onay bekleyen işlemde hesaplanır",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StockEffectDto"
+              }
+            ]
+          },
+          "targetStock": {
+            "nullable": true,
+            "description": "Transferde hedef deponun stoğu",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StockEffectDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lineNo",
+          "productId",
+          "sku",
+          "productName",
+          "baseUnit",
+          "quantity",
+          "unit",
+          "baseQuantity",
+          "unitCost",
+          "warehouse",
+          "targetWarehouse",
+          "stock",
+          "targetStock"
+        ]
+      },
+      "OperationPreviewDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "STOCK_IN",
+              "STOCK_OUT",
+              "TRANSFER",
+              "COUNT",
+              "WASTE",
+              "OPENING",
+              "REVERSAL"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "NEEDS_CLARIFICATION",
+              "PENDING_CONFIRMATION",
+              "APPLIED",
+              "REVERSED",
+              "CANCELLED",
+              "EXPIRED",
+              "FAILED"
+            ]
+          },
+          "version": {
+            "type": "number",
+            "example": 1,
+            "description": "Onay isteği bu sürümü gönderir"
+          },
+          "partyId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "partyName": {
+            "type": "string",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationPreviewLineDto"
+            }
+          }
+        },
+        "required": [
+          "operationId",
+          "type",
+          "status",
+          "version",
+          "partyId",
+          "partyName",
+          "note",
+          "createdAt",
+          "lines"
+        ]
+      },
       "ConfirmOperationDto": {
         "type": "object",
         "properties": {
@@ -2581,6 +3057,179 @@
         "required": [
           "operation",
           "movements"
+        ]
+      },
+      "StockLevelDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sku": {
+            "type": "string",
+            "example": "PRZ-TOP-B"
+          },
+          "name": {
+            "type": "string",
+            "example": "Topraklı priz, beyaz"
+          },
+          "baseUnit": {
+            "type": "string",
+            "example": "adet"
+          },
+          "minStock": {
+            "type": "string",
+            "nullable": true,
+            "example": "50.000"
+          },
+          "quantity": {
+            "type": "string",
+            "example": "120.000",
+            "description": "Ana birimde; depoda hareketi olmayan ürün için 0"
+          },
+          "averageCost": {
+            "type": "string",
+            "example": "10.0000",
+            "description": "Ana birim başına hareketli ortalama maliyet"
+          },
+          "belowMinimum": {
+            "type": "boolean",
+            "description": "Kritik stok eşiği tanımlı ve miktar eşiğin altında"
+          }
+        },
+        "required": [
+          "productId",
+          "sku",
+          "name",
+          "baseUnit",
+          "minStock",
+          "quantity",
+          "averageCost",
+          "belowMinimum"
+        ]
+      },
+      "WarehouseStockDto": {
+        "type": "object",
+        "properties": {
+          "warehouse": {
+            "$ref": "#/components/schemas/WarehouseDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockLevelDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Süzgece uyan toplam ürün"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "warehouse",
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "ProductMovementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lineNo": {
+            "type": "number",
+            "example": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/WarehouseRefDto"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "IN",
+              "OUT",
+              "TRANSFER_OUT",
+              "TRANSFER_IN",
+              "COUNT_SURPLUS",
+              "COUNT_SHORTAGE",
+              "WASTE",
+              "REVERSAL"
+            ]
+          },
+          "quantityChange": {
+            "type": "string",
+            "example": "-36.000",
+            "description": "Ana birimde, işaretli: giriş +, çıkış −"
+          },
+          "unitCost": {
+            "type": "string",
+            "example": "10.0000"
+          },
+          "quantityAfter": {
+            "type": "string",
+            "example": "84.000"
+          },
+          "averageCostAfter": {
+            "type": "string",
+            "example": "10.0000"
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "lineNo",
+          "createdAt",
+          "warehouse",
+          "type",
+          "quantityChange",
+          "unitCost",
+          "quantityAfter",
+          "averageCostAfter"
+        ]
+      },
+      "ProductMovementListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductMovementDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
         ]
       }
     }

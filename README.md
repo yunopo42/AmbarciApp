@@ -2,7 +2,7 @@
 
 Ambarcı, saha çalışanlarının mobil uygulamadaki yapay zekâ asistanıyla yazarak veya konuşarak stok işlemi yapacağı, yöneticilerin ise web panelinden yöneteceği çok şirketli bir stok takip sistemidir. Asistan işlemi yalnızca önerecek; stok, kullanıcı öneriyi onayladığında değişecek. Proje bir bitirme projesidir (Senior Design Project) ve [8 haftalık plana](docs/plan.md) göre geliştirilmektedir.
 
-**Durum:** Geliştirme aşamasında. Monorepo iskeleti, CI, web ve API yayını, mobil development build, veritabanı ve şirketler arası izolasyon, kimlik doğrulama, stok işlemlerinin API'si (onay transaction'ı) ve web'de ürün, depo ve cari yönetimi hazırdır. Web ve mobil stok ekranları ile asistan sonraki işlerde gelecek.
+**Durum:** Geliştirme aşamasında. Monorepo iskeleti, CI, web ve API yayını, mobil development build, veritabanı ve şirketler arası izolasyon, kimlik doğrulama, stok işlemlerinin API'si (onay transaction'ı) ve web'de ürün, depo, cari yönetimi ile stok işlem fişleri (özet ve onay), depo bazında stok ve hareket geçmişi hazırdır. Mobil stok ekranları ve asistan sonraki işlerde gelecek.
 
 ## Canlı bağlantılar
 
@@ -12,7 +12,7 @@ Ambarcı, saha çalışanlarının mobil uygulamadaki yapay zekâ asistanıyla y
 | API sağlık kontrolü (Render) | [ambarci-api.onrender.com/v1/health](https://ambarci-api.onrender.com/v1/health) |
 | API belgesi (Swagger) | [ambarci-api.onrender.com/docs](https://ambarci-api.onrender.com/docs) |
 
-Web panelinde giriş, şirket ve üye yönetimi ile ürün, depo ve cari ekranları vardır. API ücretsiz planda çalıştığı için 15 dakika istek almazsa uyur; ilk istekte yaklaşık bir dakika beklemek gerekebilir.
+Web panelinde giriş, şirket ve üye yönetimi; ürün, depo ve cari ekranları; stok işlem fişleri, depo bazında stok ve hareket geçmişi vardır. API ücretsiz planda çalıştığı için 15 dakika istek almazsa uyur; ilk istekte yaklaşık bir dakika beklemek gerekebilir.
 
 ## Mimari özet
 
@@ -33,8 +33,8 @@ Tasarımın temel kuralları:
 | Katman | Teknoloji | Durum |
 | --- | --- | --- |
 | Mobil | Expo, Expo Router | İskelet, development build, ses tanıma deneme ekranı |
-| Web paneli | Next.js, Tailwind, shadcn/ui, TanStack Query, TanStack Table | Giriş, şirket, davet, üyeler; ürün (birim ve alternatif adlarıyla), depo ve cari yönetimi (arama ve sayfalamalı tablolar); tasarım değerleri `docs/tasarim.md`'den; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
-| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi (şirket ve rol guard'larıyla); ürün, birim, alternatif ad, depo ve cari yönetimi; stok işlemleri: açma, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; Render'da yayında |
+| Web paneli | Next.js, Tailwind, shadcn/ui, TanStack Query, TanStack Table | Giriş, şirket, davet, üyeler; ürün (birim ve alternatif adlarıyla), depo ve cari yönetimi (arama ve sayfalamalı tablolar); stok işlem fişleri (giriş, çıkış, transfer, sayım, fire; önce → sonra özeti ve onay), depo bazında stok, ürün hareket geçmişi; tasarım değerleri `docs/tasarim.md`'den; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
+| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi (şirket ve rol guard'larıyla); ürün, birim, alternatif ad, depo ve cari yönetimi; stok işlemleri: açma, önizleme, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; depo bazında stok ve hareket geçmişi; Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata, kullanıcı, şirket, katalog ve stok işlemi şemaları; API ve web formları aynı şemayla doğrular |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog, stok, işlem, hareket, sayım, denetim ve outbox tabloları (16 tablo), RLS politikaları ve iki şirketli izolasyon testi |
 | Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |
@@ -153,7 +153,7 @@ pnpm gen:api
 | `pnpm db:generate` | `packages/db/schema` içindeki şemadan yeni migration üretir |
 | `pnpm db:migrate` | Uygulanmamış migration'ları veritabanına uygular |
 | `pnpm db:seed` | Demo verisini (ABC Elektrik, Kuzey Tesisat) ve ABC Elektrik'in açılış stoklarını (onaylanan açılış işlemleriyle) yükler; tekrar çalıştırmak kayıt ve stok çoğaltmaz |
-| `pnpm db:test` | RLS izolasyon, seed ve API (şirket, davet, iki şirket izolasyonu, stok transaction'ı, eşzamanlı onay ve rollback) testlerini gerçek veritabanında çalıştırır; testler kendi verisini geri alır ya da siler |
+| `pnpm db:test` | RLS izolasyon, seed ve API (şirket, davet, iki şirket izolasyonu, stok transaction'ı, eşzamanlı onay ve rollback, stok okuma ve onay önizlemesi) testlerini gerçek veritabanında çalıştırır; testler kendi verisini geri alır ya da siler |
 | `pnpm measure:latency` | Onay transaction'ının bu bilgisayardan süresini ve sorgu sayısını ölçer; sonuç `eval/gecikme/` altına yazılır |
 | `pnpm measure:remote` | Aynı ölçümü çalışan bir API'ye (varsayılan Render) karşı yapar; `.env` içinde `MEASURE_EMAIL` ve `MEASURE_PASSWORD` ister |
 

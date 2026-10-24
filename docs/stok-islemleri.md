@@ -1,6 +1,6 @@
 # Stok işlemleri ve onay transaction'ı
 
-Bu belge stoğun nasıl değiştiğini anlatır: işlemin açılması, onay transaction'ı, kilit sırası, hareketli ortalama maliyet, tekrar eden onay ve hata kodları. İlgili iş: #33. Tablolar ve kısıtlar: [veritabani.md](veritabani.md#stok-defteri-tabloları). Ondalık hesap kararı: [ADR-003](kararlar/ADR-003-ondalik-hesap-sql.md).
+Bu belge stoğun nasıl değiştiğini anlatır: işlemin açılması, onay transaction'ı, kilit sırası, hareketli ortalama maliyet, tekrar eden onay ve hata kodları. İlgili işler: #33 (onay transaction'ı), #37 (web ekranları, önizleme ve stok okuma uçları). Tablolar ve kısıtlar: [veritabani.md](veritabani.md#stok-defteri-tabloları). Ondalık hesap kararı: [ADR-003](kararlar/ADR-003-ondalik-hesap-sql.md).
 
 ## Kural: stok yalnızca onayla değişir
 
@@ -10,8 +10,11 @@ Ekrandan, asistandan (5. hafta) ya da içe aktarmadan (#39) gelen her işlem ön
 | --- | --- |
 | `POST /v1/operations` | İşlemi açar: tür, kalemler (ürün, depo, miktar, birim), isteğe bağlı cari ve not. Ürün, birim, depo ve yetki burada kontrol edilir; stok değişmez. |
 | `GET /v1/operations/{id}` | İşlem ve kalemleri |
+| `GET /v1/operations/{id}/preview` | Onay ekranının özeti: ürün ve depo adları, ana birim karşılığı ve onay bekleyen işlemde stoğun önce → sonra hâli. Stok değişmez (aşağıda: Önizleme) |
 | `POST /v1/operations/{id}/confirm` | Onay. Gövde: `{ "version": 1 }`; başlık: `Idempotency-Key`. Stok, hareketler ve maliyet tek transaction'da yazılır. |
 | `POST /v1/operations/{id}/cancel` | Onay bekleyen işlemi iptal eder (açan kişi ya da yönetici) |
+| `GET /v1/warehouses/{id}/stock` | Depodaki stok: aktif ürünler, miktar, ortalama maliyet, kritik eşik altında mı. Arama ve sayfalama ürün listesindekiyle aynı; depoda hareketi olmayan ürün 0 görünür |
+| `GET /v1/products/{id}/movements` | Ürünün hareketleri, en yeni önce; depo süzgeci ve sayfalama |
 
 İşlem türleri: giriş (`STOCK_IN`), çıkış (`STOCK_OUT`), transfer (`TRANSFER`), sayım (`COUNT`), fire (`WASTE`), açılış (`OPENING`, yalnızca yönetici). Ters kayıt (`REVERSAL`) 5. haftada gelir.
 
@@ -97,6 +100,31 @@ Her işlemin bir sürümü vardır (`version`, başlangıçta 1). Onay isteği k
 | 422 | `OPERATION_LINES_INVALID` | Ürün, birim ya da depo yok/pasif; miktar ana birime çevrilince sıfır (`details`: kalem no, alan, kod) |
 | 422 | `PARTY_NOT_FOUND`, `WAREHOUSE_INACTIVE` | Cari yok ya da pasif; onay anında pasif depo |
 
+## Önizleme (onaydan önce "önce → sonra")
+
+Kod: `operations.service.ts` (`preview`), `inventory/stock-preview.ts` ve `stock-ledger.repository.ts` (`previewEffects`).
+
+- Kalemler, onayın uygulayacağı sırayla stok etkilerine çevrilir: giriş +, çıkış ve fire −, transferde önce kaynaktan −, sonra hedefe +, sayımda stok sayılan miktara eşitlenir.
+- Hesap SQL'de yapılır. Her etkinin "önce"si, depodaki stok ile aynı depo ve ürüne düşen önceki etkilerin toplamıdır (`sum(...) over (partition by depo, ürün order by sıra)`). Aynı üründen iki çıkış kalemi varsa ikincisinin "önce"si birincinin "sonra"sıdır; onay da kalemleri bu sırayla uygular.
+- "Sonra" eksiye düşen kalem `sufficient: false` döner; web bu kalemi "Yetersiz stok" diye işaretler ve onay düğmesini kapatır.
+- Önizleme **kilit almaz ve stoğu değiştirmez.** Onay anında stok kilit altında yeniden okunur. Arada başka bir işlem onaylandıysa sonuç farklı olabilir; o durumda onay `409 INSUFFICIENT_STOCK` döner ve web hatayı ilgili kalemde gösterir.
+- Yalnızca onay bekleyen işlemde hesaplanır. Onaylanmış ya da iptal edilmiş işlemde stok o işlemden sonra da değiştiği için `stock: null` döner.
+- Özeti, işlemi onaylayabilecek kullanıcı görür: depo yetkisi işlem açarken ve onaydakiyle aynı kuralla denetlenir (`403 WAREHOUSE_FORBIDDEN`).
+
+## Web ekranları
+
+| Sayfa | Ne var |
+| --- | --- |
+| `/operations/new` | Fiş formu: tür (giriş, çıkış, transfer, sayım, fire), depo (transferde çıkış ve hedef), girişte tedarikçi, çıkışta müşteri, not; kalemler: ürün arama penceresi, birim (ana birim ya da ek birimler, "1 koli = 12 adet"), miktar, girişte birim maliyet. Kaydedince işlem onay bekleyen olarak açılır |
+| `/operations/{id}` | Özet: kalem başına girilen miktar ve ana birim karşılığı, depo, stok önce → sonra (transferde iki depo), yeterli/yetersiz. "Onayla" ve "İptal et". Onaydan sonra yazılan hareketler ve yeni stok |
+| `/stock` | Depo bazında stok: depo seçimi, arama, sayfalama; miktar, kritik eşik, "Kritik"/"Yeterli" rozeti, ortalama maliyet |
+| `/products/{id}` | Ürün formunun altında hareket geçmişi (depo süzgeci, sayfalama) |
+
+- **Çift tıklama:** Özet sayfası açılınca bir `Idempotency-Key` (UUID) üretilir ve o sayfadaki bütün onay denemeleri aynı anahtarla gider. Düğme istek sürerken kapalıdır; yine de ikinci istek giderse API işlemi uygulanmış ve anahtarı aynı bulur, ilk cevabı döner. Stok bir kez değişir.
+- **Depo yetkisi:** Çalışanın yetkili olduğu depolar üyelik bilgisinde gelir (`GET /v1/organizations` → `warehouseIds`). Formdaki ve stok listesindeki depo seçenekleri buna göre süzülür; asıl kontrol API'de.
+- **Ana birim karşılığı** formda çarpılarak gösterilmez (JS'de ondalık hesap yok, ADR-003); formda katsayı ("1 koli = 12 adet"), özette sunucunun hesapladığı miktar ("3 koli = 36 adet") görünür.
+- **Bilinen sınır:** İşlem listesi (onay kuyruğu) 5–6. haftada gelir. Onaylanmadan bırakılan işleme şimdilik yalnızca adresinden dönülebilir.
+
 ## Açılış stoğu
 
 `pnpm db:seed` önce katalogu (şirket, depo, ürün, cari) yükler, sonra `apps/api/src/scripts/seed-opening-stock.ts` betiğini çalıştırır. Betik ABC Elektrik'in her deposu için bir `OPENING` işlemi açar (kaynak `SYSTEM`, işlemi açan boş) ve aynı onay transaction'ından geçirir; hareketler, maliyet, denetim ve outbox kayıtları kullanıcı onayındaki gibi oluşur. Her deponun açılışı sabit bir anahtar taşır (`seed-opening:<depo kimliği>`). Betik tekrar çalıştırılınca o anahtarla uygulanmış işlem bulunur ve depo atlanır. Açılış miktarları ve maliyetleri `packages/db/seed/demo-data.ts` dosyasındadır; bazı ürünler bilerek kritik eşiğin altında başlar.
@@ -108,6 +136,8 @@ Her işlemin bir sürümü vardır (`version`, başlangıçta 1). Onay isteği k
 | `apps/api/test/operations-rules.spec.ts` | CI | Durum makinesi, kilit sırası (ters sıralı iki işlem aynı sırayı üretir), işlem şeması |
 | `apps/api/test/operations.e2e.spec.ts` | CI | Şema hataları, depo yetkisi, açılış rolü, Idempotency-Key zorunluluğu |
 | `apps/api/test-db/operations.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Beş işlem türü, birim çevrimi, ortalama maliyet, sayımın onay anındaki farkı, yetersiz stok (hiçbir şey yazılmaz), aynı onayın tekrarı, sürüm, başka şirket, depo yetkisi, açılış betiğinin tekrarı, stok = hareketlerin toplamı |
+| `apps/api/test/stock-preview.spec.ts` | CI | Önizlemenin etkileri onayın uygulama sırasıyla üretmesi (transferde kaynak sonra hedef) |
+| `apps/api/test-db/stock.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Önizleme: aynı üründen iki çıkış kalemi, transfer, sayım, yetersiz kalem, onaylanmış işlem; depo bazında stok ve kritik eşik; hareket geçmişi, depo süzgeci ve sayfalama; çalışanın depo yetkisi; başka şirketin ürünü |
 | `apps/api/test-db/concurrency.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Eşzamanlı çıkış, deadlock tehlikesi ve kilit sırası, aynı anda gelen çift onay, çok kalemli rollback (aşağıda) |
 | `apps/api/test-db/latency.measure.ts` | Gerçek veritabanı, ölçüm (`measure:latency`) | Onay süresi ve transaction başına sorgu sayısı ([veritabani.md](veritabani.md#bölgeler-arası-gecikme-ve-onay-süresi)) |
 

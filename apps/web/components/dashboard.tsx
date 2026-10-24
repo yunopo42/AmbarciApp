@@ -1,6 +1,6 @@
 'use client';
 
-import { Contact, Package, Users, Warehouse } from 'lucide-react';
+import { ArrowLeftRight, Boxes, Contact, Package, Users, Warehouse } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import type { JSX } from 'react';
@@ -21,6 +21,8 @@ interface Shortcut {
 }
 
 const SHORTCUTS: Shortcut[] = [
+  { href: '/operations/new', title: 'Yeni stok işlemi', description: 'Giriş, çıkış, transfer, sayım ya da fire', icon: ArrowLeftRight },
+  { href: '/stock', title: 'Stok', description: 'Depo bazında miktarlar ve kritik stok', icon: Boxes },
   { href: '/products', title: 'Ürünler', description: 'Stok kartları, birimler ve alternatif adlar', icon: Package },
   { href: '/warehouses', title: 'Depolar', description: 'Depo, şube ve araç depoları', icon: Warehouse },
   { href: '/parties', title: 'Cariler', description: 'Tedarikçiler ve müşteriler', icon: Contact },
@@ -52,7 +54,7 @@ export function Dashboard(): JSX.Element {
       <OrganizationGate>
         {(organization) => (
           <>
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {SHORTCUTS.filter((item) => !item.adminOnly || organization.role === 'ADMIN').map((item) => {
                 const Icon = item.icon;
                 return (

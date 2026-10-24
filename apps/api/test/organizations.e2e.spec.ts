@@ -208,7 +208,8 @@ describe('Şirket bağlamı, roller ve davetler', () => {
       // Büyük/küçük harf ve tire farkı yok sayılır.
       const typed = `${code.slice(0, 5).toLowerCase()}-${code.slice(5)}`;
       const accepted = await call('post', '/v1/invitations/accept', NEWCOMER).send({ code: typed }).expect(200);
-      expect(accepted.body).toEqual({ id: orgA, name: 'A Elektrik', role: 'EMPLOYEE' });
+      // Yeni üyenin henüz depo yetkisi yok; yönetici Üyeler ekranından verir.
+      expect(accepted.body).toEqual({ id: orgA, name: 'A Elektrik', role: 'EMPLOYEE', warehouseIds: [] });
       await call('get', '/v1/warehouses', NEWCOMER, orgA).expect(200);
 
       const second = await call('post', '/v1/invitations/accept', ADMIN_B).send({ code }).expect(409);

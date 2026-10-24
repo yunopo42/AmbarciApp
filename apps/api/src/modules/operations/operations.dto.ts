@@ -8,8 +8,11 @@ import type {
   Operation,
   OperationItem,
   OperationItemInput,
+  OperationPreview,
+  OperationPreviewLine,
   OperationStatus,
   OperationType,
+  StockEffect,
 } from '@ambarci/shared';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -29,7 +32,7 @@ const STATUSES: OperationStatus[] = [
   'FAILED',
 ];
 const SOURCES: ActionSource[] = ['SCREEN', 'CHAT', 'DOCUMENT', 'IMPORT', 'SYSTEM'];
-const MOVEMENT_TYPES: MovementType[] = [
+export const MOVEMENT_TYPES: MovementType[] = [
   'IN',
   'OUT',
   'TRANSFER_OUT',
@@ -174,4 +177,94 @@ export class ConfirmOperationResultDto implements ConfirmOperationResult {
 
   @ApiProperty({ type: [MovementDto] })
   movements!: MovementDto[];
+}
+
+/** Depo kimliği ve adı (onay ekranı ve hareket geçmişi). */
+export class WarehouseRefDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ example: 'Merkez Depo' })
+  name!: string;
+}
+
+export class StockEffectDto implements StockEffect {
+  @ApiProperty({ example: '120.000', description: 'Onaydan önce, ana birimde' })
+  before!: string;
+
+  @ApiProperty({ example: '84.000', description: 'İşlem onaylanırsa, ana birimde' })
+  after!: string;
+
+  @ApiProperty({ description: 'Stok bu kalemi karşılıyor mu (sonraki miktar eksiye düşmüyor)' })
+  sufficient!: boolean;
+}
+
+export class OperationPreviewLineDto implements OperationPreviewLine {
+  @ApiProperty({ example: 1 })
+  lineNo!: number;
+
+  @ApiProperty({ format: 'uuid' })
+  productId!: string;
+
+  @ApiProperty({ example: 'PRZ-TOP-B' })
+  sku!: string;
+
+  @ApiProperty({ example: 'Topraklı priz, beyaz' })
+  productName!: string;
+
+  @ApiProperty({ example: 'adet' })
+  baseUnit!: string;
+
+  @ApiProperty({ example: '3', description: 'Girilen birimde' })
+  quantity!: string;
+
+  @ApiProperty({ nullable: true, type: String, example: 'koli', description: 'Boşsa ana birim' })
+  unit!: string | null;
+
+  @ApiProperty({ example: '36.000', description: 'Ana birimde; sayımda sayılan miktar' })
+  baseQuantity!: string;
+
+  @ApiProperty({ nullable: true, type: String, description: 'Girilen birim başına maliyet (giriş ve açılış)' })
+  unitCost!: string | null;
+
+  @ApiProperty({ type: WarehouseRefDto })
+  warehouse!: WarehouseRefDto;
+
+  @ApiProperty({ type: WarehouseRefDto, nullable: true, description: 'Yalnızca transferde' })
+  targetWarehouse!: WarehouseRefDto | null;
+
+  @ApiProperty({ type: StockEffectDto, nullable: true, description: 'Yalnızca onay bekleyen işlemde hesaplanır' })
+  stock!: StockEffectDto | null;
+
+  @ApiProperty({ type: StockEffectDto, nullable: true, description: 'Transferde hedef deponun stoğu' })
+  targetStock!: StockEffectDto | null;
+}
+
+export class OperationPreviewDto implements OperationPreview {
+  @ApiProperty({ format: 'uuid' })
+  operationId!: string;
+
+  @ApiProperty({ enum: OPERATION_TYPES })
+  type!: OperationType;
+
+  @ApiProperty({ enum: STATUSES })
+  status!: OperationStatus;
+
+  @ApiProperty({ example: 1, description: 'Onay isteği bu sürümü gönderir' })
+  version!: number;
+
+  @ApiProperty({ format: 'uuid', nullable: true, type: String })
+  partyId!: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  partyName!: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  note!: string | null;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ type: [OperationPreviewLineDto] })
+  lines!: OperationPreviewLineDto[];
 }

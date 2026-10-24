@@ -1,8 +1,11 @@
 import { inventory, inventoryMovements, stockCounts, warehouses } from '@ambarci/db';
 import type { DbExecutor } from '@ambarci/db';
-import type { Movement, MovementType } from '@ambarci/shared';
+import type { Movement, MovementType, ProductMovement } from '@ambarci/shared';
 import { Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+
+import type { StockEffectInput } from './stock-preview.js';
 
 /** Bir stok satırının anahtarı: depo + ürün (şirket her sorguda ayrıca verilir). */
 // interface değil type: Drizzle'ın execute<T>() satır tipi indeks imzası ister.
@@ -206,4 +209,147 @@ export class StockLedgerRepository {
       where organization_id = ${organizationId} and operation_id = ${operationId}
       order by line_no, created_at`);
   }
+
+  /**
+   * Onay ekranının "önce → sonra" hesabı. Etkiler onaydaki sırayla dizilir; aynı depo ve ürüne düşen önceki
+   * etkilerin toplamı pencere fonksiyonuyla (sum … over) eklenir: aynı üründen iki çıkış kalemi varsa ikincisinin
+   * "önce"si birincinin "sonra"sıdır. Kilit alınmaz; stok onay anında, kilit altında yeniden okunur.
+   */
+  async previewEffects(executor: DbExecutor, organizationId: string, effects: StockEffectInput[]): Promise<PreviewedEffect[]> {
+    if (effects.length === 0) {
+      return [];
+    }
+    const values = sql.join(
+      effects.map(
+        (effect) =>
+          sql`(${effect.seq}::int, ${effect.lineNo}::int, ${effect.side}::text, ${effect.warehouseId}::uuid,
+               ${effect.productId}::uuid, ${effect.kind}::text, ${effect.direction}::int, ${effect.quantity}::numeric)`,
+      ),
+      sql`, `,
+    );
+    return executor.execute<PreviewedEffect>(sql`
+      with e(seq, line_no, side, warehouse_id, product_id, kind, direction, quantity) as (values ${values}),
+      d as (
+        select e.*, coalesce(i.quantity, 0) as stock,
+               case when e.kind = 'count' then 0 else e.direction * e.quantity end as change
+        from e
+        left join ${inventory} i
+          on i.organization_id = ${organizationId} and i.warehouse_id = e.warehouse_id and i.product_id = e.product_id
+      ),
+      r as (
+        select d.*,
+               d.stock + coalesce(sum(d.change) over (
+                 partition by d.warehouse_id, d.product_id order by d.seq
+                 rows between unbounded preceding and 1 preceding
+               ), 0) as before
+        from d
+      )
+      select line_no as "lineNo", side,
+             round(before, 3) as before,
+             case when kind = 'count' then round(quantity, 3) else round(before + change, 3) end as after,
+             (kind = 'count' or before + change >= 0) as sufficient
+      from r
+      order by seq`);
+  }
+
+  /**
+   * Verilen ürünlerin bir depodaki stoğu. Depoda satırı olmayan ürün 0 döner. Kritik eşik karşılaştırması da
+   * SQL'de, NUMERIC ile yapılır.
+   */
+  async stockLevels(
+    executor: DbExecutor,
+    organizationId: string,
+    warehouseId: string,
+    products: { productId: string; minStock: string | null }[],
+  ): Promise<StockLevelRow[]> {
+    if (products.length === 0) {
+      return [];
+    }
+    const values = sql.join(
+      products.map((product) => sql`(${product.productId}::uuid, ${product.minStock}::numeric)`),
+      sql`, `,
+    );
+    return executor.execute<StockLevelRow>(sql`
+      select v.product_id as "productId",
+             round(coalesce(i.quantity, 0), 3) as quantity,
+             round(coalesce(i.average_cost, 0), 4) as "averageCost",
+             (v.min_stock is not null and coalesce(i.quantity, 0) < v.min_stock) as "belowMinimum"
+      from (values ${values}) as v(product_id, min_stock)
+      left join ${inventory} i
+        on i.organization_id = ${organizationId} and i.warehouse_id = ${warehouseId} and i.product_id = v.product_id`);
+  }
+
+  /**
+   * Ürünün hareketleri, en yeni önce. `warehouseIds` verilirse yalnızca o depolardaki hareketler (çalışan yalnızca
+   * yetkili olduğu depoları görür); `warehouseId` ekranın depo süzgecidir.
+   */
+  async listProductMovements(
+    executor: DbExecutor,
+    organizationId: string,
+    productId: string,
+    filter: { warehouseIds: string[] | null; warehouseId?: string | undefined; page: number; pageSize: number },
+  ): Promise<{ items: ProductMovement[]; total: number }> {
+    if (filter.warehouseIds?.length === 0) {
+      return { items: [], total: 0 };
+    }
+    const conditions: SQL[] = [
+      eq(inventoryMovements.organizationId, organizationId),
+      eq(inventoryMovements.productId, productId),
+    ];
+    if (filter.warehouseIds) {
+      conditions.push(inArray(inventoryMovements.warehouseId, filter.warehouseIds));
+    }
+    if (filter.warehouseId) {
+      conditions.push(eq(inventoryMovements.warehouseId, filter.warehouseId));
+    }
+    const where = and(...conditions);
+    const [totalRow] = await executor.select({ total: count() }).from(inventoryMovements).where(where);
+    const rows = await executor
+      .select({
+        id: inventoryMovements.id,
+        operationId: inventoryMovements.operationId,
+        lineNo: inventoryMovements.lineNo,
+        createdAt: inventoryMovements.createdAt,
+        warehouseId: inventoryMovements.warehouseId,
+        warehouseName: warehouses.name,
+        type: inventoryMovements.type,
+        quantityChange: inventoryMovements.quantityChange,
+        unitCost: inventoryMovements.unitCost,
+        quantityAfter: inventoryMovements.quantityAfter,
+        averageCostAfter: inventoryMovements.averageCostAfter,
+      })
+      .from(inventoryMovements)
+      .innerJoin(
+        warehouses,
+        and(eq(warehouses.organizationId, inventoryMovements.organizationId), eq(warehouses.id, inventoryMovements.warehouseId)),
+      )
+      .where(where)
+      .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.lineNo))
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize);
+    return {
+      items: rows.map(({ createdAt, warehouseId, warehouseName, ...row }) => ({
+        ...row,
+        createdAt: createdAt.toISOString(),
+        warehouse: { id: warehouseId, name: warehouseName },
+      })),
+      total: totalRow?.total ?? 0,
+    };
+  }
 }
+
+/** Önizlenen bir etkinin sonucu (miktarlar ana birimde, metin). */
+export type PreviewedEffect = {
+  lineNo: number;
+  side: 'source' | 'target';
+  before: string;
+  after: string;
+  sufficient: boolean;
+};
+
+export type StockLevelRow = {
+  productId: string;
+  quantity: string;
+  averageCost: string;
+  belowMinimum: boolean;
+};

@@ -1,6 +1,6 @@
 'use client';
 
-import { Contact, LayoutDashboard, Package, Users, Warehouse } from 'lucide-react';
+import { Boxes, Contact, LayoutDashboard, Package, Users, Warehouse } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -19,18 +19,24 @@ interface NavItem {
   icon: LucideIcon;
   /** Yalnızca yöneticiye gösterilir. Asıl yetki API'de denetlenir; menü yalnızca gereksiz bağlantıyı gizler. */
   adminOnly?: boolean;
+  /** Bu bölüme ait sayılan diğer adresler (ör. stok işlemi sayfaları Stok altında). */
+  also?: string[];
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Gösterge paneli', icon: LayoutDashboard },
+  { href: '/stock', label: 'Stok', icon: Boxes, also: ['/operations'] },
   { href: '/products', label: 'Ürünler', icon: Package },
   { href: '/warehouses', label: 'Depolar', icon: Warehouse },
   { href: '/parties', label: 'Cariler', icon: Contact },
   { href: '/members', label: 'Üyeler', icon: Users, adminOnly: true },
 ];
 
-function isCurrent(pathname: string, href: string): boolean {
-  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+function isCurrent(pathname: string, item: NavItem): boolean {
+  if (item.href === '/') {
+    return pathname === '/';
+  }
+  return [item.href, ...(item.also ?? [])].some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
 /**
@@ -66,7 +72,7 @@ export function AppShell({ email, children }: { email: string | null; children: 
           <nav aria-label="Ana menü">
             <ul className="flex flex-wrap gap-1 lg:flex-col">
               {items.map((item) => {
-                const current = isCurrent(pathname, item.href);
+                const current = isCurrent(pathname, item);
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>

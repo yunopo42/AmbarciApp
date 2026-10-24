@@ -7,6 +7,7 @@ import type {
   CreateOperationInput,
   Operation,
   OperationItem,
+  OperationPreview,
   OperationType,
   OrganizationRole,
 } from '@ambarci/shared';
@@ -131,6 +132,81 @@ export class OperationsService {
       throw operationNotFound();
     }
     return operation;
+  }
+
+  /**
+   * Onay ekranının özeti: kalemler ürün ve depo adlarıyla, ana birim karşılıkları ve (onay bekleyen işlemde)
+   * stoğun önce → sonra hâli. Çevrim ve stok hesabı SQL'de; stok kilitlenmez ve değişmez. Özet, işlemi
+   * onaylayabilecek kullanıcıya gösterilir: depo yetkisi işlem açılırken ve onaydakiyle aynı kuralla denetlenir.
+   */
+  async preview(organizationId: string, actor: OperationActor, operationId: string): Promise<OperationPreview> {
+    const operation = await this.get(organizationId, operationId);
+    if (actor.kind === 'user') {
+      await this.assertAccess(this.db, organizationId, actor.userId, operation.type, operation.items);
+    }
+    const [conversions, warehouses, partyName] = await Promise.all([
+      this.catalog.convertToBaseUnits(this.db, organizationId, operation.items),
+      this.inventory.findWarehouseStatuses(this.db, organizationId, warehousesOf(operation.items)),
+      operation.partyId ? this.catalog.findPartyName(this.db, organizationId, operation.partyId) : Promise.resolve(null),
+    ]);
+    const warehouseNames = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse.name]));
+    const warehouseRef = (id: string): { id: string; name: string } => {
+      const name = warehouseNames.get(id);
+      if (name === undefined) {
+        throw new Error(`İşlemin deposu bulunamadı (${id}).`);
+      }
+      return { id, name };
+    };
+
+    const lines = operation.items.map((item, index) => {
+      const conversion = conversions[index];
+      if (!conversion || conversion.lineNo !== item.lineNo || conversion.sku === null || conversion.productName === null) {
+        throw new Error(`İşlem kaleminin ürünü bulunamadı (kalem ${item.lineNo}).`);
+      }
+      return { item, conversion, sku: conversion.sku, productName: conversion.productName };
+    });
+    // Onaylanmış ya da iptal edilmiş işlemde "önce → sonra" anlamsızdır: stok o işlemden sonra da değişmiştir.
+    const effects =
+      operation.status === 'PENDING_CONFIRMATION'
+        ? await this.inventory.previewStock(
+            this.db,
+            organizationId,
+            operation.type,
+            lines.map(({ item, conversion }) => ({
+              lineNo: item.lineNo,
+              productId: item.productId,
+              warehouseId: item.warehouseId,
+              targetWarehouseId: item.targetWarehouseId,
+              baseQuantity: conversion.baseQuantity,
+            })),
+          )
+        : null;
+
+    return {
+      operationId: operation.id,
+      type: operation.type,
+      status: operation.status,
+      version: operation.version,
+      partyId: operation.partyId,
+      partyName,
+      note: operation.note,
+      createdAt: operation.createdAt,
+      lines: lines.map(({ item, conversion, sku, productName }) => ({
+        lineNo: item.lineNo,
+        productId: item.productId,
+        sku,
+        productName,
+        baseUnit: conversion.baseUnit ?? '',
+        quantity: item.quantity,
+        unit: item.unit,
+        baseQuantity: conversion.baseQuantity,
+        unitCost: item.unitCost,
+        warehouse: warehouseRef(item.warehouseId),
+        targetWarehouse: item.targetWarehouseId ? warehouseRef(item.targetWarehouseId) : null,
+        stock: effects?.get(`${item.lineNo}:source`) ?? null,
+        targetStock: item.targetWarehouseId ? (effects?.get(`${item.lineNo}:target`) ?? null) : null,
+      })),
+    };
   }
 
   /**

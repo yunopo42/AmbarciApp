@@ -13,6 +13,8 @@ const COLUMNS = {
   isActive: warehouses.isActive,
 };
 
+export type WarehouseStatus = { id: string; name: string; isActive: boolean };
+
 /** Depo sorguları; her sorgu aktif şirketin kimliğiyle sınırlanır. */
 @Injectable()
 export class WarehousesRepository {
@@ -56,14 +58,14 @@ export class WarehousesRepository {
     return row ?? null;
   }
 
-  /** Verilen depolardan bu şirkette var olanların aktiflik durumu (yoksa listede yer almaz). */
+  /** Verilen depolardan bu şirkette var olanların adı ve aktiflik durumu (yoksa listede yer almaz). */
   findStatuses(
     executor: DbExecutor,
     organizationId: string,
     warehouseIds: string[],
-  ): Promise<{ id: string; isActive: boolean }[]> {
+  ): Promise<WarehouseStatus[]> {
     return executor
-      .select({ id: warehouses.id, isActive: warehouses.isActive })
+      .select({ id: warehouses.id, name: warehouses.name, isActive: warehouses.isActive })
       .from(warehouses)
       .where(and(eq(warehouses.organizationId, organizationId), inArray(warehouses.id, warehouseIds)));
   }
