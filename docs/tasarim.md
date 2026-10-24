@@ -150,7 +150,7 @@ Stitch bazı ekranlara projenin kapsamı dışında kalan ya da mimarisiyle çel
 
 ## Uygulama notları
 
-- **Tek kaynak:** Değerler, kod yazılırken tek bir yerde tanımlanır: web için Tailwind'in `@theme` değişkenleri (`apps/web/app/globals.css`), mobil için bir tema dosyası. İkisi bu tabloyla aynı kalır; değer değişince önce bu dosya güncellenir.
+- **Tek kaynak:** Değerler, kod yazılırken tek bir yerde tanımlanır: web için Tailwind'in `@theme` değişkenleri (`apps/web/app/globals.css`), mobil için tema dosyası (`apps/mobile/src/theme.ts`). İkisi bu tabloyla aynı kalır; değer değişince önce bu dosya güncellenir.
 - **Koyu tema:** Şimdilik yok; yalnızca açık tema tasarlandı.
 
 ### Web'de (Tailwind) kullanılan adlar

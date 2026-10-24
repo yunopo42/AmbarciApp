@@ -335,6 +335,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/products/{productId}/stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ürünün depolara göre stoğu ve toplamı; çalışan yalnızca yetkili olduğu depoları görür */
+        get: operations["StockController_productStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/products/{productId}/movements": {
         parameters: {
             query?: never;
@@ -812,6 +829,32 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        ProductWarehouseStockDto: {
+            warehouse: components["schemas"]["WarehouseDto"];
+            /**
+             * @description Ana birimde; depoda hareketi olmayan ürün için 0
+             * @example 120.000
+             */
+            quantity: string;
+            /** @example 10.0000 */
+            averageCost: string;
+            /** @description Kritik stok eşiği tanımlı ve miktar eşiğin altında */
+            belowMinimum: boolean;
+        };
+        ProductStockDto: {
+            /** Format: uuid */
+            productId: string;
+            /** @example adet */
+            baseUnit: string;
+            /** @example 50.000 */
+            minStock: string | null;
+            /**
+             * @description Listelenen depoların toplamı
+             * @example 140.000
+             */
+            total: string;
+            warehouses: components["schemas"]["ProductWarehouseStockDto"][];
         };
         ProductMovementDto: {
             /** Format: uuid */
@@ -2063,6 +2106,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehouseStockDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    StockController_productStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductStockDto"];
                 };
             };
             /** @description Şirket seçilmemiş ya da kimlik geçersiz */

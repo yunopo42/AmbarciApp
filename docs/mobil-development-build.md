@@ -77,8 +77,20 @@ eas build --profile development --platform android
 4. Telefonda Ambarcı'yı aç. Açılış ekranında geliştirme sunucusu listelenirse üzerine dokun. Listede yoksa
    adres alanına `http://<Wi-Fi adresi>:8081` yazıp **Connect**'e bas ya da **Scan QR Code** ile
    terminaldeki QR kodu okut.
-5. Ana ekran açılınca **Ses tanıma denemesi** bağlantısına gir ve `eval/ses-denemesi.md` dosyasındaki
-   cümleleri sırayla dene.
+5. Giriş yapınca stok listesi açılır. Ses tanıma denemesi **Hesap** ekranındadır; `eval/ses-denemesi.md`
+   dosyasındaki cümleleri sırayla dene.
+
+### Uygulamanın API adresi
+
+Mobil uygulama stok ve ürün bilgisini API'den alır; adres depo kökündeki `.env` dosyasında
+`EXPO_PUBLIC_API_URL` satırıdır. Telefon bilgisayardaki `localhost`'a ulaşamaz:
+
+- **Render'daki API:** `EXPO_PUBLIC_API_URL=https://ambarci-api.onrender.com`. `main`'e birleşmiş uçlarla çalışır.
+- **Bilgisayardaki API** (henüz birleşmemiş bir değişikliği denerken): `EXPO_PUBLIC_API_URL=http://<Wi-Fi adresi>:3001`.
+  API'yi `pnpm dev` ya da `pnpm --filter @ambarci/api dev` ile başlat; API bütün ağ arayüzlerini dinler.
+  Telefonun tarayıcısında `http://<Wi-Fi adresi>:3001/v1/health` açılabiliyorsa uygulama da bağlanır.
+
+Değer build'e gömülmez, Metro'dan gelir: `.env` değişince Metro'yu yeniden başlatmak yeter.
 
 Aynı ağda bağlanamıyorsan (okul ağı, misafir ağı gibi) tünel kullan:
 

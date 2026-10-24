@@ -23,5 +23,7 @@ module.exports = ({ config }) => ({
     // Uygulama bu değerleri expo-constants ile okur (src/lib/supabase.ts).
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+    // API adresi (src/lib/api.ts). Telefon "localhost"a ulaşamaz: Render adresi ya da bilgisayarın ağ adresi.
+    apiUrl: process.env.EXPO_PUBLIC_API_URL,
   },
 });

@@ -91,6 +91,30 @@ export const warehouseStockSchema = z.object({
 });
 export type WarehouseStock = z.infer<typeof warehouseStockSchema>;
 
+/** Ürünün bir depodaki stoğu (GET /v1/products/{id}/stock). */
+export const productWarehouseStockSchema = z.object({
+  warehouse: warehouseSchema,
+  /** Ana birimde; depoda hiç hareketi olmayan ürün için "0". */
+  quantity: z.string(),
+  averageCost: z.string(),
+  belowMinimum: z.boolean(),
+});
+export type ProductWarehouseStock = z.infer<typeof productWarehouseStockSchema>;
+
+/**
+ * GET /v1/products/{id}/stock: ürünün depolara göre stoğu ve toplamı. Yönetici bütün depoları, çalışan yalnızca
+ * yetkili olduğu depoları görür; toplam da yalnızca görünen depolarındır. Pasif depo yalnızca stoğu varsa listelenir.
+ */
+export const productStockSchema = z.object({
+  productId: z.uuid(),
+  baseUnit: z.string(),
+  minStock: z.string().nullable(),
+  /** Görünen depoların toplamı (SQL'de toplanır). */
+  total: z.string(),
+  warehouses: z.array(productWarehouseStockSchema),
+});
+export type ProductStock = z.infer<typeof productStockSchema>;
+
 /** GET /v1/products/{id}/movements: en yeni hareket önce; isteğe bağlı depo süzgeci. */
 export const productMovementQuerySchema = z.object({
   warehouseId: z.uuid().optional(),

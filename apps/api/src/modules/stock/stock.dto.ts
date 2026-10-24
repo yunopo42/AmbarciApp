@@ -1,4 +1,12 @@
-import type { MovementType, ProductMovement, ProductMovementList, StockLevel, WarehouseStock } from '@ambarci/shared';
+import type {
+  MovementType,
+  ProductMovement,
+  ProductMovementList,
+  ProductStock,
+  ProductWarehouseStock,
+  StockLevel,
+  WarehouseStock,
+} from '@ambarci/shared';
 import { ApiProperty } from '@nestjs/swagger';
 
 import { WarehouseDto } from '../inventory/warehouses.controller.js';
@@ -93,4 +101,35 @@ export class ProductMovementListDto implements ProductMovementList {
 
   @ApiProperty()
   pageSize!: number;
+}
+
+export class ProductWarehouseStockDto implements ProductWarehouseStock {
+  @ApiProperty({ type: WarehouseDto })
+  warehouse!: WarehouseDto;
+
+  @ApiProperty({ example: '120.000', description: 'Ana birimde; depoda hareketi olmayan ürün için 0' })
+  quantity!: string;
+
+  @ApiProperty({ example: '10.0000' })
+  averageCost!: string;
+
+  @ApiProperty({ description: 'Kritik stok eşiği tanımlı ve miktar eşiğin altında' })
+  belowMinimum!: boolean;
+}
+
+export class ProductStockDto implements ProductStock {
+  @ApiProperty({ format: 'uuid' })
+  productId!: string;
+
+  @ApiProperty({ example: 'adet' })
+  baseUnit!: string;
+
+  @ApiProperty({ nullable: true, type: String, example: '50.000' })
+  minStock!: string | null;
+
+  @ApiProperty({ example: '140.000', description: 'Listelenen depoların toplamı' })
+  total!: string;
+
+  @ApiProperty({ type: [ProductWarehouseStockDto] })
+  warehouses!: ProductWarehouseStockDto[];
 }

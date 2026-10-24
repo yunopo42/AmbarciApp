@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import type { JSX } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/auth/auth-provider';
+import { AppText } from '@/components/app-text';
+import { Button, Card, TextField } from '@/components/ui';
+import { colors, radius, spacing } from '@/theme';
 
-// Tasarım değerleri (renk, yazı tipi, boşluk) docs/tasarim.md hazırlanınca uygulanacak (#20).
-// Hesaplar yönetici davetiyle açılacak (#18); bu yüzden kayıt ekranı yok.
+// Hesaplar web panelinden açılır ve şirkete davet koduyla katılınır (#18); bu yüzden mobilde kayıt ekranı yok.
 export default function LoginScreen(): JSX.Element {
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
@@ -25,61 +27,72 @@ export default function LoginScreen(): JSX.Element {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Ambarcı</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="E-posta"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        textContentType="emailAddress"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Şifre"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoComplete="current-password"
-        textContentType="password"
-      />
-      {error ? <Text accessibilityRole="alert">{error}</Text> : null}
-      <Pressable
-        accessibilityRole="button"
-        disabled={pending}
-        onPress={() => void handleSubmit()}
-        style={styles.button}
-      >
-        <Text>{pending ? 'Giriş yapılıyor…' : 'Giriş yap'}</Text>
-      </Pressable>
-    </View>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={styles.brand}>
+        <View style={styles.logo}>
+          <AppText variant="headlineSm" tone="onPrimary">
+            A
+          </AppText>
+        </View>
+        <AppText variant="headlineLgMobile" tone="primary">
+          Ambarcı
+        </AppText>
+      </View>
+      <Card style={styles.form}>
+        <AppText variant="headlineSm">Giriş yap</AppText>
+        <TextField
+          placeholder="E-posta"
+          accessibilityLabel="E-posta"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+        />
+        <TextField
+          placeholder="Şifre"
+          accessibilityLabel="Şifre"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoComplete="current-password"
+          textContentType="password"
+        />
+        {error ? (
+          <AppText accessibilityRole="alert" variant="labelMd" tone="critical">
+            {error}
+          </AppText>
+        ) : null}
+        <Button label={pending ? 'Giriş yapılıyor…' : 'Giriş yap'} disabled={pending} onPress={() => void handleSubmit()} />
+      </Card>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     justifyContent: 'center',
-    gap: 16,
-    padding: 24,
+    gap: spacing.lg,
+    padding: spacing.md,
+    backgroundColor: colors.canvas,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 4,
-    padding: 12,
-  },
-  button: {
-    borderWidth: 1,
-    borderRadius: 4,
-    padding: 12,
+  brand: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  form: {
+    gap: spacing.md,
   },
 });
