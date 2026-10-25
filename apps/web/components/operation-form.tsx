@@ -3,6 +3,7 @@
 import { describeApiError } from '@ambarci/api-client';
 import { createOperationSchema } from '@ambarci/shared';
 import type { PartyType, Product } from '@ambarci/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -84,6 +85,7 @@ export function OperationForm(): JSX.Element {
 function OperationFormBody(): JSX.Element {
   const { $api } = useApi();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const warehouses = useWarehouses();
   const create = $api.useMutation('post', '/v1/operations');
   const nextKey = useRef(1);
@@ -177,6 +179,8 @@ function OperationFormBody(): JSX.Element {
     setErrors({});
     try {
       const operation = await create.mutateAsync({ body: parsed.data });
+      // Yeni işlem onay bekleyenler listesine girer.
+      await queryClient.invalidateQueries({ queryKey: ['get', '/v1/operations'] });
       router.push(`/operations/${operation.id}`);
     } catch (reason) {
       const failure = describeApiError(reason);

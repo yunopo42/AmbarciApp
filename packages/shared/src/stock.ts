@@ -7,7 +7,8 @@ import { movementTypeSchema, operationStatusSchema, operationTypeSchema } from '
 // Stoğu okuyan uçlar: işlem önizlemesi, depo bazında stok listesi ve ürünün hareket geçmişi. Miktar ve maliyet
 // metin olarak taşınır ve sayıya çevrilmez (ADR-003); hesaplar SQL'de yapılır.
 
-const warehouseRefSchema = z.object({
+/** Depo kimliği ve adı (onay ekranı, hareket geçmişi, işlem listesi). */
+export const warehouseRefSchema = z.object({
   id: z.uuid(),
   name: z.string(),
 });

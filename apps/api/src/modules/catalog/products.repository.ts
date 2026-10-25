@@ -102,6 +102,50 @@ export class ProductsRepository {
   }
 
   /**
+   * Ürünleri birimleri ve adlarıyla toplu ekler (içe aktarma). executor açık bir transaction'dır; hata olursa hiçbiri
+   * kalmaz. Satır satır değil, tablo başına 1.000'erlik toplu INSERT: her sorgu Render'dan ~22 ms sürdüğü için
+   * 1.000 ürünü tek tek eklemek ~3.000 sorgu olurdu. Benzersizlik yine veritabanı kısıtlarıyla korunur.
+   */
+  async insertMany(executor: DbExecutor, organizationId: string, inputs: ProductInput[]): Promise<{ id: string; sku: string }[]> {
+    const created: { id: string; sku: string }[] = [];
+    for (const batch of chunks(inputs, BATCH_SIZE)) {
+      created.push(
+        ...(await executor
+          .insert(products)
+          .values(batch.map((input) => ({ organizationId, ...productFields(input) })))
+          .returning({ id: products.id, sku: products.sku })),
+      );
+    }
+    const idOf = new Map(created.map((row) => [row.sku, row.id]));
+    const productId = (sku: string): string => {
+      const id = idOf.get(sku);
+      if (!id) {
+        throw new Error(`Eklenen ürün bulunamadı (${sku}).`);
+      }
+      return id;
+    };
+    const units = inputs.flatMap((input) =>
+      input.units.map((unit) => ({
+        organizationId,
+        productId: productId(input.sku),
+        unit: unit.unit,
+        factor: unit.factor,
+        barcode: unit.barcode ?? null,
+      })),
+    );
+    for (const batch of chunks(units, BATCH_SIZE)) {
+      await executor.insert(productUnits).values(batch);
+    }
+    const aliases = inputs.flatMap((input) =>
+      input.aliases.map((alias) => ({ organizationId, productId: productId(input.sku), alias })),
+    );
+    for (const batch of chunks(aliases, BATCH_SIZE)) {
+      await executor.insert(productAliases).values(batch);
+    }
+    return created;
+  }
+
+  /**
    * Ürünü, birimlerini ve adlarını tek transaction'da günceller; ürün bu şirkette yoksa null döner. Listede olmayan
    * birim ve ad silinir. Geçmiş işlemlerde kullanılmış bir birimin silinmesi (ya da adının değişmesi) yabancı anahtar
    * tarafından reddedilir ve transaction'ın tamamı geri alınır.
@@ -146,6 +190,17 @@ export class ProductsRepository {
       aliases: aliases.filter((alias) => alias.productId === row.id).map(({ alias }) => alias),
     }));
   }
+}
+
+// Toplu INSERT'te satır sayısı: PostgreSQL bir ifadede en fazla 65.535 parametre alır (1.000 ürün × 7 kolon = 7.000).
+const BATCH_SIZE = 1000;
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    result.push(items.slice(start, start + size));
+  }
+  return result;
 }
 
 function productFields(input: ProductInput): {

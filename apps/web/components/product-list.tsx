@@ -5,7 +5,7 @@ import type { Product, RecordStatusFilter } from '@ambarci/shared';
 import { keepPreviousData } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import type { PaginationState } from '@tanstack/react-table';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import type { JSX } from 'react';
@@ -116,10 +116,16 @@ export function ProductList(): JSX.Element {
         description="Stok kartları, ek birimleri ve sahada kullanılan adları."
         actions={
           canEdit ? (
-            <Link href="/products/new" className={buttonVariants()}>
-              <Plus aria-hidden />
-              Yeni ürün
-            </Link>
+            <>
+              <Link href="/products/import" className={buttonVariants({ variant: 'secondary' })}>
+                <Upload aria-hidden />
+                İçe aktar
+              </Link>
+              <Link href="/products/new" className={buttonVariants()}>
+                <Plus aria-hidden />
+                Yeni ürün
+              </Link>
+            </>
           ) : null
         }
       />

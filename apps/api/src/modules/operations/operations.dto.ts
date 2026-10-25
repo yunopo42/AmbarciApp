@@ -8,9 +8,11 @@ import type {
   Operation,
   OperationItem,
   OperationItemInput,
+  OperationList,
   OperationPreview,
   OperationPreviewLine,
   OperationStatus,
+  OperationSummary,
   OperationType,
   StockEffect,
 } from '@ambarci/shared';
@@ -21,7 +23,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 const OPERATION_TYPES: OperationType[] = ['STOCK_IN', 'STOCK_OUT', 'TRANSFER', 'COUNT', 'WASTE', 'OPENING', 'REVERSAL'];
 const CREATABLE_TYPES: CreatableOperationType[] = ['STOCK_IN', 'STOCK_OUT', 'TRANSFER', 'COUNT', 'WASTE', 'OPENING'];
-const STATUSES: OperationStatus[] = [
+export const STATUSES: OperationStatus[] = [
   'RECEIVED',
   'NEEDS_CLARIFICATION',
   'PENDING_CONFIRMATION',
@@ -31,7 +33,7 @@ const STATUSES: OperationStatus[] = [
   'EXPIRED',
   'FAILED',
 ];
-const SOURCES: ActionSource[] = ['SCREEN', 'CHAT', 'DOCUMENT', 'IMPORT', 'SYSTEM'];
+export const SOURCES: ActionSource[] = ['SCREEN', 'CHAT', 'DOCUMENT', 'IMPORT', 'SYSTEM'];
 export const MOVEMENT_TYPES: MovementType[] = [
   'IN',
   'OUT',
@@ -267,4 +269,41 @@ export class OperationPreviewDto implements OperationPreview {
 
   @ApiProperty({ type: [OperationPreviewLineDto] })
   lines!: OperationPreviewLineDto[];
+}
+
+export class OperationSummaryDto implements OperationSummary {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ enum: OPERATION_TYPES })
+  type!: OperationType;
+
+  @ApiProperty({ enum: STATUSES })
+  status!: OperationStatus;
+
+  @ApiProperty({ enum: SOURCES })
+  source!: ActionSource;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ example: 2 })
+  lineCount!: number;
+
+  @ApiProperty({ type: [WarehouseRefDto], description: 'İşlemin dokunduğu depolar (transferde hedef dahil)' })
+  warehouses!: WarehouseRefDto[];
+}
+
+export class OperationListDto implements OperationList {
+  @ApiProperty({ type: [OperationSummaryDto] })
+  items!: OperationSummaryDto[];
+
+  @ApiProperty()
+  total!: number;
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
 }

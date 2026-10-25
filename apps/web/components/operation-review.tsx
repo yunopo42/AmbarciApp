@@ -72,7 +72,8 @@ function ReviewBody({ operationId }: { operationId: string }): JSX.Element {
       queryClient.invalidateQueries({
         queryKey: $api.queryOptions('get', '/v1/operations/{operationId}/preview', previewInit).queryKey,
       }),
-      // Stok listesi ve hareket geçmişi bir sonraki açılışta sunucudan yeniden okunur.
+      // Stok listesi, hareket geçmişi ve onay bekleyen işlemler bir sonraki açılışta sunucudan yeniden okunur.
+      queryClient.invalidateQueries({ queryKey: ['get', '/v1/operations'] }),
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/warehouses/{warehouseId}/stock'] }),
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/movements'] }),
     ]);

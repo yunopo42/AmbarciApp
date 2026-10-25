@@ -7,6 +7,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { InventoryModule } from './modules/inventory/inventory.module.js';
 import { OperationsModule } from './modules/operations/operations.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
+import { ProductImportModule } from './modules/product-import/product-import.module.js';
 import { StockModule } from './modules/stock/stock.module.js';
 
 @Module({
@@ -19,6 +20,7 @@ import { StockModule } from './modules/stock/stock.module.js';
     CatalogModule,
     OperationsModule,
     StockModule,
+    ProductImportModule,
   ],
 })
 export class AppModule {}

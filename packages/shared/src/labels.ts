@@ -2,7 +2,7 @@
 
 import type { PartyType, RecordStatusFilter } from './catalog.js';
 import type { WarehouseType } from './inventory.js';
-import type { MovementType, OperationStatus, OperationType } from './operations.js';
+import type { ActionSource, MovementType, OperationStatus, OperationType } from './operations.js';
 import type { OrganizationRole } from './organizations.js';
 
 export const ROLE_LABELS: Record<OrganizationRole, string> = {
@@ -58,4 +58,13 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   COUNT_SHORTAGE: 'Sayım noksanı',
   WASTE: 'Fire',
   REVERSAL: 'Ters kayıt',
+};
+
+/** İşlemin nereden geldiği. */
+export const ACTION_SOURCE_LABELS: Record<ActionSource, string> = {
+  SCREEN: 'Ekran',
+  CHAT: 'Sohbet',
+  DOCUMENT: 'Belge',
+  IMPORT: 'İçe aktarma',
+  SYSTEM: 'Sistem',
 };

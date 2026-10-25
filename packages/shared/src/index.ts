@@ -6,6 +6,8 @@ export * from './errors.js';
 export * from './health.js';
 export * from './inventory.js';
 export * from './labels.js';
+export * from './operation-list.js';
 export * from './operations.js';
 export * from './organizations.js';
+export * from './product-import.js';
 export * from './stock.js';

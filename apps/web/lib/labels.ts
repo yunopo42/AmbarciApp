@@ -1,5 +1,6 @@
 // Enum etiketleri web ve mobilde ortak (packages/shared/src/labels.ts); tarih biçimi web'e özgü.
 export {
+  ACTION_SOURCE_LABELS,
   MOVEMENT_TYPE_LABELS,
   OPERATION_STATUS_LABELS,
   OPERATION_TYPE_LABELS,

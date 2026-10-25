@@ -7,6 +7,8 @@ import type {
   CreateOperationInput,
   Operation,
   OperationItem,
+  OperationList,
+  OperationListQuery,
   OperationPreview,
   OperationType,
   OrganizationRole,
@@ -22,6 +24,7 @@ import { OutboxService } from '../events/outbox.service.js';
 import { ApplyStockService } from '../inventory/apply-stock.service.js';
 import type { ApplyLine } from '../inventory/apply-stock.service.js';
 import { InventoryService } from '../inventory/inventory.service.js';
+import type { OrganizationContext } from '../organizations/organization-context.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { canTransition } from './operation-state.js';
 import { OperationsRepository, toOperation } from './operations.repository.js';
@@ -70,60 +73,109 @@ export class OperationsService {
     input: CreateOperationInput,
     source: ActionSource = 'SCREEN',
   ): Promise<Operation> {
-    const lines: LineInput[] = input.items.map((item, index) => ({
-      lineNo: index + 1,
-      productId: item.productId.toLowerCase(),
-      warehouseId: item.warehouseId.toLowerCase(),
-      targetWarehouseId: item.targetWarehouseId?.toLowerCase() ?? null,
-      quantity: item.quantity,
-      unit: item.unit ?? null,
-      unitCost: item.unitCost ?? null,
-    }));
+    // Yetki transaction'dan önce: yetkisiz istek veritabanında transaction açtırmaz.
+    await this.assertCreateAccess(this.db, organizationId, actor, input.type, warehousesOf(linesOf(input.items)));
+    return this.db.transaction((tx) => this.createWithin(tx, organizationId, actor, input, source));
+  }
 
+  /** Kullanıcı bu depolarda bu türde işlem açabilir mi; açılış stoğunu yalnızca yönetici girer. */
+  async assertCreateAccess(
+    executor: DbExecutor,
+    organizationId: string,
+    actor: OperationActor,
+    type: OperationType,
+    warehouseIds: string[],
+  ): Promise<void> {
     if (actor.kind === 'user') {
-      await this.assertAccess(this.db, organizationId, actor.userId, input.type, lines);
+      const lines = warehouseIds.map((warehouseId) => ({ warehouseId: warehouseId.toLowerCase(), targetWarehouseId: null }));
+      await this.assertAccess(executor, organizationId, actor.userId, type, lines);
     }
-    const [resolved, warehouseErrors] = await Promise.all([
-      this.resolveLines(this.db, organizationId, input.type, lines),
-      this.checkWarehouses(organizationId, lines),
-    ]);
+  }
+
+  /**
+   * create'in açık bir transaction içinde çalışan hâli. Ürün içe aktarma, açılış işlemini ürünlerle aynı
+   * transaction'da açar: doğrulama okumaları da bu transaction'dan yapılır, yoksa henüz kaydedilmemiş yeni ürünler
+   * görünmezdi. Bir adım hata verirse çağıranın transaction'ı bütünüyle geri alınır. Yetkiyi çağıran önceden
+   * denetler (assertCreateAccess).
+   */
+  async createWithin(
+    executor: DbExecutor,
+    organizationId: string,
+    actor: OperationActor,
+    input: CreateOperationInput,
+    source: ActionSource,
+  ): Promise<Operation> {
+    const lines = linesOf(input.items);
+    const resolved = await this.resolveLines(executor, organizationId, input.type, lines);
+    const warehouseErrors = await this.checkWarehouses(executor, organizationId, lines);
     const errors = [...resolved.errors, ...warehouseErrors].sort((a, b) => a.lineNo - b.lineNo);
     if (errors.length > 0) {
       throw linesInvalid(errors);
     }
     const partyId = input.partyId?.toLowerCase() ?? null;
-    if (partyId && !(await this.catalog.isActiveParty(this.db, organizationId, partyId))) {
+    if (partyId && !(await this.catalog.isActiveParty(executor, organizationId, partyId))) {
       throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'PARTY_NOT_FOUND', 'Cari bulunamadı ya da pasif.');
     }
 
-    return this.db.transaction(async (tx) => {
-      const operation = await this.repository.insert(tx, {
-        organizationId,
-        type: input.type,
-        source,
-        partyId,
-        note: input.note || null,
-        createdBy: actorId(actor),
-        items: resolved.lines.map(({ productId, warehouseId, targetWarehouseId, quantity, unit, unitCost }) => ({
-          productId,
-          warehouseId,
-          targetWarehouseId,
-          quantity,
-          unit,
-          unitCost,
-        })),
-      });
-      await this.audit.record(tx, {
-        organizationId,
-        actorId: actorId(actor),
-        action: 'operation.created',
-        entityType: 'operation',
-        entityId: operation.id,
-        source,
-        details: { type: operation.type, lineCount: operation.items.length },
-      });
-      return operation;
+    const operation = await this.repository.insert(executor, {
+      organizationId,
+      type: input.type,
+      source,
+      partyId,
+      note: input.note || null,
+      createdBy: actorId(actor),
+      items: resolved.lines.map(({ productId, warehouseId, targetWarehouseId, quantity, unit, unitCost }) => ({
+        productId,
+        warehouseId,
+        targetWarehouseId,
+        quantity,
+        unit,
+        unitCost,
+      })),
     });
+    await this.audit.record(executor, {
+      organizationId,
+      actorId: actorId(actor),
+      action: 'operation.created',
+      entityType: 'operation',
+      entityId: operation.id,
+      source,
+      details: { type: operation.type, lineCount: operation.items.length },
+    });
+    return operation;
+  }
+
+  /**
+   * İşlemler, en yeni önce; varsayılan yalnızca onay bekleyenler (ekrandan açılıp bırakılan fiş, içe aktarmanın
+   * açılış işlemi). Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür; açılış stoğunu yalnızca
+   * yönetici girdiği için açılış işlemlerini de görmez. Böylece listedeki her işlemin özeti açılabilir.
+   */
+  async list(organization: OrganizationContext, query: OperationListQuery): Promise<OperationList> {
+    const warehouseIds = await this.organizations.visibleWarehouseIds(organization);
+    const { items, total } = await this.repository.listSummaries(this.db, organization.id, {
+      status: query.status,
+      warehouseIds,
+      excludeTypes: organization.role === 'ADMIN' ? [] : ['OPENING'],
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    const ids = [...new Set(items.flatMap((item) => item.warehouseIds))];
+    const statuses = ids.length > 0 ? await this.inventory.findWarehouseStatuses(this.db, organization.id, ids) : [];
+    const nameOf = new Map(statuses.map((warehouse) => [warehouse.id, warehouse.name]));
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        type: item.type,
+        status: item.status,
+        source: item.source,
+        createdAt: item.createdAt,
+        lineCount: item.lineCount,
+        warehouses: item.warehouseIds.map((id) => ({ id, name: nameOf.get(id) ?? '' })),
+      })),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
   }
 
   async get(organizationId: string, operationId: string): Promise<Operation> {
@@ -441,8 +493,8 @@ export class OperationsService {
   }
 
   /** Depolar bu şirkette var ve aktif mi (işlem açılırken). Onayda aynı kontrol stok kilidiyle birlikte yapılır. */
-  private async checkWarehouses(organizationId: string, lines: LineInput[]): Promise<LineError[]> {
-    const statuses = await this.inventory.findWarehouseStatuses(this.db, organizationId, warehousesOf(lines));
+  private async checkWarehouses(executor: DbExecutor, organizationId: string, lines: LineInput[]): Promise<LineError[]> {
+    const statuses = await this.inventory.findWarehouseStatuses(executor, organizationId, warehousesOf(lines));
     const statusOf = new Map(statuses.map((status) => [status.id, status.isActive]));
     const errors: LineError[] = [];
     for (const line of lines) {
@@ -461,6 +513,19 @@ export class OperationsService {
     }
     return errors;
   }
+}
+
+/** İstekteki kalemler, kalem numarasıyla ve küçük harfli kimliklerle. */
+function linesOf(items: CreateOperationInput['items']): LineInput[] {
+  return items.map((item, index) => ({
+    lineNo: index + 1,
+    productId: item.productId.toLowerCase(),
+    warehouseId: item.warehouseId.toLowerCase(),
+    targetWarehouseId: item.targetWarehouseId?.toLowerCase() ?? null,
+    quantity: item.quantity,
+    unit: item.unit ?? null,
+    unitCost: item.unitCost ?? null,
+  }));
 }
 
 function actorId(actor: OperationActor): string | null {

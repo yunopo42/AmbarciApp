@@ -1432,6 +1432,91 @@
         "tags": [
           "operations"
         ]
+      },
+      "get": {
+        "operationId": "OperationsController_list",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "En fazla 100",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Varsayılan PENDING_CONFIRMATION",
+            "schema": {
+              "enum": [
+                "RECEIVED",
+                "NEEDS_CLARIFICATION",
+                "PENDING_CONFIRMATION",
+                "APPLIED",
+                "REVERSED",
+                "CANCELLED",
+                "EXPIRED",
+                "FAILED"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "İşlemler, en yeni önce; varsayılan yalnızca onay bekleyenler. Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür",
+        "tags": [
+          "operations"
+        ]
       }
     },
     "/v1/operations/{operationId}": {
@@ -2023,6 +2108,86 @@
         "summary": "Ürünün hareket geçmişi, en yeni önce; çalışan yalnızca yetkili olduğu depoların hareketlerini görür",
         "tags": [
           "stock"
+        ]
+      }
+    },
+    "/v1/products/import": {
+      "post": {
+        "operationId": "ProductImportController_import",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductImportResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bir kod bu arada başka bir üründe kullanılmış",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "SKU ya da barkod şirkette kullanılıyor (details: satır, alan, mesaj) ya da depo geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Ürünleri toplu ekler (Excel/CSV, en fazla 1.000 satır, yalnızca yönetici); ya hepsi ya hiçbiri. Başlangıç stoku onay bekleyen açılış işlemi olarak açılır",
+        "tags": [
+          "products"
         ]
       }
     }
@@ -2846,6 +3011,100 @@
           "name"
         ]
       },
+      "OperationSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "STOCK_IN",
+              "STOCK_OUT",
+              "TRANSFER",
+              "COUNT",
+              "WASTE",
+              "OPENING",
+              "REVERSAL"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "NEEDS_CLARIFICATION",
+              "PENDING_CONFIRMATION",
+              "APPLIED",
+              "REVERSED",
+              "CANCELLED",
+              "EXPIRED",
+              "FAILED"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "SCREEN",
+              "CHAT",
+              "DOCUMENT",
+              "IMPORT",
+              "SYSTEM"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lineCount": {
+            "type": "number",
+            "example": 2
+          },
+          "warehouses": {
+            "description": "İşlemin dokunduğu depolar (transferde hedef dahil)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WarehouseRefDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status",
+          "source",
+          "createdAt",
+          "lineCount",
+          "warehouses"
+        ]
+      },
+      "OperationListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationSummaryDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
       "StockEffectDto": {
         "type": "object",
         "properties": {
@@ -3362,6 +3621,75 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "ProductImportRowDto": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "example": 2,
+            "description": "Dosyadaki satır numarası; hatalar bu numarayla döner"
+          },
+          "product": {
+            "$ref": "#/components/schemas/ProductInputDto"
+          },
+          "openingQuantity": {
+            "type": "string",
+            "example": "120",
+            "description": "Başlangıç stoku (ana birimde); 0 yok sayılır"
+          },
+          "openingUnitCost": {
+            "type": "string",
+            "example": "10",
+            "description": "Başlangıç stokunun ana birim başına maliyeti"
+          }
+        },
+        "required": [
+          "row",
+          "product"
+        ]
+      },
+      "ProductImportDto": {
+        "type": "object",
+        "properties": {
+          "warehouseId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Başlangıç stoku varsa zorunlu: açılış işleminin deposu"
+          },
+          "rows": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductImportRowDto"
+            }
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "ProductImportResultDto": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "number",
+            "example": 120
+          },
+          "openingOperationIds": {
+            "description": "Başlangıç stoku için açılan, onay bekleyen açılış işlemleri (100 kalemde bir yenisi)",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "created",
+          "openingOperationIds"
         ]
       }
     }
