@@ -31,6 +31,12 @@ export const products = pgTable(
     // Boş barkod birden fazla üründe olabilir (PostgreSQL'de NULL değerler benzersizlik kısıtına takılmaz).
     unique('products_org_barcode_key').on(t.organizationId, t.barcode),
     unique('products_org_id_key').on(t.organizationId, t.id),
+    // Asistanın ürün araması: şirket içinde, Türkçe harf farkı gözetmeden trigram benzerliği (0005_trigram_search.sql).
+    index('products_org_name_trgm_idx').using(
+      'gin',
+      t.organizationId,
+      sql`private.fold_search(${t.name}) extensions.gin_trgm_ops`,
+    ),
     check('products_sku_not_blank', sql`length(trim(${t.sku})) > 0`),
     check('products_name_not_blank', sql`length(trim(${t.name})) > 0`),
     check('products_min_stock_non_negative', sql`${t.minStock} >= 0`),
@@ -69,8 +75,8 @@ export const productUnits = pgTable(
 ).enableRLS();
 
 /**
- * Ürünün sahada kullanılan diğer adları ("üçlü priz", "grup priz"). Asistan ürünü bu adlarla da bulur.
- * Benzerlik araması için pg_trgm GIN indeksi 4. haftada eklenecek.
+ * Ürünün sahada kullanılan diğer adları ("üçlü priz", "grup priz"). Asistan ürünü bu adlarla da bulur
+ * (benzerlik araması için trigram indeksi).
  */
 export const productAliases = pgTable(
   'product_aliases',
@@ -91,6 +97,11 @@ export const productAliases = pgTable(
     // Aynı ad iki farklı ürüne verilebilir; o durumda asistan kullanıcıya hangisi olduğunu sorar.
     unique('product_aliases_product_alias_key').on(t.organizationId, t.productId, t.alias),
     index('product_aliases_org_alias_idx').on(t.organizationId, t.alias),
+    index('product_aliases_org_alias_trgm_idx').using(
+      'gin',
+      t.organizationId,
+      sql`private.fold_search(${t.alias}) extensions.gin_trgm_ops`,
+    ),
     check('product_aliases_alias_not_blank', sql`length(trim(${t.alias})) > 0`),
     memberCanRead('product_aliases', t.organizationId),
   ],

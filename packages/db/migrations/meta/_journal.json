@@ -36,6 +36,20 @@
       "when": 1792616960537,
       "tag": "0004_outbox_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792947227249,
+      "tag": "0005_trigram_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792947558171,
+      "tag": "0006_conversations_and_ai_runs",
+      "breakpoints": true
     }
   ]
 }

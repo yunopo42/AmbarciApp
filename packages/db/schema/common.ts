@@ -49,6 +49,18 @@ export const operationStatus = pgEnum('operation_status', [
 // Kaydın nereden geldiği: ekran (web/mobil form), sohbet (asistan), belge (irsaliye), içe aktarma, sistem (seed).
 export const actionSource = pgEnum('action_source', ['SCREEN', 'CHAT', 'DOCUMENT', 'IMPORT', 'SYSTEM']);
 
+// Sohbetin kanalı. Şimdilik yalnızca uygulama (mobil ve web); WhatsApp MVP dışında.
+export const conversationChannel = pgEnum('conversation_channel', ['APP']);
+
+// Mesajın sahibi. USER: kullanıcının yazdığı (ya da sesle söylediği) mesaj; ASSISTANT: modelin cevabı (metin, düşünme
+// ve araç çağrısı blokları); TOOL: araç sonuçları. Claude API araç sonuçlarını "user" rolüyle alır; ayrı tutulması
+// arayüzün yalnızca kullanıcı ve asistan mesajlarını göstermesini ve tekrar kontrolünün yalnızca USER'da olmasını sağlar.
+export const messageRole = pgEnum('message_role', ['USER', 'ASSISTANT', 'TOOL']);
+
+// Kullanıcı mesajının cevap durumu (yalnızca USER mesajında). Aynı client_message_id tekrar gelirse API buna bakar:
+// sürüyorsa 409, tamamlandıysa kayıtlı cevap; model ikinci kez çağrılmaz.
+export const messageStatus = pgEnum('message_status', ['IN_PROGRESS', 'COMPLETED', 'FAILED']);
+
 // Stok hareketinin türü. Her türün işareti inventory_movements'taki CHECK kısıtıyla bağlıdır.
 export const movementType = pgEnum('movement_type', [
   'IN',

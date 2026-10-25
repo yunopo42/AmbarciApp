@@ -22,6 +22,18 @@ export function memberCanRead(table: string, organizationId: AnyPgColumn): PgPol
   });
 }
 
+/**
+ * Yalnızca satırın sahibi okuyabilir, o da şirketin aktif üyesiyse (sohbetler ve mesajlar). Aynı şirketin yöneticisi
+ * de başkasının sohbetini okuyamaz: mesajlar kişinin kendi yazdıklarıdır.
+ */
+export function ownerCanRead(table: string, organizationId: AnyPgColumn, userId: AnyPgColumn): PgPolicy {
+  return pgPolicy(`${table}_select_owner`, {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`${userId} = (select auth.uid()) and ${organizationId} in (select private.user_organization_ids())`,
+  });
+}
+
 /** Yalnızca şirketin aktif yöneticileri okuyabilir (örn. davet kodları). */
 export function adminCanRead(table: string, organizationId: AnyPgColumn): PgPolicy {
   return pgPolicy(`${table}_select_admin`, {

@@ -1,10 +1,10 @@
 # Veritabanı şeması ve şirketler arası izolasyon
 
-Bu belge `packages/db` altındaki şemanın ve RLS politikalarının neden böyle kurulduğunu anlatır. İlgili işler: #15 (şema ve ilk migration), #19 (RLS ve iki şirketli izolasyon testi), #32 (işlem, hareket, sayım, denetim ve outbox tabloları).
+Bu belge `packages/db` altındaki şemanın ve RLS politikalarının neden böyle kurulduğunu anlatır. İlgili işler: #15 (şema ve ilk migration), #19 (RLS ve iki şirketli izolasyon testi), #32 (işlem, hareket, sayım, denetim ve outbox tabloları), #54 (sohbet, mesaj ve `ai_runs` tabloları; benzerlik araması).
 
 ## Kapsam
 
-Şemada 16 tablo var. İlk 10 tablo 2. haftada geldi:
+Şemada 19 tablo var. İlk 10 tablo 2. haftada geldi:
 
 | Tablo | Ne tutar | Öne çıkan kurallar |
 | --- | --- | --- |
@@ -30,7 +30,15 @@ Bu belge `packages/db` altındaki şemanın ve RLS politikalarının neden böyl
 | `audit_logs` | Kim, ne zaman, hangi kaynaktan, neyi yaptı | Yalnızca yönetici okur |
 | `outbox_events` | Stokla aynı transaction'da yazılan olaylar (bildirim vb. için) | İstemcilere tamamen kapalı |
 
-Sohbet, `ai_runs`, belge ve `push_tokens` tabloları ilgili haftalarda yeni migration'larla eklenir.
+4. haftada asistanın 3 tablosu eklendi (#54; ayrıntı: [Asistan tabloları](#asistan-tabloları)):
+
+| Tablo | Ne tutar | Öne çıkan kurallar |
+| --- | --- | --- |
+| `conversations` | Asistanla sohbet: sahibi, kanal, başlık, son mesaj zamanı | Yalnızca sahibi okur; hesap silinince silinir |
+| `messages` | Sohbetin mesajları: sıra, rol, Claude'un içerik blokları, istemci kimliği, cevap durumu | (sohbet, sıra) ve (sohbet, `client_message_id`) benzersiz; içerik boş olmayan blok dizisi |
+| `ai_runs` | Her model çağrısı: model, prompt sürümü, effort, araçlar, token ve önbellek sayıları, süre, maliyet | Yalnızca yönetici okur; hesap silinince kişi ve mesaj bağlantısı boşalır, kayıt kalır |
+
+Belge ve `push_tokens` tabloları ilgili haftalarda yeni migration'larla eklenir.
 
 ## Tasarım kararları
 
@@ -130,12 +138,63 @@ operations → APPLIED
 
 Yeni tablolar boş olduğu için Supabase'in performans denetimi bu indeksleri "kullanılmamış" (INFO) olarak gösterir; veri geldikçe kullanılırlar.
 
+## Asistan tabloları
+
+4. haftada eklenen tablolar (#54) asistanın sohbet geçmişini ve her model çağrısının kaydını tutar. Model çağrısı `ai` modülünde (#55), ajan döngüsü ve araçlar `assistant` modülünde (#56), uçlar ve akış #57'de.
+
+**Bir sohbetin yolu:**
+
+```text
+conversations (bir kullanıcının sohbeti)
+  └─ messages
+       1 USER       "Merkez depoda priz kaç tane?"    client_message_id; durum IN_PROGRESS → COMPLETED
+       2 ASSISTANT  [düşünme] [tool_use: search_products]
+       3 TOOL       [tool_result]
+       4 ASSISTANT  [düşünme] [text: "Merkez depoda 10 adet var."]
+ai_runs: 1. mesaja bağlı iki kayıt (tur 1: araç çağrısı, tur 2: cevap)
+```
+
+### Kararlar
+
+1. **İçerik blokları olduğu gibi saklanır.** Claude'un cevabı bir blok dizisidir: düşünme (`thinking`), metin (`text`), araç çağrısı (`tool_use`). Araç sonuçları (`tool_result`) ayrı bir mesajdır. `messages.content` bu diziyi değiştirmeden `jsonb` olarak saklar. Haiku 5.5'te düşünme blokları araç sonuçlarıyla birlikte değiştirilmeden geri gönderilmeli ve geçmiş yalnızca sona eklenerek büyümeli (ADR-001). Yalnızca metin saklansaydı modele giden geçmiş birebir kurulamaz, istek 400 alabilirdi. Arayüz bu dizinin metin bloklarını gösterir.
+2. **Araç sonucu ayrı rol.** Claude API araç sonuçlarını `user` rolüyle alır; tabloda `TOOL` rolüyle tutulur. Böylece arayüz yalnızca `USER` ve `ASSISTANT` mesajlarını gösterir, tekrar kontrolü yalnızca kullanıcının yazdığı mesajda çalışır. Adaptör `TOOL`'u API'ye `user` olarak gönderir.
+3. **Sıra numarası ve tek cevap.** Mesajlar `position` (1, 2, 3…) ile sıralanır ve (sohbet, sıra) benzersizdir. Aynı transaction'daki eklemelerin zamanı aynı olabileceği için zaman damgası sıralamaya yetmez. Benzersizlik ayrıca aynı sohbette aynı anda iki cevap üretilmesini engeller: ikinci cevabın ilk mesajı aynı sırayı almaya çalışır ve reddedilir. Bu önemli, çünkü `tool_use` bloğundan hemen sonra onun sonucu gelmek zorunda; iki cevabın mesajları karışsaydı sohbet bozulurdu.
+4. **Mesaj bir kez işlenir.** İstemci her mesaj için bir kimlik (`client_message_id`, UUID) üretir ve ağ hatasında aynı kimlikle tekrar gönderir; (sohbet, `client_message_id`) benzersizdir. Kullanıcı mesajının `status` alanı cevabın durumudur (`IN_PROGRESS`, `COMPLETED`, `FAILED`). Aynı kimlik tekrar gelirse API buna bakıp ya kayıtlı cevabı döner ya da 409 verir; modeli ikinci kez çağırmaz (#57). İstemci kimliği ve durum yalnızca kullanıcı mesajında bulunur ve orada zorunludur (CHECK).
+5. **Boş mesaj yazılamaz.** İçerik, boş olmayan bir JSON dizisi olmak zorunda (CHECK). Claude API boş içerikli mesajı reddeder; böyle bir satır yazılsaydı sohbetin sonraki bütün istekleri hata verirdi.
+6. **Sohbeti yalnızca sahibi okur.** Politika hem `user_id = auth.uid()` hem aktif üyelik ister. Aynı şirketin yöneticisi de başkasının sohbetini okuyamaz, çünkü mesajlar kişinin kendi yazdıklarıdır. Yönetici maliyet ve kullanım bilgisini `ai_runs`'tan görür; orada mesaj içeriği yoktur.
+7. **Mesajda kullanıcı kolonu.** RLS her satırda tek kolona bakabilsin diye (tasarım kararı 3'teki `organization_id` gibi) mesaj da sohbetin sahibini taşır. Bileşik yabancı anahtar `(organization_id, conversation_id, user_id)` → `conversations` bu kolonun sohbetin sahibiyle aynı olmasını garanti eder: başka kullanıcıya ya da başka şirkete bağlı mesaj yazılamaz.
+8. **Hesap silinince.** Sohbetler ve mesajlar silinir (`on delete cascade`), çünkü kişisel içeriktir (KVKK). `ai_runs` kişisel veri içermez; maliyet ve değerlendirme kaydı olarak kalır, `user_id` ve `message_id` boşalır. Bu, işlem ve denetim kayıtlarındaki kuralla aynıdır (stok defteri kararı 10).
+9. **Kolon listeli SET NULL.** `ai_runs`'ın mesaja bağlantısı bileşik anahtardır: `(organization_id, message_id)`. Düz `ON DELETE SET NULL` mesaj silinince iki kolonu da boşaltmaya çalışır; `organization_id` NOT NULL olduğu için silme hata verirdi. PostgreSQL 15'ten beri `ON DELETE SET NULL (message_id)` yalnızca yazılan kolonu boşaltır (Supabase'de PostgreSQL 17). drizzle-kit bu sözdizimini üretemediği için migration'da elle yazıldı.
+10. **Bir mesaj, birden fazla model çağrısı.** Bir soru, araç turları yüzünden birkaç model çağrısı sürer (2. hafta denemesinde mesaj başına ortalama 1,75 tur). Her çağrı ayrı bir `ai_runs` satırıdır; aynı kullanıcı mesajına bağlanır ve tur numarası (`round_no`) taşır. Mesaj başına süre, token ve maliyet bu satırların toplamıdır. `first_token_ms` ilk metin parçasına kadar geçen süredir; kullanıcının ilk kelimeyi ne kadar beklediğini ölçmek için (#60).
+11. **Maliyet `NUMERIC`.** `cost_usd NUMERIC(12,8)`: bir çağrı kuruşun çok altında tutar (2. hafta denemesinde mesaj başına yaklaşık 0,001 $). Maliyet çağrı anındaki fiyatla token sayılarından SQL'de hesaplanır (ADR-003); fiyat sonradan değişse de kayıt değişmez. Effort da yazılır, çünkü aynı model farklı effort düzeyinde farklı token harcar (ADR-001).
+12. **Bitiş nedeni metin.** `stop_reason` (`end_turn`, `tool_use`, `refusal`…) `enum` değil metindir: API yeni bir değer eklerse kayıt yazılamaz hâle gelmesin.
+
+### İndeksler
+
+| İndeks | Hangi sorgu için |
+| --- | --- |
+| `conversations (user_id, organization_id, last_message_at)` | "Sohbetlerim" listesi; hesap silinirken kullanıcının sohbetleri |
+| `messages (organization_id, conversation_id, position)` (benzersiz) | Sohbet geçmişi, sırasıyla |
+| `ai_runs (organization_id, created_at)` | Şirketin günlük token bütçesi ve maliyet raporu |
+| `ai_runs (user_id, created_at)` | Kullanıcının günlük token bütçesi; hesap silinirken |
+| `ai_runs (organization_id, message_id)` | Bir mesajın cevabındaki çağrılar |
+
+## Benzerlik araması (pg_trgm)
+
+Asistanın ürün arama aracı (`search_products`, #56) için. Sahada ürün adı yazım hatasıyla ("kabllo") ya da ses tanıma hatasıyla gelir; `ILIKE` ancak metin birebir geçiyorsa bulur.
+
+- **pg_trgm** metni üçlü harf gruplarına (trigram) böler: "kablo" → "  k", " ka", "kab", "abl", "blo", "lo ". İki metnin ortak gruplarından 0–1 arası bir benzerlik skoru çıkar; `%` işleci skoru eşiğin (varsayılan 0,3) üstünde olanları bulur. Eklenti, Supabase'in önerdiği gibi `extensions` şemasında.
+- **Türkçe harf dönüşümü:** `private.fold_search(metin)`, `apps/api/src/common/search.ts`'teki `foldForSearch` ile aynı dönüşümü yapar (I, İ, ı → i, sonra küçük harf). İkisinin aynı sonucu verdiği test ediliyor (`apps/api/test-db/search.db.spec.ts`). Fonksiyon indeks ifadesinde kullanıldığı için `IMMUTABLE`; `search_path` boş ve `private` şemasında (istemciler çağıramaz).
+- **İndeksler:** `products (organization_id, fold_search(name))` ve `product_aliases (organization_id, fold_search(alias))`, ikisi de GIN. **btree_gin** eklentisi şirket kimliğini (uuid) trigram ile aynı GIN indeksine koymayı sağlar; arama her zaman tek şirketin ürünlerinde yapılır.
+- **Sorgu indeksle aynı yazılmalı.** İndeks `private.fold_search(name)` ifadesi üzerine kurulu. Sorgu da `private.fold_search(name) % private.fold_search($1)` biçiminde yazılmazsa indeks kullanılamaz. Test, iki tabloda da planın trigram indeksini kullandığını `EXPLAIN` ile doğrular.
+- **Canlıdaki ilk deneme** (ABC Elektrik demo verisi, geri alınan bir transaction'da): "kabllo nym 3x2,5" en yüksek skorla NYM kablo 3x2,5'u (0,833), "otomatk sigorta 16" Otomatik sigorta C16'yı (0,600) buldu. Alternatif adlarda şirket koşulu ve benzerlik koşulu aynı indeks taramasında çalıştı. "uclu priz" ürün adlarında bir şey bulmadı: dönüşüm ü ve ç gibi harfleri değiştirmiyor. Alternatif adlarda arama ve skor eşiği #56'da ayarlanacak.
+
 ## Şirketler arası izolasyon: dört katman
 
 | Katman | Kimi durdurur | Nerede |
 | --- | --- | --- |
 | 1. API filtresi | API'yi kullanan istemci | Her sorgu `organization_id` ile süzülür; şirket kimliği oturumdan gelir, istemciden alınmaz (#17, #18) |
-| 2. RLS politikaları | Supabase Data API'yi doğrudan kullanan istemci | `schema/rls.ts`, `0002_read_policies.sql`, `0003_operations_and_movements.sql` |
+| 2. RLS politikaları | Supabase Data API'yi doğrudan kullanan istemci | `schema/rls.ts`, `0002_read_policies.sql`, `0003_operations_and_movements.sql`, `0006_conversations_and_ai_runs.sql` |
 | 3. Rol yetkileri | Aynı istemci, politika yanlış yazılsa bile | `0001_rls_helpers.sql` |
 | 4. Bileşik anahtarlar ve CHECK | API'deki bir programlama hatası | `0000_initial_schema.sql` |
 
@@ -146,7 +205,8 @@ Yeni tablolar boş olduğu için Supabase'in performans denetimi bu indeksleri "
 **Politikalar:**
 
 - Oturum açmış kullanıcı (`authenticated`) bir satırı ancak o satırın şirketinin **aktif** üyesiyse okuyabilir.
-- Davet kodlarını yalnızca o şirketin yöneticisi okuyabilir; kod bir sırdır. Denetim kaydı (`audit_logs`) da yalnızca yöneticiye açıktır.
+- Davet kodlarını yalnızca o şirketin yöneticisi okuyabilir; kod bir sırdır. Denetim kaydı (`audit_logs`) ve model çağrısı kayıtları (`ai_runs`) da yalnızca yöneticiye açıktır.
+- Sohbeti ve mesajlarını yalnızca sahibi, o da şirketin aktif üyesiyse okuyabilir; aynı şirketin yöneticisi okuyamaz.
 - `outbox_events` hiçbir istemciye açık değildir: politikası yoktur ve okuma yetkisi de geri alınmıştır.
 - Yazma politikası yoktur. Ayrıca `anon` rolünün bütün yetkileri ve `authenticated` rolünün yazma yetkileri geri alınmıştır. Veri yalnızca API'den değişir; stok yalnızca onay uç noktasından değişir (mimari değişmez 2).
 - Depo bazında yetki (çalışan yalnızca izinli depoda işlem yapar) RLS'de değil API'de uygulanır. RLS'nin görevi şirket sınırıdır; depo yetkisi işlem kuralıdır.
@@ -167,10 +227,14 @@ Yeni tablolar boş olduğu için Supabase'in performans denetimi bu indeksleri "
 | `0002_read_policies.sql` | 10 okuma politikası | `drizzle-kit generate` |
 | `0003_operations_and_movements.sql` | 4 enum, stok defterinin 6 tablosu, kısıtlar, indeksler, 5 okuma politikası; `parties` için (şirket, id) benzersizliği | `drizzle-kit generate` (bir satırın sırası elle düzeltildi, aşağıda) |
 | `0004_outbox_grants.sql` | `outbox_events` üzerindeki istemci yetkilerinin geri alınması | Elle (`drizzle-kit generate --custom`) |
+| `0005_trigram_search.sql` | `pg_trgm` ve `btree_gin` eklentileri, `private.fold_search` fonksiyonu | Elle (`drizzle-kit generate --custom`) |
+| `0006_conversations_and_ai_runs.sql` | 3 enum, asistanın 3 tablosu, kısıtlar, indeksler, 3 okuma politikası; ürün adı ve alternatif ad trigram indeksleri | `drizzle-kit generate` (bir yabancı anahtar elle düzeltildi, aşağıda) |
 
 Sıra önemlidir: politikalar fonksiyonları, fonksiyonlar da tabloları kullanır. RLS ilk migration'da açılır; politikalar gelene kadar tablolar herkese kapalıdır, açık kalmaz.
 
 `0003` üretildiğinde drizzle-kit, `parties (organization_id, id)` benzersizlik kısıtını dosyanın sonuna, ona dayanan `operations_party_fk` yabancı anahtarından sonraya yazdı; PostgreSQL bu sırayı reddeder. Kısıt, uygulanmadan önce elle yabancı anahtarların önüne alındı (dosyada yorumla işaretli). Migration önce canlı veritabanında geri alınan bir transaction içinde denendi, sonra uygulandı.
+
+`0005` elle yazıldı ve `0006`'dan önce gelir: trigram indeksleri `private.fold_search` fonksiyonunu kullandığı için fonksiyon indekslerden önce var olmalı. `0006`'da drizzle-kit `ai_runs_message_fk` için kolon listesiz `ON DELETE set null` üretti; elle `ON DELETE SET NULL (message_id)` yapıldı ([Asistan tabloları](#asistan-tabloları), karar 9; dosyada yorumla işaretli). İki migration da önce geri alınan bir transaction'da denendi, sonra uygulandı.
 
 0001'deki varsayılan yetkiler (`ALTER DEFAULT PRIVILEGES`) sayesinde yeni tablolar da anon'a kapalı ve authenticated için salt okunur başlar; bunun için ayrıca migration yazılmadı.
 
@@ -201,19 +265,21 @@ Kararlar:
 2. Her test bir transaction açar. İçinde iki şirket (A, B), beş kullanıcı ve her tabloda örnek veri oluşturur. Kullanıcılar: A yöneticisi, A çalışanı, A'nın pasif üyesi, B yöneticisi ve hiçbir şirkete üye olmayan biri.
 3. Test bitince transaction geri alınır. Veritabanında iz kalmaz; gerçek kullanıcı hesabı açılmaz.
 
-**Neyi kanıtlar (38 test)?**
+**Neyi kanıtlar (49 test)?**
 
 - On üç tablonun her birinde A kullanıcısı yalnızca A'nın, B kullanıcısı yalnızca B'nin satırlarını görür (3. haftada işlem, kalem, hareket ve sayım tabloları eklendi).
 - B'nin ürünü kimliği bilinse bile okunamaz.
-- Davet kodlarını ve denetim kaydını yalnızca kendi şirketinin yöneticisi görür; çalışan göremez.
+- Davet kodlarını, denetim kaydını ve model çağrısı kayıtlarını (`ai_runs`) yalnızca kendi şirketinin yöneticisi görür; çalışan göremez.
+- Sohbeti ve mesajlarını yalnızca sahibi görür. Aynı şirketin yöneticisi, pasife alınan üye (kendi eski sohbeti dahil) ve şirkete üye olmayan kullanıcı göremez.
 - Outbox olaylarını oturum açmış hiçbir kullanıcı, yönetici bile okuyamaz.
 - Pasif üye ve hiçbir şirkete üye olmayan kullanıcı hiçbir satır görmez.
 - Oturum açmamış istemci (`anon`) hiçbir tabloyu ve yardımcı fonksiyonları kullanamaz.
-- Oturum açmış kullanıcı hiçbir şey yazamaz: ürün ekleme ya da güncelleme, stok değiştirme ya da silme, kendini başka şirkete üye yapma, rolünü yükseltme, işlem durumunu değiştirme, stok hareketi ekleme ya da silme, denetim kaydı silme.
+- Oturum açmış kullanıcı hiçbir şey yazamaz: ürün ekleme ya da güncelleme, stok değiştirme ya da silme, kendini başka şirkete üye yapma, rolünü yükseltme, işlem durumunu değiştirme, stok hareketi ekleme ya da silme, denetim kaydı silme, kendi sohbetine mesaj ekleme, sohbet başlığını değiştirme, model çağrısı kaydı silme.
 - Veritabanı, şirketler arası bağlantıyı (A'nın stoğu → B'nin ürünü, A'nın hareketi → B'nin ürünü) ve eksi stoğu reddeder.
 - Hareket kısıtları: türüyle yönü uyuşmayan ya da sıfır miktarlı hareket, aynı kalemin aynı depoya ikinci hareketi, aynı işlemin ikinci ters kaydı ve bağlantısız ters kayıt reddedilir; sayım farkını veritabanı hesaplar ve elle yazılamaz.
+- Sohbet kısıtları: aynı `client_message_id` ve aynı sıra ikinci kez yazılamaz; mesaj, sohbetin sahibi olmayan kullanıcıya ya da başka şirkete bağlanamaz; istemci kimliği ve durum yalnızca kullanıcı mesajında bulunur; boş içerik reddedilir. Hesap silinince sohbet ve mesajlar silinir, `ai_runs` kayıtları şirkette kalır ve bağlantıları boşalır.
 
-**Testin gerçekten sızıntı yakaladığı nasıl bilinir?** Geliştirme sırasında bir transaction içinde `products` tablosuna herkese açık bir politika (`using (true)`) eklendi. Aynı yöntemle bakıldığında A kullanıcısının gördüğü şirket sayısı 1'den 2'ye çıktı, yani test başarısız olurdu. Deneme geri alındı. 3. haftada aynı deneme `inventory_movements` tablosunda tekrarlandı; sonuç yine 1'den 2'ye çıktı.
+**Testin gerçekten sızıntı yakaladığı nasıl bilinir?** Geliştirme sırasında bir transaction içinde `products` tablosuna herkese açık bir politika (`using (true)`) eklendi. Aynı yöntemle bakıldığında A kullanıcısının gördüğü şirket sayısı 1'den 2'ye çıktı, yani test başarısız olurdu. Deneme geri alındı. 3. haftada aynı deneme `inventory_movements` tablosunda tekrarlandı; sonuç yine 1'den 2'ye çıktı. 4. haftada `messages` politikası, geri alınan bir transaction'da "şirketin her üyesi okur" biçimine çevrildi: yöneticinin gördüğü çalışan mesajı sayısı 0'dan 1'e çıktı.
 
 **API üzerinden izolasyon** (`apps/api/test-db/organizations.db.spec.ts`, aynı `pnpm db:test` komutuyla). API gerçek veritabanıyla çalıştırılır; token'lar testin kendi anahtarıyla imzalanır. Test şunları doğrular:
 
@@ -275,7 +341,7 @@ Sorgu başına süre üç senaryoda da 22–23 ms; model burada da tutuyor: tran
 
 ## Savunmada sorulabilecek sorular
 
-- **"Bir şirket başka şirketin verisini nasıl göremiyor?"** Dört katman var (yukarıdaki tablo). Data API yolunu RLS ve rol yetkileri kapatır; API yolunu her sorgudaki şirket filtresi; programlama hatalarına karşı da bileşik anahtarlar ve CHECK kısıtları devrededir. RLS katmanı 38 testle doğrulandı.
+- **"Bir şirket başka şirketin verisini nasıl göremiyor?"** Dört katman var (yukarıdaki tablo). Data API yolunu RLS ve rol yetkileri kapatır; API yolunu her sorgudaki şirket filtresi; programlama hatalarına karşı da bileşik anahtarlar ve CHECK kısıtları devrededir. RLS katmanı 49 testle doğrulandı.
 - **"RLS varken API'de neden ayrıca filtre var?"** API tablo sahibi kullanıcıyla bağlandığı için RLS'ye takılmaz. RLS, Data API'yi doğrudan kullanan istemciye karşı ikinci kilittir. Tek katmana güvenilmez.
 - **"Stok neden eksiye düşemiyor?"** Uygulama kontrol eder; ayrıca veritabanında `CHECK (quantity >= 0)` var. İki eşzamanlı çıkış da olsa ikincisi veritabanında reddedilir.
 - **"Miktarlar neden float değil?"** Kayan noktalı sayılar ondalık değerleri tam tutamaz ve hatalar birikir. `NUMERIC` tam ondalık tutar.
@@ -286,3 +352,7 @@ Sorgu başına süre üç senaryoda da 22–23 ms; model burada da tutuyor: tran
 - **"Kalemleri neden JSON alanında tutmadınız?"** JSON'da veritabanı ürünün, deponun ve birimin aynı şirkete ait olduğunu denetleyemezdi. Ayrı tabloda bunu bileşik yabancı anahtarlar yapıyor.
 - **"Veritabanı İrlanda'da, API Frankfurt'ta; bu bir sorun mu?"** Onay transaction'ı sabit sayıda sorgudan oluşur (1 kalemde 12) ve süresi yaklaşık sorgu sayısı × gidiş-dönüştür. Ölçümde her sorgunun iki gidiş-dönüş sürdüğü görüldü. Sorgular hazırlanmış ifade olarak gönderilince süre %45 kısaldı. Render'da 1 kalemli onay ~270 ms sürüyor (sorgu başına ~22 ms); saha kullanımında fark edilmeyecek bir süre olduğu için proje taşınmadı.
 - **"Sayım farkı nasıl hesaplanıyor?"** Sistemdeki miktar onay anında kilitli stok satırından okunur, fark da veritabanında hesaplanan bir kolondur. Fark artıysa sayım fazlası, eksiyse sayım noksanı hareketi yazılır.
+- **"Asistanın sohbet geçmişi neden düz metin değil de JSON blokları?"** Claude'un cevabı düşünme, metin ve araç çağrısı bloklarından oluşur. Bu bloklar modele bir sonraki istekte değiştirilmeden geri gönderilmek zorunda (ADR-001). Bloklar olduğu gibi saklandığı için geçmiş birebir yeniden kurulur.
+- **"Aynı mesaj iki kez gönderilirse model iki kez mi çağrılır?"** Hayır. İstemci her mesaja bir kimlik verir ve tekrar denemede aynı kimliği gönderir. (sohbet, `client_message_id`) benzersizdir; ikinci istek kullanıcı mesajının durumuna bakar ve kayıtlı cevabı alır.
+- **"Yönetici çalışanların sohbetlerini okuyabilir mi?"** Hayır. Sohbeti yalnızca sahibi okur. Yönetici maliyet ve kullanımı `ai_runs`'tan görür; orada mesaj içeriği yoktur. Asistanın hazırladığı her öneri zaten işlem ve denetim kaydı olarak yöneticiye görünür (5. hafta).
+- **"Yazım hatalı ürün adı nasıl bulunuyor?"** pg_trgm iki metnin üçlü harf gruplarını karşılaştırıp benzerlik skoru verir. Kolon ve aranan metin önce aynı Türkçe dönüşümden geçer; şirket kimliği ve trigram aynı GIN indeksinde olduğu için arama hızlı ve tek şirketle sınırlıdır.
