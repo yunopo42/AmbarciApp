@@ -1,7 +1,7 @@
 import { parties, productUnits, products } from '@ambarci/db';
 import type { DbExecutor } from '@ambarci/db';
 import { Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 /** Çevrilecek kalem: girilen birimde miktar ve isteğe bağlı birim maliyet (metin, ADR-003). */
 export interface UnitConversionInput {
@@ -92,6 +92,42 @@ export class CatalogRepository {
       .where(and(eq(parties.organizationId, organizationId), eq(parties.id, partyId)))
       .limit(1);
     return row?.name ?? null;
+  }
+
+  /**
+   * Verilen SKU ve barkodlardan bu şirkette kullanılanlar (ürün ve ek birim barkodları). İçe aktarmada satır
+   * numarasıyla hata vermek için önceden bakılır; aradaki yarışı yine benzersizlik kısıtı kapatır.
+   */
+  async findTakenCodes(
+    executor: DbExecutor,
+    organizationId: string,
+    codes: { skus: string[]; barcodes: string[] },
+  ): Promise<{ skus: Set<string>; barcodes: Set<string> }> {
+    const [skuRows, productBarcodeRows, unitBarcodeRows] = await Promise.all([
+      codes.skus.length > 0
+        ? executor
+            .select({ value: products.sku })
+            .from(products)
+            .where(and(eq(products.organizationId, organizationId), inArray(products.sku, codes.skus)))
+        : Promise.resolve([]),
+      codes.barcodes.length > 0
+        ? executor
+            .select({ value: products.barcode })
+            .from(products)
+            .where(and(eq(products.organizationId, organizationId), inArray(products.barcode, codes.barcodes)))
+        : Promise.resolve([]),
+      codes.barcodes.length > 0
+        ? executor
+            .select({ value: productUnits.barcode })
+            .from(productUnits)
+            .where(and(eq(productUnits.organizationId, organizationId), inArray(productUnits.barcode, codes.barcodes)))
+        : Promise.resolve([]),
+    ]);
+    const present = (rows: { value: string | null }[]): string[] => rows.flatMap((row) => (row.value ? [row.value] : []));
+    return {
+      skus: new Set(present(skuRows)),
+      barcodes: new Set([...present(productBarcodeRows), ...present(unitBarcodeRows)]),
+    };
   }
 
   async isActiveParty(executor: DbExecutor, organizationId: string, partyId: string): Promise<boolean> {

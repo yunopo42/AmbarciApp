@@ -1,5 +1,5 @@
 import type { DbExecutor } from '@ambarci/db';
-import type { ProductList, ProductListQuery } from '@ambarci/shared';
+import type { ProductInput, ProductList, ProductListQuery } from '@ambarci/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { CatalogRepository } from './catalog.repository.js';
@@ -33,6 +33,20 @@ export class CatalogService {
   /** Ürünün ana birimi ve kritik eşiği; ürün bu şirkette yoksa (başka şirketinki de) null. */
   findProductSummary(executor: DbExecutor, organizationId: string, productId: string): Promise<ProductSummary | null> {
     return this.repository.findProductSummary(executor, organizationId, productId);
+  }
+
+  /** İçe aktarmada dosyadaki SKU ve barkodlardan bu şirkette zaten kullanılanlar. */
+  findTakenCodes(
+    executor: DbExecutor,
+    organizationId: string,
+    codes: { skus: string[]; barcodes: string[] },
+  ): Promise<{ skus: Set<string>; barcodes: Set<string> }> {
+    return this.repository.findTakenCodes(executor, organizationId, codes);
+  }
+
+  /** Ürünleri birimleri ve adlarıyla toplu ekler; executor çağıranın transaction'ıdır (içe aktarma). */
+  insertProducts(executor: DbExecutor, organizationId: string, inputs: ProductInput[]): Promise<{ id: string; sku: string }[]> {
+    return this.products.insertMany(executor, organizationId, inputs);
   }
 
   /** Ürün listesi (arama ve sayfalama ürün yönetimindekiyle aynı); depo bazında stok listesi bunun üzerine kurulur. */

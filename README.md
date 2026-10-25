@@ -2,7 +2,7 @@
 
 Ambarcı, saha çalışanlarının mobil uygulamadaki yapay zekâ asistanıyla yazarak veya konuşarak stok işlemi yapacağı, yöneticilerin ise web panelinden yöneteceği çok şirketli bir stok takip sistemidir. Asistan işlemi yalnızca önerecek; stok, kullanıcı öneriyi onayladığında değişecek. Proje bir bitirme projesidir (Senior Design Project) ve [8 haftalık plana](docs/plan.md) göre geliştirilmektedir.
 
-**Durum:** Geliştirme aşamasında. Monorepo iskeleti, CI, web ve API yayını, mobil development build, veritabanı ve şirketler arası izolasyon, kimlik doğrulama, stok işlemlerinin API'si (onay transaction'ı) ve web'de ürün, depo, cari yönetimi ile stok işlem fişleri (özet ve onay), depo bazında stok ve hareket geçmişi hazırdır. Mobilde stok listesi ve ürün detayı da var. Asistan 4. haftada gelecek.
+**Durum:** Geliştirme aşamasında. Monorepo iskeleti, CI, web ve API yayını, mobil development build, veritabanı ve şirketler arası izolasyon, kimlik doğrulama, stok işlemlerinin API'si (onay transaction'ı) ve web'de ürün, depo, cari yönetimi ile stok işlem fişleri (özet ve onay), depo bazında stok ve hareket geçmişi hazırdır. Ürünler Excel/CSV ile içe aktarılabiliyor; mobilde stok listesi ve ürün detayı da var. Asistan 4. haftada gelecek.
 
 ## Canlı bağlantılar
 
@@ -33,8 +33,8 @@ Tasarımın temel kuralları:
 | Katman | Teknoloji | Durum |
 | --- | --- | --- |
 | Mobil | Expo, Expo Router, TanStack Query | Giriş, şirket seçimi, stok listesi (depo filtresi, arama, kritik stok) ve ürün detayı (depolara göre stok, birimler, son hareketler); tasarım değerleri `src/theme.ts`'te; ses tanıma deneme ekranı; development build |
-| Web paneli | Next.js, Tailwind, shadcn/ui, TanStack Query, TanStack Table | Giriş, şirket, davet, üyeler; ürün (birim ve alternatif adlarıyla), depo ve cari yönetimi (arama ve sayfalamalı tablolar); stok işlem fişleri (giriş, çıkış, transfer, sayım, fire; önce → sonra özeti ve onay), depo bazında stok, ürün hareket geçmişi; tasarım değerleri `docs/tasarim.md`'den; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
-| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi (şirket ve rol guard'larıyla); ürün, birim, alternatif ad, depo ve cari yönetimi; stok işlemleri: açma, önizleme, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; depo bazında stok ve hareket geçmişi; Render'da yayında |
+| Web paneli | Next.js, Tailwind, shadcn/ui, TanStack Query, TanStack Table | Giriş, şirket, davet, üyeler; ürün (birim ve alternatif adlarıyla), depo ve cari yönetimi (arama ve sayfalamalı tablolar); Excel/CSV ile ürün içe aktarma (önizleme, şablon); stok işlem fişleri (giriş, çıkış, transfer, sayım, fire; önce → sonra özeti ve onay), depo bazında stok, ürün hareket geçmişi; tasarım değerleri `docs/tasarim.md`'den; API'yi OpenAPI'den üretilen tipli istemciyle çağırır; Vercel'de yayında |
+| API | NestJS, REST `/v1`, Swagger | Sağlık kontrolü, Supabase JWT doğrulaması; şirket oluşturma, davet kodu, üyeler ve depo yetkisi (şirket ve rol guard'larıyla); ürün, birim, alternatif ad, depo ve cari yönetimi; ürün içe aktarma (1.000 satıra kadar, başlangıç stoku onay bekleyen açılış işlemiyle); stok işlemleri: açma, önizleme, onay bekleyenlerin listesi, onay (giriş, çıkış, transfer, sayım, fire, açılış; hareketli ortalama maliyet), iptal; depo bazında stok ve hareket geçmişi; Render'da yayında |
 | Ortak şemalar | Zod | Sağlık, hata, kullanıcı, şirket, katalog ve stok işlemi şemaları; API ve web formları aynı şemayla doğrular |
 | Veritabanı | PostgreSQL (Supabase), Drizzle ORM | Şirket, depo, katalog, stok, işlem, hareket, sayım, denetim ve outbox tabloları (16 tablo), RLS politikaları ve iki şirketli izolasyon testi |
 | Kimlik doğrulama | Supabase Auth | Web ve mobilde e-posta + şifreyle giriş/çıkış; API token'ı doğrular. Hesap açma davetle gelecek (#18) |

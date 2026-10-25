@@ -9,6 +9,7 @@ Ekrandan, asistandan (5. hafta) ya da içe aktarmadan (#39) gelen her işlem ön
 | Uç nokta | Ne yapar |
 | --- | --- |
 | `POST /v1/operations` | İşlemi açar: tür, kalemler (ürün, depo, miktar, birim), isteğe bağlı cari ve not. Ürün, birim, depo ve yetki burada kontrol edilir; stok değişmez. |
+| `GET /v1/operations?status=&page=&pageSize=` | İşlemler, en yeni önce; varsayılan yalnızca onay bekleyenler. Kalem sayısı ve dokunduğu depolar. Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür; açılış işlemlerini yalnızca yönetici görür |
 | `GET /v1/operations/{id}` | İşlem ve kalemleri |
 | `GET /v1/operations/{id}/preview` | Onay ekranının özeti: ürün ve depo adları, ana birim karşılığı ve onay bekleyen işlemde stoğun önce → sonra hâli. Stok değişmez (aşağıda: Önizleme) |
 | `POST /v1/operations/{id}/confirm` | Onay. Gövde: `{ "version": 1 }`; başlık: `Idempotency-Key`. Stok, hareketler ve maliyet tek transaction'da yazılır. |
@@ -118,14 +119,14 @@ Kod: `operations.service.ts` (`preview`), `inventory/stock-preview.ts` ve `stock
 | --- | --- |
 | `/operations/new` | Fiş formu: tür (giriş, çıkış, transfer, sayım, fire), depo (transferde çıkış ve hedef), girişte tedarikçi, çıkışta müşteri, not; kalemler: ürün arama penceresi, birim (ana birim ya da ek birimler, "1 koli = 12 adet"), miktar, girişte birim maliyet. Kaydedince işlem onay bekleyen olarak açılır |
 | `/operations/{id}` | Özet: kalem başına girilen miktar ve ana birim karşılığı, depo, stok önce → sonra (transferde iki depo), yeterli/yetersiz. "Onayla" ve "İptal et". Onaydan sonra yazılan hareketler ve yeni stok |
-| `/stock` | Depo bazında stok: depo seçimi, arama, sayfalama; miktar, kritik eşik, "Kritik"/"Yeterli" rozeti, ortalama maliyet |
+| `/stock` | Onay bekleyen işlemler (varsa; özete bağlantıyla) ve depo bazında stok: depo seçimi, arama, sayfalama; miktar, kritik eşik, "Kritik"/"Yeterli" rozeti, ortalama maliyet |
 | `/products/{id}` | Ürün formunun altında hareket geçmişi (depo süzgeci, sayfalama) |
 | Mobil: stok listesi ve ürün detayı | Depo çipleri, arama, "KRİTİK"/"YETERLİ" rozeti, kaydırdıkça sonraki sayfa; ürün detayında depolara göre stok, birimler, alternatif adlar, son 10 hareket (#38) |
 
 - **Çift tıklama:** Özet sayfası açılınca bir `Idempotency-Key` (UUID) üretilir ve o sayfadaki bütün onay denemeleri aynı anahtarla gider. Düğme istek sürerken kapalıdır; yine de ikinci istek giderse API işlemi uygulanmış ve anahtarı aynı bulur, ilk cevabı döner. Stok bir kez değişir.
 - **Depo yetkisi:** Çalışanın yetkili olduğu depolar üyelik bilgisinde gelir (`GET /v1/organizations` → `warehouseIds`). Formdaki ve stok listesindeki depo seçenekleri buna göre süzülür; asıl kontrol API'de.
 - **Ana birim karşılığı** formda çarpılarak gösterilmez (JS'de ondalık hesap yok, ADR-003); formda katsayı ("1 koli = 12 adet"), özette sunucunun hesapladığı miktar ("3 koli = 36 adet") görünür.
-- **Bilinen sınır:** İşlem listesi (onay kuyruğu) 5–6. haftada gelir. Onaylanmadan bırakılan işleme şimdilik yalnızca adresinden dönülebilir.
+- **Onay bekleyen işlemler:** Ekrandan açılıp bırakılan fiş ya da içe aktarmanın açılış işlemi Stok sayfasındaki listeden özetine döner. Süzme ve toplu onayla tam onay kuyruğu 5–6. haftada bunun üzerine kurulur.
 
 ## Açılış stoğu
 
@@ -138,6 +139,7 @@ Kod: `operations.service.ts` (`preview`), `inventory/stock-preview.ts` ve `stock
 | `apps/api/test/operations-rules.spec.ts` | CI | Durum makinesi, kilit sırası (ters sıralı iki işlem aynı sırayı üretir), işlem şeması |
 | `apps/api/test/operations.e2e.spec.ts` | CI | Şema hataları, depo yetkisi, açılış rolü, Idempotency-Key zorunluluğu |
 | `apps/api/test-db/operations.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Beş işlem türü, birim çevrimi, ortalama maliyet, sayımın onay anındaki farkı, yetersiz stok (hiçbir şey yazılmaz), aynı onayın tekrarı, sürüm, başka şirket, depo yetkisi, açılış betiğinin tekrarı, stok = hareketlerin toplamı |
+| `apps/api/test-db/operation-list.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | İşlem listesi: yalnızca onay bekleyenler, en yeni önce, kalem sayısı ve depolar; sayfalama ve durum süzgeci; çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür, açılışı görmez; başka şirketin işlemi görünmez |
 | `apps/api/test/stock-preview.spec.ts` | CI | Önizlemenin etkileri onayın uygulama sırasıyla üretmesi (transferde kaynak sonra hedef) |
 | `apps/api/test-db/stock.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Önizleme: aynı üründen iki çıkış kalemi, transfer, sayım, yetersiz kalem, onaylanmış işlem; depo bazında stok ve kritik eşik; hareket geçmişi, depo süzgeci ve sayfalama; çalışanın depo yetkisi; başka şirketin ürünü |
 | `apps/api/test-db/concurrency.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Eşzamanlı çıkış, deadlock tehlikesi ve kilit sırası, aynı anda gelen çift onay, çok kalemli rollback (aşağıda) |

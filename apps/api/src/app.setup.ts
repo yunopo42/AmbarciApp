@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { OpenAPIObject } from '@nestjs/swagger';
 
@@ -11,6 +12,9 @@ import { ORGANIZATION_SECURITY } from './common/openapi.js';
 export function configureApp(app: INestApplication): void {
   // Tüm uç noktalar /v1 altında yayınlanır.
   app.setGlobalPrefix('v1');
+
+  // Ürün içe aktarma 1.000 satıra kadar JSON gönderir; Express'in varsayılan 100 KB sınırı buna yetmez (ADR-004).
+  (app as NestExpressApplication).useBodyParser('json', { limit: '2mb' });
 
   // Bütün hatalar { error: { code, message, details? } } biçiminde döner.
   app.useGlobalFilters(new HttpExceptionFilter());

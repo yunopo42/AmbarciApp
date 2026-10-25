@@ -12,6 +12,7 @@ import type { JSX } from 'react';
 import { useApi } from '@/components/api-provider';
 import { OrganizationGate } from '@/components/organization-gate';
 import { PageHeader } from '@/components/page-header';
+import { PendingOperations } from '@/components/pending-operations';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -107,7 +108,14 @@ export function StockList(): JSX.Element {
           </Link>
         }
       />
-      <OrganizationGate>{() => <StockFilters />}</OrganizationGate>
+      <OrganizationGate>
+        {() => (
+          <>
+            <PendingOperations />
+            <StockFilters />
+          </>
+        )}
+      </OrganizationGate>
     </>
   );
 }

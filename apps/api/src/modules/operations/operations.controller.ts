@@ -1,6 +1,12 @@
-import { confirmOperationSchema, createOperationSchema, IDEMPOTENCY_HEADER, idempotencyKeySchema } from '@ambarci/shared';
-import type { AuthUser, ConfirmOperationInput, CreateOperationInput } from '@ambarci/shared';
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Res } from '@nestjs/common';
+import {
+  confirmOperationSchema,
+  createOperationSchema,
+  IDEMPOTENCY_HEADER,
+  idempotencyKeySchema,
+  operationListQuerySchema,
+} from '@ambarci/shared';
+import type { AuthUser, ConfirmOperationInput, CreateOperationInput, OperationListQuery } from '@ambarci/shared';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -10,6 +16,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
@@ -26,7 +33,9 @@ import {
   ConfirmOperationResultDto,
   CreateOperationDto,
   OperationDto,
+  OperationListDto,
   OperationPreviewDto,
+  STATUSES,
 } from './operations.dto.js';
 import { OperationsService } from './operations.service.js';
 import type { OperationActor } from './operations.service.js';
@@ -53,6 +62,23 @@ export class OperationsController {
     @Body(new ZodValidationPipe(createOperationSchema)) body: CreateOperationInput,
   ): Promise<OperationDto> {
     return this.operations.create(organization.id, actorOf(user, organization), body);
+  }
+
+  @Get()
+  @OrganizationScoped()
+  @ApiOperation({
+    summary:
+      'İşlemler, en yeni önce; varsayılan yalnızca onay bekleyenler. Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür',
+  })
+  @ApiQuery({ name: 'status', required: false, enum: STATUSES, description: 'Varsayılan PENDING_CONFIRMATION' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'En fazla 100' })
+  @ApiOkResponse({ type: OperationListDto })
+  list(
+    @CurrentOrganization() organization: OrganizationContext,
+    @Query(new ZodValidationPipe(operationListQuerySchema)) query: OperationListQuery,
+  ): Promise<OperationListDto> {
+    return this.operations.list(organization, query);
   }
 
   @Get(':operationId')

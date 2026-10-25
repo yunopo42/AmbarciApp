@@ -10,6 +10,7 @@ import type {
 } from '@ambarci/shared';
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 
 /** İşlem satırı (kalemsiz); onay sırasında FOR UPDATE ile okunur. */
 export interface OperationRecord {
@@ -80,9 +81,71 @@ export function toOperation(record: OperationRecord, items: OperationItem[]): Op
   };
 }
 
+/** İşlem listesindeki satır: kalem sayısı ve dokunduğu depolar (transferde hedef dahil). */
+// interface değil type: Drizzle'ın execute<T>() satır tipi indeks imzası ister.
+export type OperationSummaryRow = {
+  id: string;
+  type: OperationType;
+  status: OperationStatus;
+  source: ActionSource;
+  /** ISO 8601 (to_json); ham sorguda sürücü zaman damgasını metin döndürür. */
+  createdAt: string;
+  lineCount: number;
+  warehouseIds: string[];
+};
+
 /** İşlem sorguları; her sorgu şirket kimliğiyle sınırlanır. */
 @Injectable()
 export class OperationsRepository {
+  /**
+   * İşlem özetleri, en yeni önce. `warehouseIds` verilirse yalnızca bütün depoları o listede olan işlemler (çalışan,
+   * özetini açıp onaylayabileceği işlemleri görür); `excludeTypes` listelenmeyecek türler.
+   */
+  async listSummaries(
+    executor: DbExecutor,
+    organizationId: string,
+    filter: { status: OperationStatus; warehouseIds: string[] | null; excludeTypes: OperationType[]; page: number; pageSize: number },
+  ): Promise<{ items: OperationSummaryRow[]; total: number }> {
+    if (filter.warehouseIds?.length === 0) {
+      return { items: [], total: 0 };
+    }
+    const excluded: SQL =
+      filter.excludeTypes.length > 0
+        ? sql`and o.type not in (${sql.join(
+            filter.excludeTypes.map((type) => sql`${type}`),
+            sql`, `,
+          )})`
+        : sql``;
+    const visible: SQL = filter.warehouseIds
+      ? sql`where s.warehouse_ids <@ array[${sql.join(
+          filter.warehouseIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )}]`
+      : sql``;
+    // Kalemler işlemle birleştirilir: kalem sayısı ve çıkış/hedef depoların tekrarsız listesi.
+    const summaries = sql`
+      with s as (
+        select o.id, o.type, o.status, o.source, o.created_at, count(*)::int as line_count,
+               array(
+                 select distinct w
+                 from unnest(array_agg(i.warehouse_id) || array_agg(i.target_warehouse_id)) as w
+                 where w is not null
+               ) as warehouse_ids
+        from ${operations} o
+        join ${operationItems} i on i.organization_id = o.organization_id and i.operation_id = o.id
+        where o.organization_id = ${organizationId} and o.status = ${filter.status} ${excluded}
+        group by o.id
+      )`;
+    const [totalRow] = await executor.execute<{ total: number }>(sql`${summaries} select count(*)::int as total from s ${visible}`);
+    const items = await executor.execute<OperationSummaryRow>(sql`${summaries}
+      select id, type, status, source, to_json(created_at) #>> '{}' as "createdAt", line_count as "lineCount",
+             warehouse_ids as "warehouseIds"
+      from s ${visible}
+      order by created_at desc, id
+      limit ${filter.pageSize} offset ${(filter.page - 1) * filter.pageSize}`);
+    return { items, total: totalRow?.total ?? 0 };
+  }
+
   /** İşlemi ve kalemlerini ekler. executor açık bir transaction olmalı: ikisi birlikte yazılır ya da hiç yazılmaz. */
   async insert(executor: DbExecutor, input: NewOperation): Promise<Operation> {
     const [record] = await executor

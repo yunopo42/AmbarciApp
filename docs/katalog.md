@@ -52,12 +52,25 @@ Kodlar: `apps/api/src/modules/catalog/` (ürün ve cari), `apps/api/src/modules/
 - **Kayıttan sonra:** Liste sorguları geçersiz sayılır ve sunucudan yeniden okunur. Depo değişince üyelerin depo yetkisi tablosu da güncellenir.
 - **Tablo:** TanStack Table 9 (`apps/web/components/ui/data-table.tsx`). Sayfalama elle (`manualPagination`): tablo, API'nin döndüğü sayfayı çizer, sayfa sayısını `total`'dan hesaplar.
 
+## Excel/CSV ile içe aktarma
+
+Karar ve gerekçe: [ADR-004](kararlar/ADR-004-excel-csv-ice-aktarma.md). Web: `/products/import` (yalnızca yönetici). API: `POST /v1/products/import`.
+
+1. **Dosya tarayıcıda okunur.** `.xlsx` için `read-excel-file`, `.csv` için `papaparse` (`apps/web/lib/product-import-file.ts`). CSV önce katı UTF-8 olarak, olmazsa Türkçe Excel'in kodlamasıyla (Windows-1254) çözülür; ayraç (`;`, `,` ya da sekme) başlık satırından bulunur. Sayılar hücredeki metin olarak okunur, sayıya çevrilmez. Eski `.xls` okunmaz.
+2. **Şablon:** `;` ayraçlı, UTF-8 BOM'lu CSV (ekrandan indirilir). Sütunlar: SKU, Ürün adı, Ana birim (zorunlu); Barkod, Kritik stok, Ek birim, Ek birim katsayısı, Ek birim barkodu, Alternatif adlar (`|` ile ayrılır), Başlangıç stoku (ana birimde), Birim maliyet (ana birim başına). Başlıkların sırası önemli değil.
+3. **Önizleme:** Kaydetmeden önce her satır, API'nin kullandığı şemayla (`productImportRowSchema`) ve dosya içi tekrar kontrolüyle (`findImportDuplicates`) doğrulanır; hatalar satır numarası ve sütun adıyla gösterilir. Hatalı satır varsa ya dosya düzeltilir ya da "Yalnızca geçerli satırları içe aktar" ile hatalılar atlanır; atlanan satırların numaraları sonuçta gösterilir. Hangisi seçilirse seçilsin, gönderilen satırlar için kural "ya hepsi ya hiçbiri".
+4. **API:** En fazla 1.000 satır. Şema ve dosya içi tekrarlar 400 `VALIDATION_FAILED`; şirkette zaten kullanılan SKU ve barkodlar 422 `IMPORT_ROWS_INVALID` (`details`: satır, alan, mesaj) ile döner. Hepsi tek transaction'da: bir satır bile yazılamazsa hiçbiri kalmaz. Ürünler, birimler ve adlar toplu `INSERT` ile yazılır (1.000 satır için birkaç sorgu).
+5. **Başlangıç stoku stoğa doğrudan yazılmaz.** Seçilen depo için onay bekleyen açılış işlemleri (`OPENING`, kaynak `IMPORT`) ürünlerle aynı transaction'da açılır; her işlem en fazla 100 kalem. Stok, işlem onay ekranından onaylanınca değişir (mimari değişmez 2). İşlemler Stok sayfasındaki "Onay bekleyen işlemler" listesinde görünür. Başka şirketin ya da pasif depo seçilirse 422 `IMPORT_WAREHOUSE_INVALID` ve hiçbir şey kaydedilmez.
+6. **Modül:** `apps/api/src/modules/product-import/`. Ürünleri catalog'un, açılış işlemini operations'ın servisiyle yazar; operations zaten catalog'a bağlı olduğu için iş ayrı modülde (döngü olmasın).
+
 ## Testler
 
 | Test | Ortam | Ne doğrular |
 | --- | --- | --- |
 | `apps/api/test/catalog-rules.spec.ts` | CI | Ürün ve cari şeması, sorgu parametreleri, Türkçe arama biçimi |
 | `apps/api/test/catalog.e2e.spec.ts` | CI | Depo ekleme, güncelleme, aynı ad (409), başka şirketin deposu (404); çalışanın ürün, cari ve depo değiştiremediği (403); şema hataları |
+| `apps/api/test/product-import-rules.spec.ts` | CI | İçe aktarma şeması: dosya içi tekrar (satır numarasıyla), satır sınırı, başlangıç stoku için depo, maliyetin stoksuz girilmemesi |
+| `apps/api/test-db/product-import.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Birimler ve adlarla içe aktarma; açılış işleminin onay beklemesi ve onayla stoğa girmesi; şirkette kullanılan SKU/barkod (satır numarasıyla, hiçbir şey yazılmaz); başka şirketin deposu; çalışan; 1.001 satır; 100 KB üstü 1.000 satır ve 10 açılış işlemi |
 | `apps/api/test-db/catalog.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Ürün birimleri ve adlarıyla; arama (Türkçe dahil) ve sayfalama; aynı SKU/barkod/VKN; başka şirketin kaydı; pasife alma; kullanılmış birim, ana birim kilidi ve katsayı değişikliği |
 
 ## Savunmada sorulabilecek sorular
