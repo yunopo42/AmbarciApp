@@ -58,15 +58,17 @@ Ses denemesinden çıkan karar (`eval/ses-denemesi.md`): ürün eşleştirme isi
 
 **Kapı:** —
 
-2. haftanın uzaması nedeniyle 23–25 Ekim'e sıkıştırıldı. 4. haftanın kapısı (telefonda canlı stok sorgusu) değişmedi.
+2. haftanın uzaması nedeniyle 23–25 Ekim'e sıkıştırıldı. 4. haftanın kapısı (telefonda canlı stok sorgusu) değişmedi. İşlere 22 Ekim gecesi başlandı; bütün maddeler 25 Ekim'de tamamlandı (`docs/raporlar/hafta-03.md`).
 
-- [ ] Hareket, işlem, sayım, denetim ve outbox tabloları; demo verisine açılış stokları (2. haftadan kapsam kararıyla)
-- [ ] Ürün, birim, alternatif ad, depo ve cari yönetimi (web)
-- [ ] Excel/CSV ile ürün içe aktarma
-- [ ] Giriş, çıkış, transfer, sayım, fire ekranları ve stok transaction'ı
-- [ ] Hareketli ortalama maliyet hesabı
-- [ ] OpenAPI istemcisi; mobilde stok listesi ve ürün detayı
-- [ ] Eşzamanlı çıkış ve rollback testleri (çok kalemli işlemde bir kalem başarısızsa hiçbir şey yazılmaz)
+- [x] Hareket, işlem, sayım, denetim ve outbox tabloları; demo verisine açılış stokları (2. haftadan kapsam kararıyla)
+- [x] Ürün, birim, alternatif ad, depo ve cari yönetimi (web)
+- [x] Excel/CSV ile ürün içe aktarma
+- [x] Giriş, çıkış, transfer, sayım, fire ekranları ve stok transaction'ı
+- [x] Hareketli ortalama maliyet hesabı
+- [x] OpenAPI istemcisi; mobilde stok listesi ve ürün detayı
+- [x] Eşzamanlı çıkış ve rollback testleri (çok kalemli işlemde bir kalem başarısızsa hiçbir şey yazılmaz)
+
+Planda olmayan, eklenen işler: bölgeler arası gecikme ölçümü ve onay süresini yarıya indiren düzeltme (#34); Next.js, NestJS ve multer güvenlik güncellemesi (#45); onay bekleyen işlemler listesi (#39, 5–6. haftadaki onay kuyruğunun ilk adımı).
 
 ## Hafta 4 — Asistan altyapısı (26 Ekim – 1 Kasım)
 
