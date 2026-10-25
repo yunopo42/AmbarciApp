@@ -1,5 +1,6 @@
 // Veritabanı şeması. drizzle-kit migration'ları yalnızca buradan dışa aktarılanlardan üretir.
 // Supabase'in auth.users tablosu (drizzle-orm/supabase) bilerek dışa aktarılmaz; o tablo Supabase'e aittir.
+export * from './assistant.ts';
 export * from './audit.ts';
 export * from './catalog.ts';
 export * from './common.ts';

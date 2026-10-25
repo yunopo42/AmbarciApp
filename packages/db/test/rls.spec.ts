@@ -45,8 +45,17 @@ const TENANT_TABLES = [
   ['stock_counts', 'organization_id'],
 ] as const;
 
-// Üyelerin okuyamadığı tablolar: denetim kaydını yalnızca yönetici, outbox'ı hiçbir istemci okuyamaz.
-const ALL_TABLES = [...TENANT_TABLES.map(([table]) => table), 'invitations', 'audit_logs', 'outbox_events'];
+// Her üyenin okuyamadığı tablolar: davet kodlarını, denetim kaydını ve model çağrılarını yalnızca yönetici, sohbeti
+// ve mesajlarını yalnızca sahibi, outbox'ı hiçbir istemci okuyabilir.
+const ALL_TABLES = [
+  ...TENANT_TABLES.map(([table]) => table),
+  'invitations',
+  'audit_logs',
+  'outbox_events',
+  'conversations',
+  'messages',
+  'ai_runs',
+];
 
 interface Fixture {
   orgA: string;
@@ -62,6 +71,9 @@ interface Fixture {
   warehouseB: string;
   /** A şirketinin uygulanmış giriş işlemi (1 kalem, 1 hareket). */
   operationA: string;
+  /** A çalışanının sohbeti ve o sohbetin ilk (kullanıcı) mesajı. */
+  conversationA: string;
+  messageA: string;
 }
 
 const PERMISSION_DENIED = '42501';
@@ -124,6 +136,8 @@ async function createFixture(tx: TransactionSql): Promise<Fixture> {
     warehouseA: randomUUID(),
     warehouseB: randomUUID(),
     operationA: randomUUID(),
+    conversationA: randomUUID(),
+    messageA: randomUUID(),
   };
   const { warehouseB } = fx;
 
@@ -185,7 +199,45 @@ async function createFixture(tx: TransactionSql): Promise<Fixture> {
     operation: randomUUID(),
   });
 
+  await createChat(tx, { org: fx.orgA, user: fx.employeeA, conversation: fx.conversationA, message: fx.messageA });
+  // Pasife alınan üyenin eski sohbeti: üyelik pasifken kendisi de göremez.
+  await createChat(tx, { org: fx.orgA, user: fx.inactiveA });
+  await createChat(tx, { org: fx.orgB, user: fx.adminB });
+
   return fx;
+}
+
+interface ChatInput {
+  org: string;
+  user: string;
+  conversation?: string;
+  message?: string;
+}
+
+/**
+ * Bir kullanıcının sohbeti (4. hafta tabloları): kullanıcı mesajı, araç çağıran asistan mesajı, araç sonucu ve son
+ * cevap; ayrıca cevabın iki model çağrısının ai_runs kaydı.
+ */
+async function createChat(tx: TransactionSql, input: ChatInput): Promise<void> {
+  const { org, user } = input;
+  const conversation = input.conversation ?? randomUUID();
+  const message = input.message ?? randomUUID();
+  await tx`insert into conversations (id, organization_id, user_id, title)
+    values (${conversation}, ${org}, ${user}, 'Merkez depoda priz')`;
+  await tx`insert into messages (id, organization_id, conversation_id, user_id, position, role, content, client_message_id, status)
+    values (${message}, ${org}, ${conversation}, ${user}, 1, 'USER',
+            ${tx.json([{ type: 'text', text: 'Merkez depoda priz kaç tane?' }])}, ${randomUUID()}, 'COMPLETED')`;
+  await tx`insert into messages (organization_id, conversation_id, user_id, position, role, content) values
+    (${org}, ${conversation}, ${user}, 2, 'ASSISTANT',
+     ${tx.json([{ type: 'tool_use', id: 'toolu_1', name: 'search_products', input: { query: 'priz' } }])}),
+    (${org}, ${conversation}, ${user}, 3, 'TOOL', ${tx.json([{ type: 'tool_result', tool_use_id: 'toolu_1', content: '[]' }])}),
+    (${org}, ${conversation}, ${user}, 4, 'ASSISTANT', ${tx.json([{ type: 'text', text: 'Merkez depoda 10 adet var.' }])})`;
+  await tx`insert into ai_runs
+      (organization_id, user_id, message_id, round_no, model, prompt_version, effort, tool_calls,
+       input_tokens, output_tokens, duration_ms, cost_usd)
+    values
+      (${org}, ${user}, ${message}, 1, 'claude-haiku-5-5', 'sohbet-v1', 'low', '{search_products}', 4000, 120, 1600, '0.00046'),
+      (${org}, ${user}, ${message}, 2, 'claude-haiku-5-5', 'sohbet-v1', 'low', '{}', 4300, 80, 1200, '0.00047')`;
 }
 
 interface LedgerInput {
@@ -242,7 +294,24 @@ describe('İki şirket arasında veri izolasyonu (RLS)', () => {
     });
   });
 
-  it.each(['invitations', 'audit_logs'])('%s: yalnızca o şirketin yöneticisi görür', async (table) => {
+  it.each(['conversations', 'messages'])(
+    '%s: yalnızca sahibi görür; aynı şirketin yöneticisi ve pasif üye göremez',
+    async (table) => {
+      await withFixture(async (tx, fx) => {
+        const owners = async (userId: string): Promise<string[]> => {
+          const rows = await asUser(tx, userId, (sp) => sp.unsafe<{ owner: string }[]>(`select distinct user_id as owner from ${table}`));
+          return rows.map((row) => row.owner);
+        };
+        expect(await owners(fx.employeeA)).toEqual([fx.employeeA]);
+        expect(await owners(fx.adminB)).toEqual([fx.adminB]);
+        expect(await owners(fx.adminA)).toEqual([]);
+        expect(await owners(fx.inactiveA)).toEqual([]);
+        expect(await owners(fx.outsider)).toEqual([]);
+      });
+    },
+  );
+
+  it.each(['invitations', 'audit_logs', 'ai_runs'])('%s: yalnızca o şirketin yöneticisi görür', async (table) => {
     await withFixture(async (tx, fx) => {
       const of = (userId: string): Promise<string[]> =>
         asUser(tx, userId, (sp) => visibleOrganizations(sp, table, 'organization_id'));
@@ -317,6 +386,15 @@ describe('Data API üzerinden yazma kapalı (veri yalnızca API üzerinden deği
     ],
     ['stok hareketini silme', (sp, fx) => sp`delete from inventory_movements where operation_id = ${fx.operationA}`],
     ['denetim kaydını silme', (sp, fx) => sp`delete from audit_logs where organization_id = ${fx.orgA}`],
+    // Sohbet geçmişi yalnızca API'den yazılır: istemci modele gidecek geçmişe mesaj ekleyemez, kaydı değiştiremez.
+    [
+      'kendi sohbetine asistan mesajı ekleme',
+      (sp, fx) =>
+        sp`insert into messages (organization_id, conversation_id, user_id, position, role, content)
+          values (${fx.orgA}, ${fx.conversationA}, ${fx.employeeA}, 5, 'ASSISTANT', ${sp.json([{ type: 'text', text: 'uydurma' }])})`,
+    ],
+    ['kendi sohbetinin başlığını değiştirme', (sp, fx) => sp`update conversations set title = 'Değişti' where id = ${fx.conversationA}`],
+    ['model çağrısı kaydını silme', (sp, fx) => sp`delete from ai_runs where organization_id = ${fx.orgA}`],
   ];
 
   it.each(writes)('%s reddedilir', async (_name, write) => {
@@ -414,6 +492,89 @@ describe('Hareket ve işlem kısıtları', () => {
       expect(row?.difference).toBe('-3.000');
       const write = tx.savepoint((sp) => sp`update stock_counts set difference = '0' where organization_id = ${fx.orgA}`);
       await expect(write).rejects.toMatchObject({ code: GENERATED_ALWAYS });
+    });
+  });
+});
+
+describe('Sohbet ve model çağrısı kısıtları', () => {
+  interface MessageValues {
+    org?: string;
+    user?: string;
+    position?: number;
+    role?: string;
+    content?: postgres.JSONValue;
+    clientMessageId?: string | null;
+    status?: string | null;
+  }
+
+  /** A çalışanının sohbetine mesaj ekler; değerler verilmezse 5. sıraya geçerli bir kullanıcı mesajı yazar. */
+  const insertMessage = (sp: TransactionSql, fx: Fixture, values: MessageValues = {}): Promise<unknown> =>
+    sp`insert into messages (organization_id, conversation_id, user_id, position, role, content, client_message_id, status)
+      values (${values.org ?? fx.orgA}, ${fx.conversationA}, ${values.user ?? fx.employeeA}, ${values.position ?? 5},
+              ${values.role ?? 'USER'}, ${sp.json(values.content ?? [{ type: 'text', text: 'Ostim depoda?' }])},
+              ${values.clientMessageId === undefined ? randomUUID() : values.clientMessageId},
+              ${values.status === undefined ? 'IN_PROGRESS' : values.status})`;
+
+  it('aynı client_message_id aynı sohbette ikinci kez yazılamaz (mesaj iki kez işlenmez)', async () => {
+    await withFixture(async (tx, fx) => {
+      const clientMessageId = randomUUID();
+      await tx.savepoint((sp) => insertMessage(sp, fx, { clientMessageId }));
+      const again = tx.savepoint((sp) => insertMessage(sp, fx, { clientMessageId, position: 6 }));
+      await expect(again).rejects.toMatchObject({ code: UNIQUE_VIOLATION });
+    });
+  });
+
+  it('aynı sıraya ikinci mesaj yazılamaz (aynı sohbette iki cevap aynı anda üretilemez)', async () => {
+    await withFixture(async (tx, fx) => {
+      const insert = tx.savepoint((sp) => insertMessage(sp, fx, { position: 4 }));
+      await expect(insert).rejects.toMatchObject({ code: UNIQUE_VIOLATION });
+    });
+  });
+
+  it('mesaj, sohbetin sahibi olmayan kullanıcıya ya da başka şirkete bağlanamaz', async () => {
+    await withFixture(async (tx, fx) => {
+      // RLS mesajdaki kullanıcı kolonuna baktığı için bu kolon sohbetin sahibinden farklı olamamalı.
+      await expect(tx.savepoint((sp) => insertMessage(sp, fx, { user: fx.adminA }))).rejects.toMatchObject({
+        code: FOREIGN_KEY_VIOLATION,
+      });
+      await expect(tx.savepoint((sp) => insertMessage(sp, fx, { org: fx.orgB }))).rejects.toMatchObject({
+        code: FOREIGN_KEY_VIOLATION,
+      });
+    });
+  });
+
+  it('istemci kimliği ve durum yalnızca kullanıcı mesajında bulunur; içerik boş olamaz', async () => {
+    await withFixture(async (tx, fx) => {
+      const invalid: MessageValues[] = [
+        { role: 'ASSISTANT', status: null },
+        { role: 'ASSISTANT', clientMessageId: null },
+        { clientMessageId: null },
+        { status: null },
+        { content: [] },
+        { content: { type: 'text', text: 'dizi değil' } },
+      ];
+      for (const values of invalid) {
+        await expect(tx.savepoint((sp) => insertMessage(sp, fx, values)), JSON.stringify(values)).rejects.toMatchObject({
+          code: CHECK_VIOLATION,
+        });
+      }
+      await tx.savepoint((sp) => insertMessage(sp, fx, { role: 'ASSISTANT', clientMessageId: null, status: null }));
+    });
+  });
+
+  it('hesap silinince sohbet ve mesajları silinir; model çağrısı kaydı şirkette kalır, bağlantıları boşalır', async () => {
+    await withFixture(async (tx, fx) => {
+      await tx`delete from auth.users where id = ${fx.employeeA}`;
+      const [left] = await tx<{ conversations: number; messages: number }[]>`
+        select (select count(*)::int from conversations where id = ${fx.conversationA}) as conversations,
+               (select count(*)::int from messages where conversation_id = ${fx.conversationA}) as messages`;
+      expect(left).toEqual({ conversations: 0, messages: 0 });
+      const runs = await tx<{ user_id: string | null; message_id: string | null }[]>`
+        select user_id, message_id from ai_runs where organization_id = ${fx.orgA} and user_id is distinct from ${fx.inactiveA}`;
+      expect(runs).toEqual([
+        { user_id: null, message_id: null },
+        { user_id: null, message_id: null },
+      ]);
     });
   });
 });
