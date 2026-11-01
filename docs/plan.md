@@ -1,8 +1,10 @@
 # Ambarcı — 8 haftalık plan
 
-Kaynak: `docs/raporlar/hafta-01-arastirma-ve-oneri.md`, bölüm 8 (kapılar) ve bölüm 9 (görevler). Dönem: 5 Ekim – 29 Kasım 2026.
+Kaynak: `docs/raporlar/hafta-01-arastirma-ve-oneri.md`, bölüm 8 (kapılar) ve bölüm 9 (görevler). Dönem: 5 Ekim – 6 Aralık 2026.
 
 **Plan değişikliği (17 Ekim 2026):** 1. hafta işleri 17 Ekim'e uzadı; yetişmeyen 1. hafta maddeleri 2. haftanın başına devredildi. 2. haftanın kapısı 22 Ekim'e alındı, 3. hafta 23–25 Ekim'e sıkıştırıldı. 4. haftanın kapısı ve sonraki haftalar değişmedi.
+
+**Plan değişikliği (1 Kasım 2026):** 2–6 Kasım sınav haftası olduğu için 4. hafta ve sonrası bir hafta kaydırıldı; işlere 7 Kasım'da devam edilir. 4. haftanın kapısı 8 Kasım'a alındı, 5–8. haftalar birer hafta kaydı ve final demo 6 Aralık'a geldi (#63). İlk plan 29 Kasım'da bitiyordu.
 
 Her hafta bir GitHub milestone'u, her görev bir issue olarak açılır. Dört kapı vardır: 2., 4., 5. ve 8. hafta. Kapı geçilmeden sonraki faza geçilmez; geçilemezse kapsam daraltılır. Öncelik sırası: sohbet → öneri → onay → stok akışı, sonra irsaliye, sonra ses ve barkod. Son haftada yeni özellik eklenmez.
 
@@ -11,11 +13,11 @@ Her hafta bir GitHub milestone'u, her görev bir issue olarak açılır. Dört k
 | 1 | 5–11 Ekim | Araştırma ve iskelet | — |
 | 2 | 12–22 Ekim | Veritabanı ve kimlik | İki şirket arasında veri sızıntısı yok (22 Ekim) |
 | 3 | 23–25 Ekim | Manuel stok | — |
-| 4 | 26 Ekim – 1 Kasım | Asistan altyapısı | Telefonda canlı stok sorgusu |
-| 5 | 2–8 Kasım | Öneri ve onay | Onay stoğu tam bir kez değiştirir |
-| 6 | 9–15 Kasım | Ölçüm ve bildirim | — |
-| 7 | 16–22 Kasım | Belge, ses, barkod | — |
-| 8 | 23–29 Kasım | Test, rapor, demo | Final demo ve ölçülmüş sonuçlar |
+| 4 | 26 Ekim – 8 Kasım (2–6 Kasım sınav arası) | Asistan altyapısı | Telefonda canlı stok sorgusu (8 Kasım) |
+| 5 | 9–15 Kasım | Öneri ve onay | Onay stoğu tam bir kez değiştirir |
+| 6 | 16–22 Kasım | Ölçüm ve bildirim | — |
+| 7 | 23–29 Kasım | Belge, ses, barkod | — |
+| 8 | 30 Kasım – 6 Aralık | Test, rapor, demo | Final demo ve ölçülmüş sonuçlar |
 
 ## Hafta 1 — Araştırma ve iskelet (5–11 Ekim)
 
@@ -70,7 +72,7 @@ Ses denemesinden çıkan karar (`eval/ses-denemesi.md`): ürün eşleştirme isi
 
 Planda olmayan, eklenen işler: bölgeler arası gecikme ölçümü ve onay süresini yarıya indiren düzeltme (#34); Next.js, NestJS ve multer güvenlik güncellemesi (#45); onay bekleyen işlemler listesi (#39, 5–6. haftadaki onay kuyruğunun ilk adımı).
 
-## Hafta 4 — Asistan altyapısı (26 Ekim – 1 Kasım)
+## Hafta 4 — Asistan altyapısı (26 Ekim – 8 Kasım)
 
 **Kapı:** Telefondan canlı stok sorgusu
 
@@ -79,9 +81,9 @@ Planda olmayan, eklenen işler: bölgeler arası gecikme ölçümü ve onay sür
 - [ ] SSE akışı; web ve mobilde sohbet ekranı
 - [ ] `ai_runs` kayıtları (token, süre, maliyet)
 
-29 Ekim resmi tatili bu haftadadır; bir günlük tampon bırakılmıştır.
+29 Ekim resmi tatili bu haftadadır; bir günlük tampon bırakılmıştır. 2–6 Kasım sınav haftasında iş yapılmaz; işlere 7 Kasım'da devam edilir.
 
-## Hafta 5 — Öneri ve onay (2–8 Kasım)
+## Hafta 5 — Öneri ve onay (9–15 Kasım)
 
 **Kapı:** Onay stoğu tam bir kez değiştirir
 
@@ -90,7 +92,7 @@ Planda olmayan, eklenen işler: bölgeler arası gecikme ölçümü ve onay sür
 - [ ] Idempotency, outbox, denetim kaydı; ters kayıtla geri alma (15 dk kendi işlemi, sonrası yönetici)
 - [ ] Tekrar ve eşzamanlılık testleri
 
-## Hafta 6 — Ölçüm ve bildirim (9–15 Kasım)
+## Hafta 6 — Ölçüm ve bildirim (16–22 Kasım)
 
 **Kapı:** —
 
@@ -99,7 +101,7 @@ Planda olmayan, eklenen işler: bölgeler arası gecikme ölçümü ve onay sür
 - [ ] Push bildirimi: onay bekleyen işlem, kritik stok
 - [ ] Web onay kuyruğu ve dashboard
 
-## Hafta 7 — Belge, ses, barkod (16–22 Kasım)
+## Hafta 7 — Belge, ses, barkod (23–29 Kasım)
 
 **Kapı:** —
 
@@ -112,7 +114,7 @@ Planda olmayan, eklenen işler: bölgeler arası gecikme ölçümü ve onay sür
 
 Not: Hafta sonunda kapsam dondurulur; bu bir kapı değildir.
 
-## Hafta 8 — Test, rapor, demo (23–29 Kasım)
+## Hafta 8 — Test, rapor, demo (30 Kasım – 6 Aralık)
 
 **Kapı:** Final demo ve ölçülmüş sonuçlar
 
