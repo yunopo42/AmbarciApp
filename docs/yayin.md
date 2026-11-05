@@ -30,7 +30,10 @@ ve Render eski sürümü yayında tutar (#17'de `SUPABASE_URL` için yaşandı).
 | `SUPABASE_URL` | Yerel `.env`, Render | — | Eklendi (#17) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yerel `.env`; Render'a yalnızca API kullanacaksa | Vercel, mobil | Gerekirse |
 | `SUPABASE_ANON_KEY` | Yerel `.env` (testler) | — | Gerekmez |
-| `ANTHROPIC_API_KEY`, `CLAUDE_CHAT_MODEL`, `CLAUDE_DOC_MODEL` | Yerel `.env`, Render | Vercel, mobil | Asistan altyapısıyla (4. hafta) |
+| `ANTHROPIC_API_KEY` | Yerel `.env`, Render | Vercel, mobil | Sohbet uçları (#57) birleşmeden önce. API açılışta istemez: boşsa asistan kapalıdır, sohbet isteği `503 AI_NOT_CONFIGURED` alır |
+| `CLAUDE_CHAT_MODEL`, `CLAUDE_CHAT_EFFORT` | Yerel `.env`, Render (isteğe bağlı) | Vercel, mobil | #55'ten beri okunur. Tanımsızsa ADR-001 seçimi (`claude-haiku-5-5`, `low`); **geçersiz değer API'nin açılmasını engeller** |
+| `AI_DAILY_TOKEN_LIMIT_USER`, `AI_DAILY_TOKEN_LIMIT_ORG` | Yerel `.env`, Render (isteğe bağlı) | Vercel, mobil | Tanımsızsa 500.000 ve 2.000.000 token/gün (`docs/asistan.md`) |
+| `CLAUDE_DOC_MODEL` | Yerel `.env`, Render | Vercel, mobil | Belge okumayla (7. hafta) |
 
 - Service role anahtarı RLS'yi atlar; `DATABASE_URL` veritabanına tam erişim verir. İkisi ve Claude anahtarı
   yalnızca backend'de durur. `NEXT_PUBLIC_` ve `EXPO_PUBLIC_` önekli değişkenler web ve mobil paketine gömülür

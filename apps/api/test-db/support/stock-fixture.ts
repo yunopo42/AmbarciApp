@@ -144,6 +144,9 @@ export async function createStockFixture(options: StockFixtureOptions): Promise<
     async close() {
       await app.close();
       for (const table of [
+        // Asistan tabloları (4. hafta): mesajlar sohbetle birlikte silinir, önce model çağrısı kayıtları.
+        'ai_runs',
+        'conversations',
         'outbox_events',
         'audit_logs',
         'stock_counts',
