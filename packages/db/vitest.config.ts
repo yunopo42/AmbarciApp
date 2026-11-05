@@ -5,8 +5,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['test/**/*.spec.ts'],
-    // Her test uzak veritabanında bir transaction açıp kapatır.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    // Her test uzak veritabanında bir transaction açıp kapatır; süre ağ gecikmesiyle doğru orantılı (gidiş-dönüş
+    // 24 Ekim'de ~80 ms, 6 Kasım'da ~170 ms ölçüldü). Sınır API'nin gerçek veritabanı testleriyle aynı.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });

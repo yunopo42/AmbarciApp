@@ -331,10 +331,19 @@ describe('İki şirket arasında veri izolasyonu (RLS)', () => {
 
   it('pasif üye ve hiçbir şirkete üye olmayan kullanıcı hiçbir şey görmez', async () => {
     await withFixture(async (tx, fx) => {
+      // Rol, tablo başına değil kullanıcı başına bir kez değiştirilir: bütün tablolar aynı savepoint'te okunur.
+      // Her rol değişimi 5 ayrı sorgu sürdüğü için tablo başına değiştirmek bu testi uzak veritabanında en yavaş
+      // test yapıyordu (gidiş-dönüş ~170 ms olunca 30 sn sınırını aştı).
+      const nothingVisible = Object.fromEntries(TENANT_TABLES.map(([table]) => [table, []]));
       for (const userId of [fx.inactiveA, fx.outsider]) {
-        for (const [table, column] of TENANT_TABLES) {
-          expect(await asUser(tx, userId, (sp) => visibleOrganizations(sp, table, column))).toEqual([]);
-        }
+        const visible = await asUser(tx, userId, async (sp) => {
+          const byTable: Record<string, string[]> = {};
+          for (const [table, column] of TENANT_TABLES) {
+            byTable[table] = await visibleOrganizations(sp, table, column);
+          }
+          return byTable;
+        });
+        expect(visible).toEqual(nothingVisible);
       }
     });
   });

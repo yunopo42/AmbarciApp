@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from './database/database.module.js';
+import { AiModule } from './modules/ai/ai.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -21,6 +22,8 @@ import { StockModule } from './modules/stock/stock.module.js';
     OperationsModule,
     StockModule,
     ProductImportModule,
+    // Uç noktası yok; asistan modülü (#56) kullanacak. Burada yüklenmesi ayarları açılışta doğrular.
+    AiModule,
   ],
 })
 export class AppModule {}
