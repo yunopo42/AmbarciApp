@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları), #57 (sohbet uçları ve SSE akışı), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -37,6 +37,7 @@ Kod: `apps/api/src/modules/ai/`. Uç noktası yok; asistan modülü (#56) kullan
 | --- | --- | --- |
 | 429 | `AI_BUDGET_EXCEEDED` | Günlük bütçe doldu (`details`: `scope` = `user` / `organization`, `limit`, `used`) |
 | 422 | `AI_REFUSED` | Model isteği reddetti |
+| 422 | `AGENT_TOOL_LIMIT` | 5 araç turundan sonra model hâlâ araç istedi (#56; çağrı `ai_runs`'a bu kodla yazılır) |
 | 502 | `AI_RESPONSE_TRUNCATED` | Araç çağrısı yazılırken çıktı sınırına takıldı |
 | 502 | `AI_REQUEST_REJECTED` | Claude API isteğimizi reddetti (400/404/422; ayrıntı yalnızca logda) |
 | 503 | `AI_NOT_CONFIGURED`, `AI_AUTH_FAILED` | Anahtar tanımlı değil ya da reddedildi |
@@ -74,3 +75,54 @@ Kullanıcı Türkçe mesajı görür; sağlayıcının teknik mesajı yalnızca 
 - **"Bir kullanıcı API anahtarınızı tüketebilir mi?"** Kullanıcı ve şirket başına günlük token bütçesi var; sınır `ai_runs`'tan okunur ve aşılınca istek modele gitmeden reddedilir. Ayrıca Anthropic konsolunda aylık harcama sınırı tanımlı (2. hafta).
 - **"Model reddederse kullanıcı ne görür?"** "Asistan bu isteğe cevap veremedi" mesajını; reddedilen içerik sohbet geçmişine eklenmez, çağrı yine maliyetiyle kaydedilir.
 - **"Neden temperature yok?"** Haiku 5.5 varsayılan dışı örnekleme ayarını kabul etmiyor; kullandığımız API sürümü bu alanları tamamen kaldırdı. Tutarlılık, strict araç şemaları ve sistem promptuyla sağlanıyor.
+
+## Ajan döngüsü ve okuma araçları (`assistant` modülü, #56)
+
+```text
+kullanıcı mesajı ──► AgentLoop.run
+                      1. AiService.assertWithinBudget (mesaj başına bir kez)
+                      2. AiService.createTurn (tur 1 … en fazla 6)
+                           model araç isterse ──► ToolRegistry.execute (paralel) ──► okuma servisleri
+                           sonuçlar tek TOOL mesajında modele ──► sonraki tur
+                      3. model metinle cevaplayınca biter
+                      her tur: onRound([ASSISTANT, TOOL]) … son tur: onRound([ASSISTANT]) → mesajları #57 yazar
+```
+
+Kod: `apps/api/src/modules/assistant/` (`agent-loop.ts`, `tools/registry.ts`, `tools/read-tools.ts`, `tools/strict-json-schema.ts`). Araç girdileri: `packages/shared/src/assistant-tools.ts`. Ürün araması: `catalog/products.repository.ts` (`searchSimilar`).
+
+### Kararlar
+
+1. **Tur sınırı (mimari değişmez 10).** Mesaj başına en fazla 5 araç turu; son cevapla birlikte en fazla 6 model çağrısı. 6. çağrı hâlâ araç isterse araçlar çalıştırılmaz, çağrı `ai_runs`'a `AGENT_TOOL_LIMIT` koduyla yazılır ve `422 AGENT_TOOL_LIMIT` döner. 2. hafta denemesinde mesaj başına ortalama 1,75 tur yetti; sınır sonsuz döngüye ve kontrolsüz maliyete karşı.
+2. **Paralel araç çağrıları tek mesajda.** Model bir turda birden fazla araç isteyebilir (denemede çoğunlukla `search_products` ile `list_warehouses` birlikte). Araçlar birlikte çalışır, sonuçlar çağrı sırasıyla tek bir TOOL mesajında döner. API bunu ister; sonuçları ayrı mesajlara bölmek modelin paralel çağrıyı bırakmasına yol açar.
+3. **Kayıt defteri.** Her aracın adı, açıklaması, durum etiketi ("Ürün aranıyor"), sınıfı (`read` / `propose`), yetki kuralı (izin verilen roller) ve girdi şeması var. Modele giden strict JSON şeması `packages/shared`'daki Zod şemasından üretilir; aynı şema sunucuda girdiyi yeniden doğrular. Strict modun desteklemediği kurallar (uzunluk, sayı sınırı, desen) modele giden şemadan çıkarılır ve yalnızca Zod'da kalır. Kayıt defteri `confirm_` ya da `apply_` ile başlayan bir aracı reddeder (mimari değişmez 2); bu hafta `propose` aracı yok (5. hafta).
+4. **Hata konuşmayı kesmez.** Bilinmeyen araç, yetkisiz rol, şemaya uymayan girdi ve aracın hatası modele `is_error: true` sonucuyla döner; model buna göre soru sorar ya da başka bir yol dener. Servisin Türkçe hatası ("Ürün bulunamadı.") modele aynen gider. Beklenmeyen hatanın ayrıntısı yalnızca loga yazılır, modele genel bir mesaj gider.
+5. **Kimlik oturumdan (mimari değişmez 5).** Araçlar şirketi, rolü ve kullanıcıyı `ToolContext`'ten alır; hiçbir aracın girdisinde şirket ya da kullanıcı alanı yok. Şemalar `strictObject`: model fazladan bir `organization_id` yazsa bile girdi reddedilir.
+6. **Araçlar ekranların okuma servislerini kullanır.** `get_stock` ve `list_recent_movements`, mobil ürün detayının kullandığı `StockService`'i çağırır. Depo yetkisi ekranlardakiyle aynıdır: çalışan yalnızca yetkili olduğu depoları görür, toplam da onların toplamıdır; yetkisiz bir depoyu açıkça sorarsa "yetkisi yok" cevabını alır. Başka şirketin ürünü "bulunamadı" görünür. Rakamlar veritabanından gelir, toplamı SQL hesaplar (2. hafta denemesinde model toplamı kendisi hesaplamıştı).
+7. **Miktarlar Türkçe yazımla.** Veritabanı "1412.500" döner; Türkçede bu "1.412,5" yazılır, "120.000" ise yüz yirmi bin diye okunur. Model bunu kullanıcıya olduğu gibi aktarabilirdi. Araçlar miktarı ortak paketteki `formatDecimal` ile, metin olarak verir (JS'te hesap yok, ADR-003). Tarihler Türkiye saatiyle ("05.11.2026 14:32"): model saat dilimi çevirmez.
+8. **Benzerlik araması.** Skor, düz benzerlik ile kelime benzerliğinin büyüğüdür: kısa bir sorgu ("priz") uzun bir adda ("Topraklı priz, beyaz") düz benzerlikte 0,25, kelime benzerliğinde 1,0 çıkar. Kelime eşiği varsayılan 0,6 yerine 0,4: demo verisinde İngilizce klavyeyle yazılmış "kacak akim" (0,57) ve "uclu priz" (0,50) varsayılanın altında kalıyordu. Eşik yalnızca aramanın transaction'ında ayarlanır (`set_config(..., true)`), havuzdaki bağlantıya sızmaz. Ad ve alternatif ad trigram indeksini kullanır; stok kodu ya da barkod tam eşleşirse skor 1. Aday bir alternatif adla bulunduysa o ad da döner. Pasif ürün aday olmaz.
+9. **Mesajları döngü yazmaz.** Döngü her turun mesajlarını `onRound` ile verir: araç turunda [ASSISTANT, TOOL] birlikte, son turda [ASSISTANT]. Araç çağrısı yazılıp sonucu yazılmadan sunucu çökseydi geçmiş bozulurdu, çünkü API her `tool_use` bloğunun ardından sonucunu ister. İkisi birlikte verilince sohbet uçları (#57) onları tek transaction'da yazabilir.
+10. **Geçmiş değişmeden büyür.** Saklanan TOOL mesajı API'ye `user` rolüyle, içeriği değişmeden gider. Sistem promptu ve araç listesi her turda aynıdır (araçların sırası sabit). Süren bir sohbet başladığı prompt sürümüyle devam eder (`promptVersion`).
+
+### Araçlar
+
+| Araç | Girdi | Çıktı |
+| --- | --- | --- |
+| `search_products` | `query` | En iyi 5 aday: `product_id`, `sku`, `name`, `base_unit`, `score` (0–1), `matched_alias` |
+| `list_warehouses` | — | Kullanıcının görebildiği aktif depolar: `warehouse_id`, `name`, `type` (Depo / Şube / Araç) |
+| `get_stock` | `product_id`, isteğe bağlı `warehouse_id` | `total`, depo başına `quantity` ve `below_min_stock`, `min_stock`, `base_unit` |
+| `list_recent_movements` | `product_id`, isteğe bağlı `warehouse_id` ve `limit` (1–20, varsayılan 10) | `total`; hareketler: `date`, `warehouse`, `type`, `quantity_change` (işaretli), `quantity_after` |
+
+### Testler
+
+| Test | Ortam | Ne doğrular |
+| --- | --- | --- |
+| `apps/api/test/assistant-tools.spec.ts` | CI | Strict şemalar (desteklenmeyen kural yok, isteğe bağlı alanlar, uuid biçimi); `confirm_` aracının reddi; bilinmeyen araç, şemaya uymayan girdi, fazladan `organization_id`, rol kuralı; servis hatası ve beklenmeyen hata; Türkçe miktar ve tarih biçimi; çalışanın depo yetkisi |
+| `apps/api/test/agent-loop.spec.ts` | CI (sahte sağlayıcı) | İki araç turu ve son cevap; paralel çağrıların tek mesajda dönmesi; geçmişin ve düşünme bloklarının değişmeden büyümesi; araç durumu ve metin olayları; tur sınırı ve `AGENT_TOOL_LIMIT` kaydı; bütçe dolunca modelin hiç çağrılmaması; hatalı girdinin modele hata olarak dönmesi; red; prompt sürümü; TOOL → `user` |
+| `apps/api/test-db/assistant-tools.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Yazım hatalı arama ("kabllo nym 3x2,5"), "yangin" / "YANGIN KABLOSU", alternatif ad ("üçlü priz", "uclu priz"), stok kodu; pasif ve başka şirketin ürünü aday olmaz; stok toplamı ve depo yetkisi; başka şirketin ürünü ve deposu; hareketler ve depolar |
+
+### Savunmada sorulabilecek sorular
+
+- **"Model başka şirketin stoğunu sorabilir mi?"** Hayır. Araç girdisinde şirket alanı yok; şirket oturumdan gelir ve şema fazladan alanı reddeder. Başka şirketin ürün kimliği bilinse bile servis "bulunamadı" döner.
+- **"Model sonsuz döngüye girerse?"** 5 araç turundan sonra durur; kullanıcı Türkçe bir hata görür, çağrı `ai_runs`'ta `AGENT_TOOL_LIMIT` koduyla işaretlidir.
+- **"Model aracı yanlış girdiyle çağırırsa?"** Girdi Zod şemasıyla doğrulanır; uymazsa araç çalışmaz, hata modele döner ve model düzeltir ya da kullanıcıya sorar.
+- **"Miktarları neden metin olarak veriyorsunuz?"** Ondalık sayı JS'te tam tutulamaz ve veritabanının "120.000" biçimi Türkçede yüz yirmi bin diye okunur. Miktar Türkçe yazımla metin olarak verilir, toplamı SQL hesaplar.

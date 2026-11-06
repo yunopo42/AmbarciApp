@@ -19,6 +19,11 @@ export interface AiCallContext {
   /** Aynı mesajın cevabındaki kaçıncı çağrı (1'den başlar). */
   roundNo: number;
   promptVersion: string;
+  /**
+   * Mesajın son izinli çağrısı (araç turu sınırı doldu). Model yine araç isterse sınır aşılmıştır: çağrı
+   * AGENT_TOOL_LIMIT koduyla kaydedilir ve hata fırlatılır (mimari değişmez 10).
+   */
+  lastRound?: boolean;
 }
 
 // Sağlayıcı hatalarının kullanıcıya gösterilen karşılığı. Teknik ayrıntı yalnızca loga yazılır.
@@ -81,7 +86,8 @@ export class AiService {
    * araç çağrısı yazarken çıktı sınırına takılırsa çağrı yine kaydedilir, sonra hata fırlatılır; reddedilen ya da
    * yarım içerik geçmişe eklenmemelidir.
    */
-  async createTurn(context: AiCallContext, request: AiTurnRequest): Promise<AiTurnResult> {
+  async createTurn(callContext: AiCallContext, request: AiTurnRequest): Promise<AiTurnResult> {
+    const { lastRound = false, ...context } = callContext;
     let result: AiTurnResult;
     try {
       result = await this.provider.createTurn(request);
@@ -106,6 +112,7 @@ export class AiService {
       throw new ApiException(mapped.status, error.code, mapped.message);
     }
 
+    const toolLimitReached = lastRound && result.toolCalls.length > 0;
     await this.record(context, {
       model: result.model,
       toolCalls: result.toolCalls.map((call) => call.name),
@@ -113,7 +120,7 @@ export class AiService {
       durationMs: result.durationMs,
       firstTokenMs: result.firstTokenMs,
       stopReason: result.stopReason,
-      errorCode: null,
+      errorCode: toolLimitReached ? 'AGENT_TOOL_LIMIT' : null,
     });
 
     if (result.stopReason === 'refusal') {
@@ -128,11 +135,18 @@ export class AiService {
       // Yarım kalan araç girdisi geçerli görünse bile çalıştırılmaz.
       throw new ApiException(HttpStatus.BAD_GATEWAY, 'AI_RESPONSE_TRUNCATED', 'Asistanın cevabı yarım kaldı; lütfen tekrar deneyin.');
     }
+    if (toolLimitReached) {
+      throw new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'AGENT_TOOL_LIMIT',
+        'Asistan bu soruyu araç sınırı içinde cevaplayamadı. Soruyu tek bir ürün için ve daha kısa sorabilirsiniz.',
+      );
+    }
     return result;
   }
 
   private async record(
-    context: AiCallContext,
+    context: Omit<AiCallContext, 'lastRound'>,
     run: {
       model: string;
       toolCalls: string[];
