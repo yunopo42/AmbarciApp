@@ -387,6 +387,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kullanıcının aktif şirketteki sohbetleri, en son konuşulan önce */
+        get: operations["ConversationsController_list"];
+        put?: never;
+        /** Yeni sohbet açar */
+        post: operations["ConversationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sohbetin mesajları, sırasıyla: kullanıcının yazdıkları ve asistanın metin cevapları */
+        get: operations["ConversationsController_messages"];
+        put?: never;
+        /** Mesaj gönderir ve cevabı akıtır (SSE). Aynı clientMessageId tekrar gelirse cevap tamamlanmışsa kayıtlı cevap döner, model çağrılmaz */
+        post: operations["ConversationsController_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -957,6 +993,54 @@ export interface components {
             created: number;
             /** @description Başlangıç stoku için açılan, onay bekleyen açılış işlemleri (100 kalemde bir yenisi) */
             openingOperationIds: string[];
+        };
+        ConversationDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Merkez depoda NYM 3x2,5 kablo kaç metre? */
+            title: string | null;
+            /** Format: date-time */
+            lastMessageAt: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ConversationListDto: {
+            items: components["schemas"]["ConversationDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ChatMessageDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            /** @example Merkez Depo’da 1.400 metre var. */
+            text: string;
+            /**
+             * @description Yalnızca kullanıcı mesajında: cevabın durumu
+             * @enum {string|null}
+             */
+            status: "IN_PROGRESS" | "COMPLETED" | "FAILED" | null;
+            /**
+             * Format: uuid
+             * @description Yalnızca kullanıcı mesajında
+             */
+            clientMessageId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ChatMessageListDto: {
+            items: components["schemas"]["ChatMessageDto"][];
+        };
+        SendMessageDto: {
+            /**
+             * Format: uuid
+             * @description İstemcinin mesaj için ürettiği kimlik; tekrar denemede aynısı gönderilir
+             */
+            clientMessageId: string;
+            /** @example Merkez depoda NYM 3x2,5 kablodan kaç metre kaldı? */
+            text: string;
         };
     };
     responses: never;
@@ -2405,6 +2489,192 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ConversationsController_list: {
+        parameters: {
+            query?: {
+                /** @description En fazla 100 */
+                pageSize?: number;
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationListDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ConversationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ConversationsController_messages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMessageListDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ConversationsController_send: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageDto"];
+            };
+        };
+        responses: {
+            /** @description Server-Sent Events (text/event-stream). Her olay `event: <tür>` ve JSON `data:` satırıdır; şema packages/shared içindeki chatStreamEventSchema. Sıra: message_started, ardından text_delta ve tool_status olayları, en sonda done ya da error. Aradaki `: ping` satırları yalnızca bağlantıyı canlı tutar. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Bu mesajın ya da sohbetteki başka bir mesajın cevabı hâlâ hazırlanıyor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ApiErrorDto"];
                 };
             };
         };

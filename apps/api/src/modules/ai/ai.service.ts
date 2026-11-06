@@ -82,6 +82,15 @@ export class AiService {
   }
 
   /**
+   * Süren bir sohbetin başladığı prompt sürümü: sohbetin kullanıcı mesajlarına bağlı ilk model çağrısının sürümü.
+   * Sohbetin ortasında sistem promptu değişirse geri gönderilen düşünme blokları geçersiz olur (ADR-001); sohbet bu
+   * yüzden başladığı sürümle devam eder. Henüz model çağrısı yoksa null (güncel sürüm kullanılır).
+   */
+  conversationPromptVersion(organizationId: string, userMessageIds: string[]): Promise<string | null> {
+    return this.runs.firstPromptVersion(this.db, organizationId, userMessageIds);
+  }
+
+  /**
    * Modeli bir kez çağırır. Başarılı ya da başarısız her çağrı ai_runs'a yazılır. Model reddederse (refusal) ya da
    * araç çağrısı yazarken çıktı sınırına takılırsa çağrı yine kaydedilir, sonra hata fırlatılır; reddedilen ya da
    * yarım içerik geçmişe eklenmemelidir.

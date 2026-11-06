@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -126,3 +126,74 @@ Kod: `apps/api/src/modules/assistant/` (`agent-loop.ts`, `tools/registry.ts`, `t
 - **"Model sonsuz döngüye girerse?"** 5 araç turundan sonra durur; kullanıcı Türkçe bir hata görür, çağrı `ai_runs`'ta `AGENT_TOOL_LIMIT` koduyla işaretlidir.
 - **"Model aracı yanlış girdiyle çağırırsa?"** Girdi Zod şemasıyla doğrulanır; uymazsa araç çalışmaz, hata modele döner ve model düzeltir ya da kullanıcıya sorar.
 - **"Miktarları neden metin olarak veriyorsunuz?"** Ondalık sayı JS'te tam tutulamaz ve veritabanının "120.000" biçimi Türkçede yüz yirmi bin diye okunur. Miktar Türkçe yazımla metin olarak verilir, toplamı SQL hesaplar.
+
+## Sohbet uçları ve cevabın akışı (SSE, #57)
+
+| Uç nokta | Ne yapar |
+| --- | --- |
+| `POST /v1/conversations` | Yeni sohbet açar (başlık ilk mesajdan konur) |
+| `GET /v1/conversations?page=&pageSize=` | Kullanıcının aktif şirketteki sohbetleri, en son konuşulan önce |
+| `GET /v1/conversations/{id}/messages` | Ekranda gösterilen mesajlar: kullanıcının yazdıkları ve asistanın metin cevapları; araç sonuçları ve düşünme blokları gönderilmez |
+| `POST /v1/conversations/{id}/messages` | Gövde `{ clientMessageId, text }`; cevap `text/event-stream` olarak akar |
+
+Kod: `apps/api/src/modules/assistant/` (`conversations.controller.ts`, `conversations.service.ts`, `conversations.repository.ts`, `sse-stream.ts`). Şemalar: `packages/shared/src/conversations.ts`.
+
+**Akışın olayları** (`chatStreamEventSchema`): her olay `event: <tür>` ve JSON `data:` satırıdır.
+
+```text
+event: message_started   {"messageId": "...", "clientMessageId": "..."}   mesaj kaydedildi
+event: tool_status       {"tool": "search_products", "label": "Ürün aranıyor", "status": "started"}
+event: tool_status       {... "status": "succeeded"}
+event: text_delta        {"text": "Merkez Depo’da "}                       parça parça
+event: text_delta        {"text": "1.400 metre var."}
+event: done              {"messageId": "...", "text": "<son cevap>", "replayed": false}
+: ping                                                                    15 saniyede bir, olay değil
+```
+
+Akış her zaman `done` ya da `error` (`{ code, message }`) ile biter. `done.text` son cevabın metnidir; istemci akan parçaları bununla değiştirir.
+
+### Kararlar
+
+1. **Tekrar gönderim (mimari değişmez 6).** İstemci her mesaj için bir kimlik (`clientMessageId`, UUID) üretir ve ağ hatasında aynı kimlikle tekrar gönderir; (sohbet, `client_message_id`) veritabanında benzersizdir. Aynı kimlik gelirse: cevap tamamlanmışsa kayıtlı cevap `replayed: true` ile döner, model çağrılmaz; cevap sürüyorsa `409 MESSAGE_IN_PROGRESS`; başarısız olduysa yeni kayıt açılmadan aynı mesaj için cevap yeniden üretilir.
+2. **Sohbette tek cevap.** Bir sohbette cevap sürerken yeni mesaj `409 CONVERSATION_BUSY` alır. Cevap başlarken sohbet satırı kısa bir transaction'da `FOR UPDATE` ile kilitlenir: aynı anda gelen iki istek sırayla karar verir. Kilit yalnızca bu kararı kapsar (5–6 sorgu); model çağrısını kapsamaz. Sıra numarasının benzersizliği (#54) son savunma hattıdır.
+3. **Model akarken veritabanı bağlantısı tutulmaz.** Supabase'in oturum havuzu 15 istemciyle sınırlı; bir cevap birkaç saniye, araç turlarıyla daha uzun sürebilir. Veritabanına yalnızca cevap başlarken (kısa transaction), her tur bitince (o turun mesajları tek ifadeyle) ve en sonda (mesaj durumu) gidilir.
+4. **İstemci koparsa cevap tamamlanır.** Model çağrısı istemcinin bağlantısına bağlı değildir; kopmuş bağlantıya yazma sessizce atlanır, cevap kaydedilir. Kullanıcı aynı kimlikle tekrar gönderince kayıtlı cevabı alır, model ikinci kez çağrılmaz. Sahada telefonun bağlantısı sık kopar; cevabı yarıda bırakmak hem maliyeti boşa harcar hem geçmişi yarım bırakırdı.
+5. **Yarıda kalan cevap.** Sunucu cevap sürerken yeniden başlarsa kullanıcı mesajı `IN_PROGRESS` kalır. Sohbet 5 dakikadır hareketsizse (her tur sohbeti "dokunur") bu mesaj başarısız sayılır ve tekrar gönderilebilir. Tek bir model çağrısı yeniden denemelerle en fazla 3 dakika sürdüğü için 5 dakika, süren bir cevabı yanlışlıkla kesmez.
+6. **Kararlar akış açılmadan verilir.** Doğrulama, sohbet sahipliği (404), tekrar gönderim ve meşgul sohbet (409) akış açılmadan denetlenir; bu hatalar normal JSON hata gövdesiyle döner. Akış açıldıktan sonraki hatalar (model hatası, bütçe, araç sınırı) `error` olayıyla gelir ve mesaj başarısız olarak kalır.
+7. **Sohbeti yalnızca sahibi görür.** Bütün sorgular şirket ve kullanıcıyla sınırlanır; başka kullanıcının ya da başka şirketin sohbeti `404 CONVERSATION_NOT_FOUND` döner (varlığı sızmaz). Veritabanındaki RLS politikası da aynı kuralı uygular (#54).
+8. **Süren sohbet başladığı prompt sürümüyle devam eder.** Sürüm, sohbetin kullanıcı mesajlarına bağlı ilk `ai_runs` kaydından okunur (sorgu yalnızca `ai_runs`'a bakar; modül sınırı).
+9. **Nest'in `@Sse()` dekoratörü kullanılmadı.** O dekoratör yalnızca GET isteğiyle çalışır; mesaj gövdeyle POST edildiği için Express yanıtına doğrudan yazılır. Başlıklar: `Content-Type: text/event-stream`, `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no` (ara vekil sunucular cevabı biriktirmesin), başlıklar hemen gönderilir.
+
+### Render ve `: ping`
+
+Render'ın belgelerine göre (6 Kasım 2026'da okundu):
+
+- Ücretsiz plandaki servis 15 dakika gelen trafik olmazsa uyur; bir dakikada uyanır ([render.com/docs/free](https://render.com/docs/free)).
+- WebSocket için sabit bir zaman aşımı yoktur; bağlantılar deploy gibi durumlarda kapanır ve iki tarafın aralıklarla canlı tutma mesajı göndermesi önerilir (örnekte 30 saniye) ([render.com/docs/websocket](https://render.com/docs/websocket)). Uzun HTTP akışı için ayrı bir süre ya da tamponlama belgelenmemiş.
+
+Bu yüzden akış boyunca 15 saniyede bir `: ping` yorum satırı gönderilir: model ya da araç uzun sürdüğünde aradaki vekil sunucular ve mobil ağlar bağlantıyı boşta sanıp kesmesin. Bir cevap normalde bundan kısa sürer (2. hafta denemesinde akışsız istekle mesaj başına medyan 4,13 saniye); ping çoğu cevapta hiç gönderilmez. Render'ın akışı tamponlamadan ilettiği (ilk metin parçasının cevap bitmeden geldiği) gerçek bir istekle ölçülecek: bu ölçüm gerçek model çağrısı ve Render'da `ANTHROPIC_API_KEY` gerektirdiği için kapı denemesinde (#60) yapılacak. **Ölçülmedi.**
+
+### Hata kodları (sohbet)
+
+| Durum | Kod | Ne zaman |
+| --- | --- | --- |
+| 400 | `VALIDATION_FAILED` | `clientMessageId` UUID değil, metin boş ya da 2.000 karakterden uzun |
+| 404 | `CONVERSATION_NOT_FOUND` | Sohbet yok, başka kullanıcının ya da başka şirketin |
+| 409 | `MESSAGE_IN_PROGRESS` | Aynı mesajın cevabı hâlâ hazırlanıyor |
+| 409 | `CONVERSATION_BUSY` | Sohbette başka bir mesajın cevabı hâlâ hazırlanıyor |
+| `error` olayı | `AI_*`, `AGENT_TOOL_LIMIT`, `INTERNAL_ERROR` | Akış açıldıktan sonraki hatalar (yukarıdaki tablolar) |
+
+### Testler
+
+| Test | Ortam | Ne doğrular |
+| --- | --- | --- |
+| `apps/api/test/conversations-rules.spec.ts` | CI | SSE yazıcısı: başlıklar, olay biçimi, ping aralığı, kopmuş bağlantıya yazmama; ekranda gösterilen mesajlar; kayıtlı cevabın bulunması; sohbet başlığı; mesaj şeması |
+| `apps/api/test/conversations.e2e.spec.ts` | CI | Dört uçta kimliksiz istek (401), şirket başlığı olmadan istek, şemaya uymayan mesaj (400, akış açılmaz) |
+| `apps/api/test-db/conversations.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`, sahte sağlayıcı) | Olay sırası; mesajların sırasıyla kaydı, başlık ve `ai_runs` bağlantısı; ekranda gösterilen mesajlar; aynı kimlikle tekrar (model çağrılmaz); 409 `MESSAGE_IN_PROGRESS` ve `CONVERSATION_BUSY`; 5 dakikadır hareketsiz sohbette yarıda kalan cevabın yeniden üretilmesi; model hatasında `error` olayı ve tekrar gönderim; başka kullanıcının ve başka şirketin sohbeti (404); istemci koptuğunda cevabın tamamlanıp kaydedilmesi |
+
+### Savunmada sorulabilecek sorular
+
+- **"Ağ koptu, kullanıcı mesajı tekrar gönderdi; model iki kez mi çağrılır?"** Hayır. Mesaj istemcinin ürettiği kimlikle gelir; aynı kimlik ikinci kez gelince cevap tamamlanmışsa kayıtlı cevap döner, sürüyorsa 409 verilir.
+- **"Neden WebSocket değil SSE?"** Cevap tek yönlü akıyor (sunucudan istemciye); SSE düz HTTP üzerinde çalışır, kimlik doğrulama ve CORS diğer uçlarla aynı kalır. Mobilde `expo/fetch`, web'de `fetch` akışı okuyabilir. Teknik araştırma raporundaki yığın kararı da bu.
+- **"Model cevap üretirken veritabanı bağlantısı açık mı kalıyor?"** Hayır. Bağlantı yalnızca cevap başlarken, her tur bitince ve en sonda kısa sorgular için alınır; havuz 15 istemciyle sınırlı olduğu için bu önemli.
+- **"İki kişi aynı sohbete aynı anda yazarsa?"** Sohbeti yalnızca sahibi görür. Aynı kullanıcı iki cihazdan aynı anda yazarsa sohbet satırı kilitlenir; ikinci mesaj 409 alır, sıra numarası benzersizliği de son savunma hattıdır.

@@ -2,6 +2,7 @@
 export * from './assistant-tools.js';
 export * from './auth.js';
 export * from './catalog.js';
+export * from './conversations.js';
 export * from './decimal-format.js';
 export * from './errors.js';
 export * from './health.js';

@@ -22,7 +22,6 @@ import { StockModule } from './modules/stock/stock.module.js';
     OperationsModule,
     StockModule,
     ProductImportModule,
-    // Uç noktası henüz yok (sohbet uçları #57). Yüklenmesi ai ayarlarını ve araç şemalarını açılışta doğrular.
     AssistantModule,
   ],
 })
