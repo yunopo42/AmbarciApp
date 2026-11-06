@@ -74,6 +74,24 @@ export class AiRunsRepository {
     return row;
   }
 
+  /** Verilen mesajlara bağlı ilk model çağrısının prompt sürümü; çağrı yoksa null. */
+  async firstPromptVersion(executor: DbExecutor, organizationId: string, messageIds: string[]): Promise<string | null> {
+    if (messageIds.length === 0) {
+      return null;
+    }
+    const [row] = await executor.execute<{ promptVersion: string }>(sql`
+      select prompt_version as "promptVersion"
+      from ${aiRuns}
+      where organization_id = ${organizationId}::uuid
+        and message_id in (${sql.join(
+          messageIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})
+      order by created_at
+      limit 1`);
+    return row?.promptVersion ?? null;
+  }
+
   /**
    * Bugün (Türkiye saatiyle gece yarısından beri) harcanan tokenlar: giriş, çıkış ve önbellek tokenlarının toplamı.
    * (şirket, zaman) indeksiyle tek sorgu; kullanıcının payı aynı satırlardan süzülür.

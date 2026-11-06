@@ -2190,6 +2190,278 @@
           "products"
         ]
       }
+    },
+    "/v1/conversations": {
+      "post": {
+        "operationId": "ConversationsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Yeni sohbet açar",
+        "tags": [
+          "conversations"
+        ]
+      },
+      "get": {
+        "operationId": "ConversationsController_list",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "En fazla 100",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Kullanıcının aktif şirketteki sohbetleri, en son konuşulan önce",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/conversations/{conversationId}/messages": {
+      "get": {
+        "operationId": "ConversationsController_messages",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Sohbetin mesajları, sırasıyla: kullanıcının yazdıkları ve asistanın metin cevapları",
+        "tags": [
+          "conversations"
+        ]
+      },
+      "post": {
+        "operationId": "ConversationsController_send",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events (text/event-stream). Her olay `event: <tür>` ve JSON `data:` satırıdır; şema packages/shared içindeki chatStreamEventSchema. Sıra: message_started, ardından text_delta ve tool_status olayları, en sonda done ya da error. Aradaki `: ping` satırları yalnızca bağlantıyı canlı tutar.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bu mesajın ya da sohbetteki başka bir mesajın cevabı hâlâ hazırlanıyor",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Mesaj gönderir ve cevabı akıtır (SSE). Aynı clientMessageId tekrar gelirse cevap tamamlanmışsa kayıtlı cevap döner, model çağrılmaz",
+        "tags": [
+          "conversations"
+        ]
+      }
     }
   },
   "info": {
@@ -3690,6 +3962,142 @@
         "required": [
           "created",
           "openingOperationIds"
+        ]
+      },
+      "ConversationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "example": "Merkez depoda NYM 3x2,5 kablo kaç metre?"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "lastMessageAt",
+          "createdAt"
+        ]
+      },
+      "ConversationListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "ChatMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "example": "Merkez Depo’da 1.400 metre var."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IN_PROGRESS",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "nullable": true,
+            "description": "Yalnızca kullanıcı mesajında: cevabın durumu"
+          },
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Yalnızca kullanıcı mesajında"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "text",
+          "status",
+          "clientMessageId",
+          "createdAt"
+        ]
+      },
+      "ChatMessageListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "SendMessageDto": {
+        "type": "object",
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "İstemcinin mesaj için ürettiği kimlik; tekrar denemede aynısı gönderilir"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "example": "Merkez depoda NYM 3x2,5 kablodan kaç metre kaldı?"
+          }
+        },
+        "required": [
+          "clientMessageId",
+          "text"
         ]
       }
     }
