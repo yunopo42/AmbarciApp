@@ -5,6 +5,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CatalogRepository } from './catalog.repository.js';
 import type { ProductSummary, UnitConversion, UnitConversionInput } from './catalog.repository.js';
 import { ProductsRepository } from './products.repository.js';
+import type { SimilarProduct } from './products.repository.js';
 
 /** Diğer modüllerin katalog tablolarına erişim yolu (modül sınırı: tablolar yalnızca bu modülün repository'sinde). */
 @Injectable()
@@ -47,6 +48,11 @@ export class CatalogService {
   /** Ürünleri birimleri ve adlarıyla toplu ekler; executor çağıranın transaction'ıdır (içe aktarma). */
   insertProducts(executor: DbExecutor, organizationId: string, inputs: ProductInput[]): Promise<{ id: string; sku: string }[]> {
     return this.products.insertMany(executor, organizationId, inputs);
+  }
+
+  /** Yazım hatalarına dayanıklı ürün araması, en iyi `limit` aday ve skorları (asistanın search_products aracı). */
+  searchSimilarProducts(organizationId: string, query: string, limit: number): Promise<SimilarProduct[]> {
+    return this.products.searchSimilar(organizationId, query, limit);
   }
 
   /** Ürün listesi (arama ve sayfalama ürün yönetimindekiyle aynı); depo bazında stok listesi bunun üzerine kurulur. */

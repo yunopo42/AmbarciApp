@@ -29,6 +29,11 @@ export class InventoryService {
     return this.warehouses.findStatuses(executor, organizationId, warehouseIds);
   }
 
+  /** Şirketin depoları, ada göre (pasifler dahil; süzme çağıranda). */
+  listWarehouses(organizationId: string): Promise<Warehouse[]> {
+    return this.warehouses.listByOrganization(organizationId);
+  }
+
   async getWarehouse(organizationId: string, warehouseId: string): Promise<Warehouse> {
     const warehouse = await this.warehouses.findById(organizationId, warehouseId);
     if (!warehouse) {

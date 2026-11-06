@@ -5,8 +5,25 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 
-import { containsText } from '../../common/search.js';
+import { containsText, foldForSearch } from '../../common/search.js';
 import { DATABASE } from '../../database/database.module.js';
+
+// interface değil type: Drizzle'ın execute<T>() satır tipi indeks imzası ister.
+/** Asistanın ürün aramasında bir aday. */
+export type SimilarProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  baseUnit: string;
+  /** 0–1 arası benzerlik; stok kodu ya da barkod tam eşleşirse 1. Miktar ya da para değil, oran: JS number olabilir. */
+  score: number;
+  /** Aday bir alternatif adla bulunduysa o ad ("üçlü priz"); adıyla bulunduysa null. */
+  matchedAlias: string | null;
+};
+
+// Kelime benzerliği eşiği. pg_trgm'in varsayılanı 0,6; demo verisinde "kacak akim" (0,57) ve "uclu priz" (0,50) gibi
+// İngilizce klavyeyle yazılmış adlar bu eşiğin altında kalıyordu. Düz benzerlik eşiği varsayılan (0,3).
+const WORD_SIMILARITY_THRESHOLD = '0.4';
 
 const PRODUCT_COLUMNS = {
   id: products.id,
@@ -72,6 +89,55 @@ export class ProductsRepository {
       page: query.page,
       pageSize: query.pageSize,
     };
+  }
+
+  /**
+   * Yazım hatalarına dayanıklı ürün araması (asistanın search_products aracı). Ad ve alternatif adda trigram
+   * benzerliği; skor, düz benzerlik ile kelime benzerliğinin büyüğüdür. Kısa sorgu ("priz") uzun bir adda
+   * ("Topraklı priz, beyaz") düz benzerlikte düşük (0,25), kelime benzerliğinde yüksek (1,0) çıkar. Stok kodu ya da
+   * barkod tam eşleşirse skor 1. Yalnızca aktif ürünler; ürün başına en iyi eşleşme, en yüksek skorlu `limit` aday.
+   *
+   * Kolon ve aranan metin aynı Türkçe dönüşümden geçer: SQL'de private.fold_search, JS'te aynı sonucu veren
+   * foldForSearch. `%` ve `<%` işleçleri (şirket, fold_search(ad)) GIN trigram indeksini kullanır (0005, 0006).
+   * Kelime eşiği yalnızca bu transaction için ayarlanır (set_config(..., true)); havuzdaki bağlantıya sızmaz.
+   */
+  async searchSimilar(organizationId: string, query: string, limit: number): Promise<SimilarProduct[]> {
+    const folded = foldForSearch(query.trim());
+    const raw = query.trim();
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('pg_trgm.word_similarity_threshold', ${WORD_SIMILARITY_THRESHOLD}, true)`);
+      return tx.execute<SimilarProduct>(sql`
+        with matches as (
+          select p.id as product_id, null::text as alias,
+                 greatest(similarity(private.fold_search(p.name), ${folded}::text),
+                          word_similarity(${folded}::text, private.fold_search(p.name))) as score
+          from ${products} p
+          where p.organization_id = ${organizationId} and p.is_active
+            and (private.fold_search(p.name) % ${folded}::text or ${folded}::text <% private.fold_search(p.name))
+          union all
+          select a.product_id, a.alias,
+                 greatest(similarity(private.fold_search(a.alias), ${folded}::text),
+                          word_similarity(${folded}::text, private.fold_search(a.alias)))
+          from ${productAliases} a
+          where a.organization_id = ${organizationId}
+            and (private.fold_search(a.alias) % ${folded}::text or ${folded}::text <% private.fold_search(a.alias))
+          union all
+          select p.id, null, 1
+          from ${products} p
+          where p.organization_id = ${organizationId} and p.is_active
+            and (private.fold_search(p.sku) = ${folded}::text or p.barcode = ${raw}::text)
+        ),
+        best as (
+          select distinct on (product_id) product_id, alias, score from matches order by product_id, score desc
+        )
+        select p.id, p.sku, p.name, p.base_unit as "baseUnit", round(b.score::numeric, 3)::float8 as score,
+               b.alias as "matchedAlias"
+        from best b
+        join ${products} p on p.organization_id = ${organizationId} and p.id = b.product_id
+        where p.is_active
+        order by b.score desc, p.name
+        limit ${limit}::int`);
+    });
   }
 
   /** executor verilmezse bağlantı havuzu; ekleme ve güncellemede aynı transaction. */

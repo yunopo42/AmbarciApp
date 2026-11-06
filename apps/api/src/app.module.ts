@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from './database/database.module.js';
-import { AiModule } from './modules/ai/ai.module.js';
+import { AssistantModule } from './modules/assistant/assistant.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -22,8 +22,8 @@ import { StockModule } from './modules/stock/stock.module.js';
     OperationsModule,
     StockModule,
     ProductImportModule,
-    // Uç noktası yok; asistan modülü (#56) kullanacak. Burada yüklenmesi ayarları açılışta doğrular.
-    AiModule,
+    // Uç noktası henüz yok (sohbet uçları #57). Yüklenmesi ai ayarlarını ve araç şemalarını açılışta doğrular.
+    AssistantModule,
   ],
 })
 export class AppModule {}

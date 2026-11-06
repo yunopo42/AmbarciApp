@@ -15,5 +15,7 @@ import { StockService } from './stock.service.js';
   imports: [OrganizationsModule, CatalogModule, InventoryModule],
   controllers: [StockController],
   providers: [StockService],
+  // Asistanın stok sorgusu ve son hareketler araçları aynı okuma kurallarını (depo yetkisi) kullanır.
+  exports: [StockService],
 })
 export class StockModule {}
