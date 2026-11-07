@@ -77,12 +77,12 @@ eas build --profile development --platform android
 4. Telefonda Ambarcı'yı aç. Açılış ekranında geliştirme sunucusu listelenirse üzerine dokun. Listede yoksa
    adres alanına `http://<Wi-Fi adresi>:8081` yazıp **Connect**'e bas ya da **Scan QR Code** ile
    terminaldeki QR kodu okut.
-5. Giriş yapınca stok listesi açılır. Ses tanıma denemesi **Hesap** ekranındadır; `eval/ses-denemesi.md`
-   dosyasındaki cümleleri sırayla dene.
+5. Giriş yapınca asistanla sohbet ekranı açılır; stok listesi başlıktaki **Stok** düğmesindedir. Ses tanıma
+   sohbet ekranındaki **Konuş** düğmesindedir (1. haftanın deneme ekranı #58'de kaldırıldı).
 
 ### Uygulamanın API adresi
 
-Mobil uygulama stok ve ürün bilgisini API'den alır; adres depo kökündeki `.env` dosyasında
+Mobil uygulama stok, ürün ve sohbet bilgisini API'den alır; adres depo kökündeki `.env` dosyasında
 `EXPO_PUBLIC_API_URL` satırıdır. Telefon bilgisayardaki `localhost`'a ulaşamaz:
 
 - **Render'daki API:** `EXPO_PUBLIC_API_URL=https://ambarci-api.onrender.com`. `main`'e birleşmiş uçlarla çalışır.
@@ -91,6 +91,9 @@ Mobil uygulama stok ve ürün bilgisini API'den alır; adres depo kökündeki `.
   Telefonun tarayıcısında `http://<Wi-Fi adresi>:3001/v1/health` açılabiliyorsa uygulama da bağlanır.
 
 Değer build'e gömülmez, Metro'dan gelir: `.env` değişince Metro'yu yeniden başlatmak yeter.
+
+Sohbet, API'nin çalıştığı yerde `ANTHROPIC_API_KEY` tanımlıysa çalışır (Render'da Environment, bilgisayarda `.env`).
+Her mesaj gerçek bir model çağrısıdır ve ücretlidir; Anthropic konsolundaki aylık harcama sınırı geçerlidir.
 
 Aynı ağda bağlanamıyorsan (okul ağı, misafir ağı gibi) tünel kullan:
 

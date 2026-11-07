@@ -10,7 +10,7 @@ import { AppText } from '@/components/app-text';
 import { Button, Card } from '@/components/ui';
 import { colors, radius, spacing, touchTarget } from '@/theme';
 
-/** Hesap: giriş yapan kullanıcı, aktif şirket seçimi (birden fazla şirket varsa), ses denemesi ve çıkış. */
+/** Hesap: giriş yapan kullanıcı, aktif şirket seçimi (birden fazla şirket varsa) ve çıkış. */
 export default function AccountScreen(): JSX.Element {
   const router = useRouter();
   const { session, signOut } = useAuth();
@@ -65,8 +65,6 @@ export default function AccountScreen(): JSX.Element {
         </View>
       ) : null}
 
-      {/* Geçici: ses tanıma denemesi 4–5. haftada sohbet ekranına taşınınca kaldırılacak. */}
-      <Button label="Ses tanıma denemesi" variant="secondary" onPress={() => router.push('/speech-test')} />
       <Button
         label={pending ? 'Çıkış yapılıyor…' : 'Çıkış yap'}
         variant="secondary"

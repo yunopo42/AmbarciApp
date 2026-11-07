@@ -50,10 +50,10 @@ function RootStack(): JSX.Element {
   const stack = (
     <Stack screenOptions={screenOptions}>
       <Stack.Protected guard={isLoggedIn}>
-        <Stack.Screen name="index" options={{ title: 'Stok' }} />
+        <Stack.Screen name="index" options={{ title: 'Asistan' }} />
+        <Stack.Screen name="stock" options={{ title: 'Stok' }} />
         <Stack.Screen name="products/[productId]" options={{ title: 'Ürün' }} />
         <Stack.Screen name="account" options={{ title: 'Hesap' }} />
-        <Stack.Screen name="speech-test" options={{ title: 'Ses tanıma denemesi' }} />
       </Stack.Protected>
       <Stack.Protected guard={!isLoggedIn}>
         <Stack.Screen name="login" options={{ title: 'Giriş', headerShown: false }} />

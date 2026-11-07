@@ -6,6 +6,10 @@ Bu bir ön denemedir; asıl ölçüm 6. haftadaki etiketli veri kümesiyle yapı
 
 ## Nasıl yapılır
 
+> Bu deneme 1. haftada geçici bir deneme ekranıyla yapıldı. Ekran 4. haftada (#58) kaldırıldı; ses tanıma artık
+> sohbet ekranındaki **Konuş** düğmesinde ve tanınan metin mesaj kutusuna yazılıyor. Aşağıdaki adımlar ve sonuçlar
+> 1. haftanın kaydıdır.
+
 1. Development build'i telefona kur ve uygulamayı aç (adımlar: `docs/mobil-development-build.md`).
 2. Ana ekrandan **Ses tanıma denemesi** bağlantısına gir.
 3. Her cümle için **Mikrofonu aç** düğmesine bas, cümleyi normal konuşma hızında bir kez söyle.
