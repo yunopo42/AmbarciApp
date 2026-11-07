@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -197,3 +197,49 @@ Bu yüzden akış boyunca 15 saniyede bir `: ping` yorum satırı gönderilir: m
 - **"Neden WebSocket değil SSE?"** Cevap tek yönlü akıyor (sunucudan istemciye); SSE düz HTTP üzerinde çalışır, kimlik doğrulama ve CORS diğer uçlarla aynı kalır. Mobilde `expo/fetch`, web'de `fetch` akışı okuyabilir. Teknik araştırma raporundaki yığın kararı da bu.
 - **"Model cevap üretirken veritabanı bağlantısı açık mı kalıyor?"** Hayır. Bağlantı yalnızca cevap başlarken, her tur bitince ve en sonda kısa sorgular için alınır; havuz 15 istemciyle sınırlı olduğu için bu önemli.
 - **"İki kişi aynı sohbete aynı anda yazarsa?"** Sohbeti yalnızca sahibi görür. Aynı kullanıcı iki cihazdan aynı anda yazarsa sohbet satırı kilitlenir; ikinci mesaj 409 alır, sıra numarası benzersizliği de son savunma hattıdır.
+
+## Mobil sohbet ekranı (#58)
+
+Giriş yapınca sohbet açılır (ana ekran). Kullanıcı sorusunu yazar ya da **Konuş**'a basar; tanınan metin kutuya yazılır, kullanıcı düzeltip **Gönder**'e basar. Cevap parça parça görünür; araç çalışırken "Ürün aranıyor…" gibi bir durum satırı çıkar. Başlıkta **Sohbetler** (geçmiş ve yeni sohbet) ve **Stok** (3. haftanın stok listesi) var. Yeni sohbet ilk mesajla açılır: önce `POST /v1/conversations`, ardından mesajın akışı.
+
+Kod: `apps/mobile/src/app/index.tsx` (ana ekran) ve `apps/mobile/src/chat/` (`use-chat.ts` durum ve tekrar gönderme, `stream.ts` expo/fetch, `use-speech-input.ts` ses, `chat-parts.tsx`, `composer.tsx`, `conversation-picker.tsx`). Akışın okunması `packages/api-client/src/chat-stream.ts`'te; web paneli (#59) de aynı fonksiyonu kullanacak.
+
+### Kararlar
+
+1. **Akış tipli istemciden okunur.** `streamChatMessage` isteği `packages/api-client`'ın tipli istemcisiyle gönderir: yol, gövde, oturum ve şirket başlıkları öbür isteklerle aynı ara katmandan gelir. Yalnızca cevabın gövdesi JSON yerine akış olarak alınır (`parseAs: 'stream'`). SSE satırları istemcide ayrılır ve her olay `chatStreamEventSchema` ile doğrulanır; tanınmayan olay atlanır, sunucuya yeni olay türü eklenince eski uygulama bozulmaz. Elle yazılmış ayrı bir fetch çağrısı yok.
+2. **Mobilde `expo/fetch`.** React Native'in eski fetch'i cevabı ancak tamamı gelince verir; `expo/fetch` gövdeyi parça parça verir. Expo 57 genel fetch'i zaten `expo/fetch` ile değiştiriyor; sohbet onu yine de açıkça kullanıyor, akış bu ayara bağlı kalmasın. Parçaları metne çeviren `TextDecoder` de Expo'nun çalışma ortamında hazır geliyor; yeni paket eklenmedi.
+3. **Tekrar gönderme elle.** Her mesaja istemcide bir kimlik (`clientMessageId`, UUID) verilir. Ağ hatası, kopan akış ya da model hatasında mesajın altında Türkçe hata ve **Tekrar gönder** çıkar; düğme mesajı aynı kimlikle gönderir. Cevap sunucuda tamamlanmışsa kayıtlı cevap gelir, model ikinci kez çağrılmaz; cevap hâlâ sürüyorsa API'nin "hâlâ hazırlanıyor" mesajı (409) gösterilir. Kendiliğinden tekrar denenmez: kullanıcı ne olduğunu görür, ikinci gönderim onun kararıdır.
+4. **Uygulama kapansa da başarısız mesaj görünür.** Geçmişte son kullanıcı mesajının cevabı başarısızsa "Bu mesaja cevap alınamadı." ve **Tekrar gönder** çıkar; cevap hâlâ sürüyorsa "Cevap hâlâ hazırlanıyor." ve **Yenile**. Yalnızca son mesaj için: daha eski bir mesaj sonradan cevaplanırsa sohbetin sırası bozulurdu.
+5. **Akan cevap ile kayıtlı geçmiş.** Gönderilen mesaj, cevabı bitene kadar ekranda yerel bir "tur" olarak durur. `done` gelince sohbetin mesajları yeniden yüklenir; kayıtlı mesajlar cevabı içerince tur ekrandan çekilir, yerini kayıtlı mesajlar alır. Kullanıcı ekrandan çıkar ya da başka sohbete geçerse akışın okunması durur; sunucu cevabı tamamlayıp kaydeder, sohbete dönülünce cevap görünür (#57).
+6. **Kopan akış.** `done` ya da `error` gelmeden biten akış `STREAM_INTERRUPTED` olur: "Bağlantı koptu. Cevap sunucuda tamamlanmış olabilir; tekrar gönderince kaydedilen cevap gelir." Son olaydan sonra kopan bağlantı cevabı bozmaz.
+7. **Ses kutuya yazılır, kendiliğinden gönderilmez.** Tanıma telefonun ses tanıma servisiyle yapılır (`expo-speech-recognition`, `tr-TR`, ara sonuçlarla). 1. hafta denemesinde ürün kodları ve bazı ölçüler yanlış tanındı (`eval/ses-denemesi.md`); bu yüzden kullanıcı metni görüp düzeltir. 1. haftanın deneme ekranı (`/speech-test`) kaldırıldı.
+8. **Tek eylem düğmesi.** Tasarımdaki gibi kutunun sağında tek ana düğme var: kutu boşken **Konuş**, dinlerken **Dur**, kutuda metin varken **Gönder**. İkon kütüphanesi yeni bağımlılık olduğu için eklenmedi; düğmeler metinli.
+9. **Gezinme.** Sohbet ana ekran oldu; stok listesi `/stock`'a taşındı ve başlıktaki **Stok**'tan açılıyor. Tasarımdaki alt sekme çubuğu (Sohbet, Stok, İşlemlerim) ikon gerektirdiği ve "İşlemlerim" ekranı henüz olmadığı için yapılmadı.
+10. **İstemci kimliği.** React Native'de `crypto.randomUUID` yok; kimlik UUID v4 biçiminde `Math.random` ile üretiliyor (`src/lib/uuid.ts`). Gizli bir değer değil, yalnızca kendi sohbetinde benzersiz olması gerekiyor; bunun için `expo-crypto` eklenmedi.
+11. **Klavye.** Mesaj kutusu klavyenin üstünde kalsın diye `KeyboardAvoidingView` kullanılıyor; ekran başlığının yüksekliği, ekranın pencere içindeki konumu ölçülerek veriliyor. Klavye kapalıyken kutu telefonun alt çubuğunun üstünde durur.
+
+### Ekranda görünen hatalar
+
+| Durum | Gösterilen |
+| --- | --- |
+| Sunucuya ulaşılamadı (`NETWORK_ERROR`) | "API'ye ulaşılamadı. Sunucu uykudaysa bir dakika sonra tekrar deneyin." |
+| Akış koptu (`STREAM_INTERRUPTED`) | "Bağlantı koptu. Cevap sunucuda tamamlanmış olabilir; tekrar gönderince kaydedilen cevap gelir." |
+| 409, 404 ve akıştaki `error` olayı (`AI_*`, `AGENT_TOOL_LIMIT`) | API'nin Türkçe mesajı (yukarıdaki tablolar) |
+| Ses: izin yok, servis yok, ses algılanmadı, Türkçe yok, internet yok | Mesaj kutusunun üstünde Türkçe açıklama (`use-speech-input.ts`) |
+
+İlk mesaj gönderilirken "Gönderiliyor… Sunucu uykudaysa ilk cevap bir dakika sürebilir." yazar: Render'daki ücretsiz servis 15 dakika istek almazsa uyur.
+
+### Testler
+
+| Test | Ortam | Ne doğrular |
+| --- | --- | --- |
+| `packages/api-client/test/chat-stream.spec.ts` | CI | SSE satırları (`: ping`, çok satırlı `data`, `\r\n`); satırın ve çok baytlı Türkçe harfin ortasında bölünen parçalar; yarım kalan son olayın atılması; isteğin yolu, oturum ve şirket başlıkları ve gövdesi; olayların sırası ve son olay; tanınmayan ve bozuk olayın atlanması; `error` olayı; 409'un API koduyla fırlaması; son olay gelmeden biten ya da kopan akış (`STREAM_INTERRUPTED`); son olaydan sonra kopan bağlantı |
+
+Mobil pakette test altyapısı yok. Ekran 7 Kasım 2026'da Android development build'de, Render'daki API'ye karşı elle denendi: yazarak ve sesle stok sorusu (cevaplar stok ekranındaki miktarlarla aynı), cevabın parça parça gelmesi, klavye, ağ hatasında tekrar gönderme ve sohbet geçmişi. Süre, ilk metin parçasına kadar geçen süre, token ve maliyet kapı denemesinde (#60) ölçülecek.
+
+### Savunmada sorulabilecek sorular
+
+- **"Telefon cevabı nasıl parça parça gösteriyor?"** Sunucu cevabı SSE olarak akıtıyor. Uygulama `expo/fetch` ile gövdeyi parça parça okuyor, satırları olaylara ayırıyor ve her `text_delta` parçasını ekrandaki cevabın sonuna ekliyor. `done` gelince cevap, kaydedilen metnin tamamıyla değiştiriliyor.
+- **"Ağ koptu; kullanıcı ne görüyor?"** Mesajın altında "Bağlantı koptu…" ve **Tekrar gönder**. Düğme aynı istemci kimliğiyle gönderiyor; cevap sunucuda tamamlandıysa kayıtlı cevap geliyor, model ikinci kez çağrılmıyor.
+- **"Sesle söylenen mesaj neden kendiliğinden gönderilmiyor?"** Ses tanıma ürün kodlarında ve ölçülerde yanılabiliyor (1. hafta denemesi). Kullanıcı tanınan metni görüp düzeltiyor; yanlış ürünle soru sorulmuyor.
+- **"Ses kaydı nereye gidiyor?"** Ambarcı'nın sunucusuna gitmiyor ve hiçbir yerde saklanmıyor; sunucuya yalnızca tanınan metin gidiyor. Tanımayı telefonun ses tanıma servisi yapıyor (Android'de Google'ın servisi); bu servis tanıma için internet kullanabilir.

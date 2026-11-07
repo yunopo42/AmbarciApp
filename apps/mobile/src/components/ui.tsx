@@ -103,6 +103,17 @@ export function TextField({ style, onFocus, onBlur, ...props }: TextInputProps):
   );
 }
 
+/** Ekran başlığındaki metin düğmesi ("Hesap", "Stok", "Sohbetler"): label-lg, primary, dokunma alanı 48. */
+export function HeaderTextButton({ label, ...props }: PressableProps & { label: string }): JSX.Element {
+  return (
+    <Pressable accessibilityRole="button" hitSlop={8} style={styles.headerButton} {...props}>
+      <AppText variant="labelLg" tone="primary">
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
 /** Yükleniyor, hata ya da boş liste mesajı; hatada "Tekrar dene". */
 export function StateMessage({
   loading = false,
@@ -178,6 +189,11 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: colors.primaryAction,
     borderWidth: 2,
+  },
+  headerButton: {
+    minHeight: touchTarget,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
   },
   state: {
     alignItems: 'center',

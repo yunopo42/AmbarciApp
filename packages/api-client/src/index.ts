@@ -4,13 +4,17 @@
 // tipleri üretir; CI, üretilmiş dosyalar güncel değilse başarısız olur. TanStack Query sarmalayıcısı
 // (openapi-react-query) bu pakette değil, her uygulamada kurulur: uygulamada tek bir React Query kopyası olsun ve
 // QueryClientProvider ile sorgular aynı kopyayı kullansın.
-import { apiErrorSchema, ORGANIZATION_HEADER } from '@ambarci/shared';
+import { ORGANIZATION_HEADER } from '@ambarci/shared';
 import createClient from 'openapi-fetch';
 import type { Client, Middleware } from 'openapi-fetch';
 
 import type { components, paths } from './schema.js';
 
 export type { components, paths } from './schema.js';
+export { ApiRequestError, describeApiError } from './errors.js';
+export type { ApiFailure } from './errors.js';
+export { readServerSentEvents, STREAM_INTERRUPTED, streamChatMessage } from './chat-stream.js';
+export type { ChatStreamEnd, ChatStreamOptions, ServerSentEvent } from './chat-stream.js';
 
 export type ApiClient = Client<paths>;
 
@@ -55,30 +59,4 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   };
   client.use(session);
   return client;
-}
-
-/** Kullanıcıya gösterilebilecek hata: API'nin sabit kodu ve Türkçe mesajı. */
-export interface ApiFailure {
-  code: string;
-  message: string;
-  details?: unknown;
-}
-
-/**
- * Bir istek hatasını tek biçime getirir. API'nin hata gövdesi olduğu gibi döner; ağ hatası (sunucu uykuda, internet
- * yok) ve beklenmeyen cevaplar için de bir kod ve Türkçe mesaj verilir.
- */
-export function describeApiError(error: unknown): ApiFailure {
-  const parsed = apiErrorSchema.safeParse(error);
-  if (parsed.success) {
-    return parsed.data.error;
-  }
-  if (error instanceof TypeError) {
-    // fetch, sunucuya ulaşamadığında TypeError fırlatır.
-    return {
-      code: 'NETWORK_ERROR',
-      message: "API'ye ulaşılamadı. Sunucu uykudaysa bir dakika sonra tekrar deneyin.",
-    };
-  }
-  return { code: 'UNEXPECTED', message: 'Beklenmeyen bir hata oluştu.' };
 }
