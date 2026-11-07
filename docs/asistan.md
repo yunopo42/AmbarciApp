@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm, altıncı bölüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -24,7 +24,7 @@ Kod: `apps/api/src/modules/ai/`. Uç noktası yok; asistan modülü (#56) kullan
 3. **Geçmiş değiştirilmeden gönderilir.** Modelin döndürdüğü bloklar (düşünme blokları dahil, metni boş olsa bile) düz JSON'a çevrilip `messages.content`'e olduğu gibi yazılır ve sonraki istekte aynen geri gönderilir. Haiku 5.5'te daha önce gönderilmiş bir mesaj, sistem promptu ya da araç listesi değişirse geri gönderilen düşünme blokları geçersiz olur ve istek reddedilebilir (ADR-001). Test, SDK'nın gerçekten gönderdiği gövdede geçmişin birebir aynı olduğunu doğrular.
 4. **Sistem promptu sürümlü ve sabit.** `prompts/chat.v1.ts` (`chat-v1`). Metne tarih, şirket ya da kullanıcı adı gibi değişen bilgi yazılmaz: hem önbellek bozulur hem de sohbetin ortasında sistem promptu değişmiş olur. Prompt değişecekse dosya düzenlenmez, `chat.v2.ts` açılır; eski sürümler silinmez, süren bir sohbet başladığı sürümle devam edebilir (`chatPrompt(version)`). Sürüm her çağrıda `ai_runs.prompt_version`'a yazılır.
 5. **Araçlar strict.** Araç tanımları `strict: true` ile gider; API modelin girdisini şemaya uydurur. Akışta araç girdisini parça parça almak için `eager_input_streaming` bilerek kapalı: bizim araç girdilerimiz birkaç düzine bayt, açıkken de API girdiyi doğrulamaz. Asistan girdiyi ayrıca kendi şemasıyla doğrular (#56).
-6. **Önbellek.** İki işaret var: sistem bloğundaki işaret araç tanımlarını ve sistem promptunu (API bunları bu sırayla işler), üst düzeydeki işaret geçmişin sonuna kadarını önbelleğe alır. Bir sorunun ikinci model çağrısı (araç turundan sonra) aynı ön eki önbellekten okur. Haiku 5.5'te önbelleğe alınabilen en kısa istem 512 token. Önbelleğin gerçek etkisi kapı denemesinde `cache_read_input_tokens` ile ölçülecek (#60).
+6. **Önbellek.** İki işaret var: sistem bloğundaki işaret araç tanımlarını ve sistem promptunu (API bunları bu sırayla işler), üst düzeydeki işaret geçmişin sonuna kadarını önbelleğe alır. Bir sorunun ikinci model çağrısı (araç turundan sonra) aynı ön eki önbellekten okur. Haiku 5.5'te önbelleğe alınabilen en kısa istem 512 token. Kapı denemesinde (#60) mesaj başına önbelleksiz girdi 4–8 token kaldı; girdinin geri kalanı önbellekten okundu (Kapı denemesi bölümü).
 7. **Her çağrı `ai_runs`'a yazılır (mimari değişmez 10).** Başarılı çağrı; modelin reddettiği çağrı (tokenları faturalanır); sağlayıcı hatası (sıfır token, hata koduyla, süresiyle). Yalnızca anahtar tanımlı değilken kayıt yazılmaz, çünkü istek hiç gönderilmemiştir. Kayıt, modelin cevabından bağımsız yazılır: model çağrıldıysa maliyet oluşmuştur.
 8. **Maliyet SQL'de (ADR-003).** `cost_usd = round((giriş × giriş fiyatı + önbelleğe yazma × yazma fiyatı + önbellekten okuma × okuma fiyatı + çıkış × çıkış fiyatı) / 1.000.000, 8)`. Fiyatlar `pricing.ts`'te metin olarak durur ve JS'te hesaba girmez. Haiku 5.5: giriş 0,10 $, çıkış 0,50 $, önbelleğe yazma 0,125 $, önbellekten okuma 0,01 $ (milyon token başına; claude-api skill'i, 2026-10-06). İstem 100K tokenı aşarsa uzun istem fiyatı (0,50 $ / 2,50 $) uygulanır; hangi fiyatın seçileceği token sayılarından (tam sayı) bulunur. Kayıt, çağrı anındaki fiyatla kalır.
 9. **Model reddederse ya da cevap yarım kalırsa.** `stop_reason: "refusal"` → `422 AI_REFUSED` ve kullanıcıya sorusunu farklı sorması söylenir; Haiku 5.5'te sunucu tarafında yedek model yoktur. Araç çağrısı yazılırken çıktı sınırına takılan cevap (`max_tokens`) çalıştırılmaz: yarım kalmış girdi geçerli görünebilir → `502 AI_RESPONSE_TRUNCATED`. İki durumda da çağrı önce kaydedilir; reddedilen ya da yarım içerik geçmişe eklenmez.
@@ -171,7 +171,7 @@ Render'ın belgelerine göre (6 Kasım 2026'da okundu):
 - Ücretsiz plandaki servis 15 dakika gelen trafik olmazsa uyur; bir dakikada uyanır ([render.com/docs/free](https://render.com/docs/free)).
 - WebSocket için sabit bir zaman aşımı yoktur; bağlantılar deploy gibi durumlarda kapanır ve iki tarafın aralıklarla canlı tutma mesajı göndermesi önerilir (örnekte 30 saniye) ([render.com/docs/websocket](https://render.com/docs/websocket)). Uzun HTTP akışı için ayrı bir süre ya da tamponlama belgelenmemiş.
 
-Bu yüzden akış boyunca 15 saniyede bir `: ping` yorum satırı gönderilir: model ya da araç uzun sürdüğünde aradaki vekil sunucular ve mobil ağlar bağlantıyı boşta sanıp kesmesin. Bir cevap normalde bundan kısa sürer (2. hafta denemesinde akışsız istekle mesaj başına medyan 4,13 saniye); ping çoğu cevapta hiç gönderilmez. Render'ın akışı tamponlamadan ilettiği (ilk metin parçasının cevap bitmeden geldiği) gerçek bir istekle ölçülecek: bu ölçüm gerçek model çağrısı ve Render'da `ANTHROPIC_API_KEY` gerektirdiği için kapı denemesinde (#60) yapılacak. **Ölçülmedi.**
+Bu yüzden akış boyunca 15 saniyede bir `: ping` yorum satırı gönderilir: model ya da araç uzun sürdüğünde aradaki vekil sunucular ve mobil ağlar bağlantıyı boşta sanıp kesmesin. Bir cevap normalde bundan kısa sürer (2. hafta denemesinde akışsız istekle mesaj başına medyan 4,13 saniye); ping çoğu cevapta hiç gönderilmez. **Ölçüldü (#60, 7 Kasım 2026):** Render akışı biriktirmeden iletiyor; ilk metin parçasından son olaya kadar istemcide geçen süre sunucudakiyle neredeyse aynı (fark 70–115 ms). 17,9 saniyelik bir cevapta akış 11,5 saniye sessiz kaldı, arada bir `: ping` geldi ve bağlantı kopmadı. 30 saniyeden uzun bir sessizlik denenmedi. Ayrıntı: Kapı denemesi bölümü.
 
 ### Hata kodları (sohbet)
 
@@ -235,7 +235,7 @@ Kod: `apps/mobile/src/app/index.tsx` (ana ekran) ve `apps/mobile/src/chat/` (`us
 | --- | --- | --- |
 | `packages/api-client/test/chat-stream.spec.ts` | CI | SSE satırları (`: ping`, çok satırlı `data`, `\r\n`); satırın ve çok baytlı Türkçe harfin ortasında bölünen parçalar; yarım kalan son olayın atılması; isteğin yolu, oturum ve şirket başlıkları ve gövdesi; olayların sırası ve son olay; tanınmayan ve bozuk olayın atlanması; `error` olayı; 409'un API koduyla fırlaması; son olay gelmeden biten ya da kopan akış (`STREAM_INTERRUPTED`); son olaydan sonra kopan bağlantı |
 
-Mobil pakette test altyapısı yok. Ekran 7 Kasım 2026'da Android development build'de, Render'daki API'ye karşı elle denendi: yazarak ve sesle stok sorusu (cevaplar stok ekranındaki miktarlarla aynı), cevabın parça parça gelmesi, klavye, ağ hatasında tekrar gönderme ve sohbet geçmişi. Süre, ilk metin parçasına kadar geçen süre, token ve maliyet kapı denemesinde (#60) ölçülecek.
+Mobil pakette test altyapısı yok. Ekran 7 Kasım 2026'da Android development build'de, Render'daki API'ye karşı elle denendi: yazarak ve sesle stok sorusu (cevaplar stok ekranındaki miktarlarla aynı), cevabın parça parça gelmesi, klavye, ağ hatasında tekrar gönderme ve sohbet geçmişi. Süre, ilk metin parçasına kadar geçen süre, token ve maliyet kapı denemesinde (#60) ölçüldü.
 
 ### Savunmada sorulabilecek sorular
 
@@ -276,3 +276,54 @@ Denemede bulunan ortam sorunu: geliştirici bilgisayarında Windows kullanıcı 
 - **"Mobil ve web aynı kuralı nasıl uyguluyor?"** Akışın okunması ve turun durumu ortak pakette (`packages/api-client`), ikisi de aynı fonksiyonları çağırıyor ve bu fonksiyonların testi var. Uygulamalarda yalnızca görünüm ve React kancası farklı.
 - **"Şirket değiştirince başka şirketin sohbeti görünebilir mi?"** Hayır. Panel aktif şirketin istemcisi ve önbelleğiyle birlikte baştan kuruluyor; sunucu da sohbeti yalnızca sahibine, o şirkette gösteriyor (başkasınınki 404).
 - **"Kullanıcı sayfa değiştirirse cevap yarıda kalır mı?"** Hayır. Panel bütün oturumlu sayfaların ortak düzeninde duruyor; sayfa değişse de kurulu kalıyor ve akış sürüyor. Tarayıcı sekmesi kapanırsa da cevap sunucuda tamamlanıp kaydediliyor (#57).
+
+## Kapı denemesi ve ilk ölçüm (#60)
+
+7 Kasım 2026'da iki ölçüm yapıldı. İkisi de Render'daki API'ye karşı, gerçek model çağrısıyla (Claude Haiku 5.5, effort `low`, prompt `chat-v1`). Asıl değerlendirme 6. haftada 100 etiketli mesajla (`pnpm eval`); buradaki sayılar küçük bir örneklemden çıkan göstergelerdir.
+
+1. **Ölçüm betiği** (`pnpm measure:chat`, `apps/api/src/scripts/measure-chat-remote.ts`). API üzerinden geçici bir şirket kurulur: 2 depo, 6 ürün, onaylanmış giriş ve çıkış işlemleri. 9 sabit soru, her biri ayrı bir sohbette sorulur. Her akış olayının bu bilgisayara geliş zamanı ve aynı soruların `ai_runs` kayıtları okunur; sonunda geçici şirket bütün kayıtlarıyla silinir. Sonuç dosyası: `eval/sohbet/render-2026-11-07.json`.
+2. **Telefon denemesi** ([eval/kapi-denemesi.md](../eval/kapi-denemesi.md)). Android development build, ABC Elektrik; 4 soru yazarak, 5 soru sesle, tek sohbette.
+
+### Sonuçlar
+
+| | Betik (9 soru, her biri ayrı sohbet) | Telefon (9 soru, tek sohbet) |
+| --- | --- | --- |
+| Doğru cevap | 9/9 | 9/9 (kullanıcının yetkili olduğu depolara göre, aşağıda) |
+| Mesaj başına model çağrısı | 1–3 tur | 1–3 tur |
+| İlk metin parçası, medyan | İstemcide 2,9 sn (sunucuda 2,3 sn) | Sunucuda 2,3 sn |
+| Cevabın tamamı, medyan | İstemcide 3,4 sn (sunucuda 2,6 sn) | Sunucuda 2,5 sn |
+| En uzun cevap | 17,9 sn (31 araç çağrısı, 3 tur) | Sunucuda 3,3 sn |
+| Mesaj başına maliyet | 0,0001–0,0005 dolar; uzun soru 0,0035 dolar | 0,0001–0,0005 dolar |
+| Toplam maliyet | 0,0055 dolar | 0,0029 dolar |
+| Stok değiştirme isteğinden sonra stok | Değişmedi (API'den doğrulandı) | Değişmedi (kaçak akım rölesi 4 adet) |
+| Başarısız model çağrısı | 0 | 0 |
+
+"Sunucuda" süre, `ai_runs`'taki model çağrılarının toplamıdır. "İstemcide" süre, isteğin bu bilgisayardan gönderilmesinden son olayın gelmesine kadar geçen süredir. Telefonda istemci tarafı süre ölçülmedi (uygulama süre kaydetmiyor); cevabın parça parça geldiği ekranda görüldü.
+
+### Ne anlama geliyor
+
+- **Render akışı biriktirmeden iletiyor.** Her soruda ilk metin parçasından son olaya kadar istemcide geçen süre sunucudakiyle neredeyse aynı (fark 70–115 ms). Uzun soruda metin 2.363 ms boyunca parça parça geldi; sunucuda bu süre 2.259 ms. Render biriktirseydi bütün parçalar aynı anda gelir, istemcideki süre sıfıra yakın olurdu.
+- **Uzun cevapta bağlantı ping'le sürdü.** 17,9 saniyelik cevapta model araçları çalıştırırken akış 11,5 saniye boyunca olay göndermedi; bu arada bir `: ping` geldi ve bağlantı kopmadı. 30 saniyeden uzun bir sessizlik denenmedi; ping 15 saniyede bir gittiği için böyle bir sessizlik oluşmuyor.
+- **Kullanıcı boş ekran görmüyor.** İstek yaklaşık 0,3 saniyede kabul ediliyor (`message_started`), ilk araç durum satırı ("Ürün aranıyor…") 1–2 saniyede çıkıyor, ilk metin yaklaşık 3 saniyede geliyor. İlk metin toplam sürenin %85 kadarında geliyor, çünkü cevap ancak ürün bulunup stok okunduktan sonra yazılıyor.
+- **Render ve ağ payı yaklaşık 0,8 saniye.** İstemcideki süre ile model çağrılarının toplamı arasındaki fark bu: evden Frankfurt'a ağ, sohbetin kilitlenip kaydedilmesi ve araçların veritabanı sorguları.
+- **Önbellek çalışıyor.** Mesaj başına önbelleksiz girdi 4–8 token; girdinin geri kalanı (2.000–19.000 token) önbellekten okunuyor (milyon token başına 0,01 dolar). Aynı sohbette geçmiş uzadıkça önbellekten okunan miktar artıyor, önbelleğe yeni yazılan azalıyor. Maliyetin çoğu önbelleğe yazmadan ve çıktıdan geliyor. Bu fiyatla 1.000 soru yaklaşık 0,3 dolar tutar (medyan mesaj maliyetinden tahmin).
+- **Araç turu sınırına yaklaşılmadı.** Model araçları paralel çağırıyor: 6 ürünlük soruda 6 arama, 12 stok ve 12 hareket sorgusu 3 turda bitti (sınır 5).
+- **Depo yetkisi asistanda da geçerli.** Telefondaki hesap çalışan ve yalnızca Merkez Depo ile Ostim Depo'ya yetkili. "Topraklı priz toplam" sorusunda asistan bu iki deponun toplamını verdi (240); Servis Aracı 1'deki 10 adedi saymadı. "Araç deposunda otomat" sorusunda araç deposunu göremediğini söyledi. Bu doğru davranış: araçlar şirketi ve kullanıcıyı oturumdan alır ve depo yetkisini uygular (mimari değişmez 5). Deneme listesindeki beklenen cevaplar yönetici gibi bütün depolar üzerinden hesaplanmıştı; liste sonradan düzeltildi.
+- **Ses tanıma.** 5 sesli sorunun tanınan metni listedeki cümleyle aynı geldi; düzeltme gerekmedi.
+
+### Sınırlamalar ve sonraki adımlar
+
+- **Örneklem küçük:** betikte 9, telefonda 9 soru; tek gün, tek ağ. Sayılar ölçülen değerler ama genelleme yapmaya yetmez; asıl değerlendirme 6. haftada.
+- **Markdown:** Model bazı cevaplarda kalın yazı (`**…**`) kullanıyor. Mobil ve web düz metin gösterdiği için yıldızlar ekranda görünüyor. Prompta "Markdown kullanma" kuralı eklemek prompt sürümünü değiştirir (`chat-v2`); 6. haftadaki değerlendirmeyle birlikte ele alınacak ya da görünümde basit biçimlendirme yapılacak.
+- **"Toplam" ifadesi:** Çalışana verilen toplam, yalnızca yetkili olduğu depoların toplamı; cevap bunu açıkça söylemiyor ("toplam 240 adet"). Prompta "görebildiğin depolarda" ifadesi aynı sürümde eklenebilir.
+- **Hitap:** Bir cevapta "sen" yerine "siz" kullanıldı.
+- **Ses uyarısı ekranda kalıyor:** Telefonda "Ses algılanmadı" uyarısı, sonraki mesajlar gönderildiği hâlde ekranda kaldı. Mesaj gönderilince ya da kutuya yazılınca temizlenmeli.
+- **Telefonda süre:** Telefonda istemci tarafı süre ölçülmedi.
+- **Yerel geliştirme:** Geliştirici bilgisayarında tanımlı bir `ANTHROPIC_BASE_URL` SDK'nın adresini değiştirebiliyor (#59 denemesi, Web sohbet paneli bölümü). Adresin kodda sabitlenmesi ayrı bir iş olarak önerildi.
+
+### Savunmada sorulabilecek sorular
+
+- **"Render cevabı gerçekten parça parça iletiyor mu? Nasıl biliyorsunuz?"** Betik her parçanın bilgisayara geliş zamanını kaydetti. İlk parçadan son olaya kadar istemcide geçen süre, sunucudaki süreyle neredeyse aynı (fark 0,1 saniyenin altında). Render biriktirseydi bütün parçalar aynı anda gelirdi.
+- **"Bir soru ne kadara mal oluyor?"** Çoğu soru 0,0001–0,0005 dolar; 6 ürünlük uzun soru 0,0035 dolar. Girdinin neredeyse tamamı önbellekten okunduğu için ucuz. 1.000 soru yaklaşık 0,3 dolar tutar.
+- **"Kullanıcı ilk kelimeyi kaç saniyede görüyor?"** Yaklaşık 3 saniyede. Ondan önce, 1–2 saniyede "Ürün aranıyor…" gibi bir durum satırı çıkıyor.
+- **"Asistan çalışana yetkisi olmadığı deponun stoğunu söyler mi?"** Hayır. Telefon denemesindeki çalışan hesabı Servis Aracı 1'i göremedi; asistan bunu söyledi ve toplamı yalnızca yetkili depolardan verdi.

@@ -9,72 +9,22 @@
 // Gerekenler (.env): DATABASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY, MEASURE_EMAIL, MEASURE_PASSWORD.
 // İsteğe bağlı: MEASURE_API_URL (varsayılan Render adresi), MEASURE_REPEATS (20), MEASURE_LABEL.
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import { createDatabase } from '@ambarci/db';
 import type { Database } from '@ambarci/db';
 import { IDEMPOTENCY_HEADER, operationSchema, ORGANIZATION_HEADER } from '@ambarci/shared';
 import type { Operation } from '@ambarci/shared';
 import { sql } from 'drizzle-orm';
-import { z } from 'zod';
 
 import { latencyScenarios, printReport, serverTimingOf, summarize, writeReport } from './latency.js';
 import type { LatencyReport, LatencyScenario, ScenarioResult } from './latency.js';
+import { loadRepoEnv, measureApiUrl, repoRoot, required, signIn, wakeUp } from './remote-session.js';
 
-// Derlenmiş dosya apps/api/dist/scripts/ altında çalışır; dört üst klasör depo köküdür.
-const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
-const envFile = fileURLToPath(new URL('../../../../.env', import.meta.url));
-if (existsSync(envFile)) {
-  process.loadEnvFile(envFile);
-}
+loadRepoEnv();
 
-function required(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`${name} tanımlı değil (.env).`);
-  }
-  return value;
-}
-
-const apiUrl = (process.env.MEASURE_API_URL?.trim() || 'https://ambarci-api.onrender.com').replace(/\/$/, '');
+const apiUrl = measureApiUrl();
 const repeats = Number(process.env.MEASURE_REPEATS ?? '20');
 const label = process.env.MEASURE_LABEL?.trim() || (apiUrl.includes('onrender.com') ? 'render' : 'yerel-http');
-
-const signInSchema = z.object({ access_token: z.string(), user: z.object({ id: z.uuid() }) });
-
-/** Ölçüm kullanıcısıyla Supabase Auth'a e-posta + şifreyle giriş yapar; token yalnızca bellekte tutulur. */
-async function signIn(): Promise<{ token: string; userId: string }> {
-  const response = await fetch(`${required('SUPABASE_URL')}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { apikey: required('SUPABASE_ANON_KEY'), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: required('MEASURE_EMAIL'), password: required('MEASURE_PASSWORD') }),
-  });
-  if (!response.ok) {
-    throw new Error(`Supabase girişi başarısız (${response.status}). MEASURE_EMAIL ve MEASURE_PASSWORD'ü kontrol edin.`);
-  }
-  const body = signInSchema.parse(await response.json());
-  return { token: body.access_token, userId: body.user.id };
-}
-
-/** Render'ın ücretsiz planı 15 dakika istek almazsa uyur; ilk istekte bir dakikaya kadar sürebilir. */
-async function wakeUp(): Promise<void> {
-  const deadline = Date.now() + 120_000;
-  for (;;) {
-    try {
-      const response = await fetch(`${apiUrl}/v1/health`);
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // Uyanırken bağlantı reddedilebilir; tekrar denenir.
-    }
-    if (Date.now() > deadline) {
-      throw new Error(`${apiUrl} iki dakikada cevap vermedi.`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
-  }
-}
 
 interface Fixture {
   org: string;
@@ -158,7 +108,7 @@ async function main(): Promise<void> {
   };
 
   try {
-    await wakeUp();
+    await wakeUp(apiUrl);
     const scenarios = latencyScenarios({ products: fixture.products, main: fixture.main, branch: fixture.branch });
     const [warmup] = scenarios;
     if (!warmup) {

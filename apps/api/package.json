@@ -14,7 +14,8 @@
     "seed:opening": "nest build && node dist/scripts/seed-opening-stock.js",
     "measure:latency": "vitest run --config vitest.measure.config.ts",
     "measure:remote": "nest build && node dist/scripts/measure-confirm-remote.js",
-    "gen:openapi": "nest build && node dist/scripts/generate-openapi.js"
+    "gen:openapi": "nest build && node dist/scripts/generate-openapi.js",
+    "measure:chat": "nest build && node dist/scripts/measure-chat-remote.js"
   },
   "dependencies": {
     "@ambarci/db": "workspace:*",
