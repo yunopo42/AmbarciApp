@@ -1,3 +1,5 @@
+import { randomUuid } from '@ambarci/api-client';
+import type { ChatRow } from '@ambarci/api-client';
 import { MESSAGE_TEXT_MAX_LENGTH } from '@ambarci/shared';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -10,12 +12,10 @@ import { ChatRowView, EmptyChat } from '@/chat/chat-parts';
 import { Composer } from '@/chat/composer';
 import { ConversationPicker } from '@/chat/conversation-picker';
 import { useChat } from '@/chat/use-chat';
-import type { ChatRow } from '@/chat/use-chat';
 import { useSpeechInput } from '@/chat/use-speech-input';
 import { OrganizationGate } from '@/components/organization-gate';
 import { HeaderTextButton, StateMessage } from '@/components/ui';
 import { useKeyboardVisible } from '@/lib/use-keyboard-visible';
-import { randomUuid } from '@/lib/uuid';
 import { spacing } from '@/theme';
 
 /**

@@ -1,14 +1,17 @@
 'use client';
 
-import { Boxes, Contact, LayoutDashboard, Package, Users, Warehouse } from 'lucide-react';
+import { Boxes, Contact, LayoutDashboard, MessageSquareText, Package, Users, Warehouse } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { JSX, ReactNode } from 'react';
 
 import { Brand } from '@/components/brand';
+import { CHAT_PANEL_ID, ChatPanel } from '@/components/chat/chat-panel';
+import { useChatPanelOpen } from '@/components/chat/use-chat-panel-open';
 import { useOrganizations } from '@/components/organization-provider';
 import { SignOutButton } from '@/components/sign-out-button';
+import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/input';
 import { ROLE_LABELS } from '@/lib/labels';
 import { cn } from '@/lib/utils';
@@ -41,15 +44,18 @@ function isCurrent(pathname: string, item: NavItem): boolean {
 
 /**
  * Oturumlu sayfaların iskeleti (docs/tasarim.md, web): solda sabit menü, sağda en fazla 1280 px genişlikte ortalanan
- * içerik, kenar boşluğu 32 px. Dar ekranda menü içeriğin üstüne geçer.
+ * içerik, kenar boşluğu 32 px. Dar ekranda menü içeriğin üstüne geçer. Aktif şirket varsa menüdeki "Asistan" düğmesi
+ * sağdaki sohbet panelini açıp kapatır; geniş ekranda panel açıkken içerik onun solunda kalır.
  */
 export function AppShell({ email, children }: { email: string | null; children: ReactNode }): JSX.Element {
   const pathname = usePathname();
   const { organizations, active, selectOrganization } = useOrganizations();
   const items = active ? NAV_ITEMS.filter((item) => !item.adminOnly || active.role === 'ADMIN') : [];
+  const [chatOpen, setChatOpen] = useChatPanelOpen();
+  const showChat = active !== null && chatOpen;
 
   return (
-    <div className="min-h-screen lg:pl-64">
+    <div className={cn('min-h-screen lg:pl-64', showChat && 'xl:pr-96')}>
       <aside className="flex flex-col gap-6 border-b border-border bg-card p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:overflow-y-auto lg:border-r lg:border-b-0">
         <Link href="/" className="rounded-md focus-visible:outline-2 focus-visible:outline-primary-action">
           <Brand subtitle={organizations.length > 1 ? null : active?.name} />
@@ -94,6 +100,18 @@ export function AppShell({ email, children }: { email: string | null; children: 
           </nav>
         ) : null}
 
+        {active ? (
+          <Button
+            variant={chatOpen ? 'secondary' : 'primary'}
+            aria-expanded={chatOpen}
+            aria-controls={CHAT_PANEL_ID}
+            onClick={() => setChatOpen(!chatOpen)}
+          >
+            <MessageSquareText aria-hidden />
+            {chatOpen ? 'Asistanı kapat' : 'Asistana sor'}
+          </Button>
+        ) : null}
+
         <div className="flex flex-col gap-3 border-t border-divider pt-4 lg:mt-auto">
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-body-md-medium text-text">{email}</span>
@@ -104,6 +122,9 @@ export function AppShell({ email, children }: { email: string | null; children: 
       </aside>
 
       <main className="mx-auto flex w-full max-w-page flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+
+      {/* Panel şirket katmanının içinde: sohbetleri aktif şirketin istemcisiyle çeker. */}
+      {active ? <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} /> : null}
     </div>
   );
 }
