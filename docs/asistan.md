@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -202,7 +202,7 @@ Bu yüzden akış boyunca 15 saniyede bir `: ping` yorum satırı gönderilir: m
 
 Giriş yapınca sohbet açılır (ana ekran). Kullanıcı sorusunu yazar ya da **Konuş**'a basar; tanınan metin kutuya yazılır, kullanıcı düzeltip **Gönder**'e basar. Cevap parça parça görünür; araç çalışırken "Ürün aranıyor…" gibi bir durum satırı çıkar. Başlıkta **Sohbetler** (geçmiş ve yeni sohbet) ve **Stok** (3. haftanın stok listesi) var. Yeni sohbet ilk mesajla açılır: önce `POST /v1/conversations`, ardından mesajın akışı.
 
-Kod: `apps/mobile/src/app/index.tsx` (ana ekran) ve `apps/mobile/src/chat/` (`use-chat.ts` durum ve tekrar gönderme, `stream.ts` expo/fetch, `use-speech-input.ts` ses, `chat-parts.tsx`, `composer.tsx`, `conversation-picker.tsx`). Akışın okunması `packages/api-client/src/chat-stream.ts`'te; web paneli (#59) de aynı fonksiyonu kullanacak.
+Kod: `apps/mobile/src/app/index.tsx` (ana ekran) ve `apps/mobile/src/chat/` (`use-chat.ts` gönderim ve tekrar gönderme, `stream.ts` expo/fetch, `use-speech-input.ts` ses, `chat-parts.tsx`, `composer.tsx`, `conversation-picker.tsx`). Akışın okunması `packages/api-client/src/chat-stream.ts`'te, turun durumu `chat-turn.ts`'te (#59'da ortak pakete taşındı); web paneli ikisini de kullanıyor.
 
 ### Kararlar
 
@@ -215,7 +215,7 @@ Kod: `apps/mobile/src/app/index.tsx` (ana ekran) ve `apps/mobile/src/chat/` (`us
 7. **Ses kutuya yazılır, kendiliğinden gönderilmez.** Tanıma telefonun ses tanıma servisiyle yapılır (`expo-speech-recognition`, `tr-TR`, ara sonuçlarla). 1. hafta denemesinde ürün kodları ve bazı ölçüler yanlış tanındı (`eval/ses-denemesi.md`); bu yüzden kullanıcı metni görüp düzeltir. 1. haftanın deneme ekranı (`/speech-test`) kaldırıldı.
 8. **Tek eylem düğmesi.** Tasarımdaki gibi kutunun sağında tek ana düğme var: kutu boşken **Konuş**, dinlerken **Dur**, kutuda metin varken **Gönder**. İkon kütüphanesi yeni bağımlılık olduğu için eklenmedi; düğmeler metinli.
 9. **Gezinme.** Sohbet ana ekran oldu; stok listesi `/stock`'a taşındı ve başlıktaki **Stok**'tan açılıyor. Tasarımdaki alt sekme çubuğu (Sohbet, Stok, İşlemlerim) ikon gerektirdiği ve "İşlemlerim" ekranı henüz olmadığı için yapılmadı.
-10. **İstemci kimliği.** React Native'de `crypto.randomUUID` yok; kimlik UUID v4 biçiminde `Math.random` ile üretiliyor (`src/lib/uuid.ts`). Gizli bir değer değil, yalnızca kendi sohbetinde benzersiz olması gerekiyor; bunun için `expo-crypto` eklenmedi.
+10. **İstemci kimliği.** React Native'de `crypto.randomUUID` yok; kimlik UUID v4 biçiminde `Math.random` ile üretiliyor (`randomUuid`, `packages/api-client/src/chat-turn.ts`). Gizli bir değer değil, yalnızca kendi sohbetinde benzersiz olması gerekiyor; bunun için `expo-crypto` eklenmedi.
 11. **Klavye.** Mesaj kutusu klavyenin üstünde kalsın diye `KeyboardAvoidingView` kullanılıyor; ekran başlığının yüksekliği, ekranın pencere içindeki konumu ölçülerek veriliyor. Klavye kapalıyken kutu telefonun alt çubuğunun üstünde durur.
 
 ### Ekranda görünen hatalar
@@ -243,3 +243,36 @@ Mobil pakette test altyapısı yok. Ekran 7 Kasım 2026'da Android development b
 - **"Ağ koptu; kullanıcı ne görüyor?"** Mesajın altında "Bağlantı koptu…" ve **Tekrar gönder**. Düğme aynı istemci kimliğiyle gönderiyor; cevap sunucuda tamamlandıysa kayıtlı cevap geliyor, model ikinci kez çağrılmıyor.
 - **"Sesle söylenen mesaj neden kendiliğinden gönderilmiyor?"** Ses tanıma ürün kodlarında ve ölçülerde yanılabiliyor (1. hafta denemesi). Kullanıcı tanınan metni görüp düzeltiyor; yanlış ürünle soru sorulmuyor.
 - **"Ses kaydı nereye gidiyor?"** Ambarcı'nın sunucusuna gitmiyor ve hiçbir yerde saklanmıyor; sunucuya yalnızca tanınan metin gidiyor. Tanımayı telefonun ses tanıma servisi yapıyor (Android'de Google'ın servisi); bu servis tanıma için internet kullanabilir.
+
+## Web sohbet paneli (#59)
+
+Panelin her sayfasında, sol menüdeki **Asistana sor** düğmesi sağda bir sohbet paneli açar. Panel sayfayı kapatmaz: yönetici stok listesine bakarken soru sorabilir. Geniş ekranda (1280 px ve üstü) panel açıkken içerik onun solunda kalır; dar ekranda panel sayfanın üstüne açılır. Başlıkta **Sohbetler** (geçmiş), yeni sohbet ve kapat düğmeleri var; **Esc** paneli kapatır. Mesaj kutusunda Enter gönderir, Shift+Enter yeni satır açar.
+
+Kod: `apps/web/components/chat/` (`chat-panel.tsx` panel ve açık sohbet, `use-chat.ts`, `chat-rows.tsx`, `chat-composer.tsx`, `conversation-list.tsx`, `use-chat-panel-open.ts`) ve `apps/web/components/app-shell.tsx` (düğme ve panelin yeri).
+
+### Kararlar
+
+1. **Mobille aynı kural, aynı kod.** Olay şeması `packages/shared`'da (#57). Akışın okunması (`chat-stream.ts`) ile turun durumu ve kayıtlı geçmişle birleştirilmesi (`chat-turn.ts`) `packages/api-client`'ta; mobil ve web ikisini de kullanıyor. Tur mantığı #58'de mobilin içindeydi; bu işte ortak pakete taşındı ve testlendi. Her uygulamada kalan yalnızca React kancası (sorgu, gönderim, iptal) ve görünüm: React Query'nin tek kopyası her uygulamada kurulur (ADR-005).
+2. **Tekrar gönderme.** Mobildekiyle aynı: her mesaja istemcide bir kimlik verilir; hata olunca mesajın altında Türkçe açıklama ve **Tekrar gönder** çıkar, düğme mesajı aynı kimlikle gönderir. Tarayıcının fetch'i cevabın gövdesini parça parça verdiği için akış tipli istemcinin kendi fetch'iyle okunur; ayrı bir fetch kodu yok.
+3. **Şirket değişince o şirketin sohbetleri.** Panel, aktif şirketin istemcisi ve sorgu önbelleğinin içinde kurulur. Şirket değişince bu katman baştan kurulur (organization-provider.tsx); panel yeni şirketin sohbet listesini gösterir, önceki şirketin sohbeti ekranda kalamaz. Sunucu da her sorguyu şirket ve kullanıcıyla sınırlar (#57).
+4. **Panel sayfalar arasında kurulu kalır.** Panel oturumlu sayfaların ortak düzeninde (`app/(app)/layout.tsx` → `AppShell`) durur; sayfa değişince yeniden kurulmaz, akan cevap kesilmez. Kapatılınca gizlenir ama sohbet kaybolmaz. Açık olup olmadığı tarayıcıda hatırlanır; sunucuda çizilen sayfa bunu bilmediği için `useSyncExternalStore` ile sayfa açıldıktan sonra okunur (sunucu ve tarayıcı çıktısı uyuşmazlığı olmaz).
+5. **Kaydırma en altta durur.** Mesaj listesi ters sütunlu (`flex-col-reverse`) bir kaydırma kutusunun içinde tek bir kutudur: tarayıcı kaydırmayı kendiliğinden en altta tutar, yeni parça gelince altta kalır; JavaScript gerekmez. İç kutudaki sıra eskiden yeniye olduğu için ekran okuyucu mesajları doğru sırayla okur. Liste `role="log"` ve cevap sürerken `aria-busy`: ekran okuyucu her parçayı ayrı ayrı okumaz.
+6. **Ses yok.** Web paneli masa başındaki yönetici içindir; ses düğmesi yalnızca mobilde.
+7. **İstemci kimliği güvenli olmayan sayfada da üretilir.** Tarayıcıda `crypto.randomUUID` yalnızca güvenli bağlamda (https, localhost) var. Panel başka bir cihazdan bilgisayarın ağ adresiyle (http) açılırsa kimlik `Math.random` ile üretilir (`randomUuid`, `chat-turn.ts`).
+
+### Testler
+
+| Test | Ortam | Ne doğrular |
+| --- | --- | --- |
+| `packages/api-client/test/chat-turn.spec.ts` | CI | Olayların tura işlenmesi (metin parçalarının eklenmesi, araç etiketinin araç bitince kalkması, `done`'ın cevabın tamamıyla değiştirmesi, `error` ve istek hatası); durum satırları; yalnızca son kullanıcı mesajına "başarısız" ya da "sürüyor" notu; tur sürerken kayıtlı kaydının gizlenmesi; cevap gelen turun geçmiş yenilenince çekilmesi; başarısız turun kayıtlı kaydın yerine gösterilmesi; `crypto.randomUUID` yokken de UUID v4 üretilmesi |
+| `packages/api-client/test/chat-stream.spec.ts` | CI | Akışın okunması (#58) |
+
+Web paneli için bileşen testi yok (web paketinde test altyapısı yok); `next build` geçiyor. Panel 7 Kasım 2026'da yerelde (web `localhost:3000`, API `localhost:3001`) elle denendi: stok sorusu ve parça parça gelen cevap, cevap akarken sayfa değiştirme, geniş ve dar ekranda yerleşim, Esc ve sayfa yenilenince açık kalması, telefondan açılan sohbetlerin listede görünmesi, şirket değişince o şirketin sohbetleri, tarayıcı çevrimdışıyken hata ve aynı kimlikle tekrar gönderme. Ortak koda taşınan mobil ekran da telefonda yeniden denendi.
+
+Denemede bulunan ortam sorunu: geliştirici bilgisayarında Windows kullanıcı değişkeni olarak `ANTHROPIC_BASE_URL=http://127.0.0.1:1337` tanımlıydı. Claude SDK'sı bu değişkeni okuduğu için yerel API istekleri o boş porta gönderdi (`AI_UNAVAILABLE`, altta `ECONNREFUSED`). Terminalde değişken kaldırılınca (`Remove-Item Env:ANTHROPIC_BASE_URL`) çalıştı. Render'da bu değişken yok. Adresin kodda sabitlenmesi ayrı bir iş olarak önerildi.
+
+### Savunmada sorulabilecek sorular
+
+- **"Mobil ve web aynı kuralı nasıl uyguluyor?"** Akışın okunması ve turun durumu ortak pakette (`packages/api-client`), ikisi de aynı fonksiyonları çağırıyor ve bu fonksiyonların testi var. Uygulamalarda yalnızca görünüm ve React kancası farklı.
+- **"Şirket değiştirince başka şirketin sohbeti görünebilir mi?"** Hayır. Panel aktif şirketin istemcisi ve önbelleğiyle birlikte baştan kuruluyor; sunucu da sohbeti yalnızca sahibine, o şirkette gösteriyor (başkasınınki 404).
+- **"Kullanıcı sayfa değiştirirse cevap yarıda kalır mı?"** Hayır. Panel bütün oturumlu sayfaların ortak düzeninde duruyor; sayfa değişse de kurulu kalıyor ve akış sürüyor. Tarayıcı sekmesi kapanırsa da cevap sunucuda tamamlanıp kaydediliyor (#57).

@@ -1,11 +1,11 @@
+import { turnStatusLabel } from '@ambarci/api-client';
+import type { ChatRow, SavedChatMessage } from '@ambarci/api-client';
 import type { JSX } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
 import { Button } from '@/components/ui';
 import { colors, radius, shadows, spacing } from '@/theme';
-
-import type { ChatRow, SavedMessage, Turn } from './use-chat';
 
 // Sohbet ekranının parçaları (docs/tasarim/1-mobil-sohbet.png): kullanıcının balonu primary zeminli, asistanın
 // cevabı kart zeminli; ikisi de radius-lg ve body-lg (docs/tasarim.md).
@@ -66,19 +66,6 @@ export function FailureNote({ message, onRetry, disabled }: { message: string; o
   );
 }
 
-function turnStatusLabel(turn: Turn): string | null {
-  if (turn.status === 'sending') {
-    return 'Gönderiliyor… Sunucu uykudaysa ilk cevap bir dakika sürebilir.';
-  }
-  if (turn.status === 'streaming') {
-    if (turn.tool) {
-      return `${turn.tool}…`;
-    }
-    return turn.answer ? null : 'Cevap hazırlanıyor…';
-  }
-  return null;
-}
-
 /** Sohbetin bir satırı: kayıtlı mesaj ya da bu ekrandan gönderilen mesaj ve akan cevabı. */
 export function ChatRowView({
   row,
@@ -115,7 +102,7 @@ function SavedRow({
   onRetry,
   onReload,
 }: {
-  message: SavedMessage;
+  message: SavedChatMessage;
   note: 'failed' | 'in_progress' | null;
   busy: boolean;
   onRetry: (clientMessageId: string, text: string) => void;
