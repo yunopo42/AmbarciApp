@@ -25,6 +25,8 @@ export interface SpeechInput {
   error: string | null;
   start: () => void;
   stop: () => void;
+  /** Uyarıyı kaldırır: kullanıcı kutuya yazınca ya da mesajı gönderince uyarı artık geçerli değildir. */
+  clearError: () => void;
 }
 
 /**
@@ -78,5 +80,7 @@ export function useSpeechInput(onTranscript: (transcript: string) => void): Spee
     ExpoSpeechRecognitionModule.stop();
   }, []);
 
-  return { listening, error, start, stop };
+  const clearError = useCallback((): void => setError(null), []);
+
+  return { listening, error, start, stop, clearError };
 }
