@@ -1,8 +1,8 @@
 // Claude adaptörü, ağ olmadan: SDK'ya sahte bir fetch verilir. Böylece SDK'nın gerçekten gönderdiği istek gövdesi
 // denetlenir (ADR-001 kuralları) ve hazır bir akış (SSE) cevabının sonuca nasıl çevrildiği görülür.
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { CHAT_MAX_TOKENS, ClaudeAdapter } from '../src/modules/ai/adapters/claude.adapter.js';
+import { CHAT_MAX_TOKENS, ClaudeAdapter, describeErrorCause } from '../src/modules/ai/adapters/claude.adapter.js';
 import { AiProviderError } from '../src/modules/ai/ai-provider.js';
 import type { AiMessage, AiProviderErrorCode, AiToolDefinition, AiTurnRequest } from '../src/modules/ai/ai-provider.js';
 
@@ -106,13 +106,23 @@ function turnRequest(overrides: Partial<AiTurnRequest> = {}): AiTurnRequest {
   return { system: 'Sen saha stok asistanısın.', tools: TOOLS, messages: HISTORY, ...overrides };
 }
 
-async function providerErrorCode(promise: Promise<unknown>): Promise<AiProviderErrorCode> {
+async function providerError(promise: Promise<unknown>): Promise<AiProviderError> {
   const error: unknown = await promise.then(
     () => undefined,
     (reason: unknown) => reason,
   );
   expect(error).toBeInstanceOf(AiProviderError);
-  return (error as AiProviderError).code;
+  return error as AiProviderError;
+}
+
+async function providerErrorCode(promise: Promise<unknown>): Promise<AiProviderErrorCode> {
+  return (await providerError(promise)).code;
+}
+
+/** Node'un fetch'inin bağlantı reddinde fırlattığı hatanın biçimi: "fetch failed", asıl neden `cause`'ta. */
+function connectionRefused(address = '127.0.0.1:1337'): TypeError {
+  const cause = Object.assign(new Error(`connect ECONNREFUSED ${address}`), { code: 'ECONNREFUSED' });
+  return new TypeError('fetch failed', { cause });
 }
 
 describe('Claude adaptörü', () => {
@@ -196,5 +206,73 @@ describe('Claude adaptörü', () => {
     controller.abort();
     const { fetch } = recordingFetch(() => sse(STREAM));
     expect(await providerErrorCode(adapter(fetch).createTurn(turnRequest({ signal: controller.signal })))).toBe('AI_ABORTED');
+  });
+});
+
+describe('Claude adaptörü: adres ve hata kaydı (#72)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('ANTHROPIC_BASE_URL başka bir adrese ayarlıyken de istek api.anthropic.com adresine gider', async () => {
+    // 4. haftada geliştirici bilgisayarında bu değişken tanımlıydı; SDK istekleri boş bir porta gönderiyordu.
+    vi.stubEnv('ANTHROPIC_BASE_URL', 'http://127.0.0.1:1337');
+    const { fetch, requests } = recordingFetch(() => sse(STREAM));
+    await adapter(fetch).createTurn(turnRequest());
+
+    expect(requests.map((request) => request.url)).toEqual(['https://api.anthropic.com/v1/messages']);
+  });
+
+  it('test kendi adresini verebilir (options.client sabit adresten sonra gelir)', async () => {
+    const { fetch, requests } = recordingFetch(() => sse(STREAM));
+    const custom = new ClaudeAdapter({
+      apiKey: 'test-anahtar',
+      model: 'claude-haiku-5-5',
+      effort: 'low',
+      client: { fetch, maxRetries: 0, baseURL: 'http://claude.test' },
+    });
+    await custom.createTurn(turnRequest());
+
+    expect(requests.map((request) => request.url)).toEqual(['http://claude.test/v1/messages']);
+  });
+
+  it('bağlantı hatasında hata mesajı hedef sunucuyu ve alttaki nedeni söyler', async () => {
+    const failing: FakeFetch = async () => {
+      throw connectionRefused();
+    };
+    const error = await providerError(adapter(failing).createTurn(turnRequest()));
+
+    expect(error.code).toBe('AI_UNAVAILABLE');
+    expect(error.message).toContain('api.anthropic.com');
+    expect(error.message).toContain('ECONNREFUSED 127.0.0.1:1337');
+  });
+
+  it('hata mesajına API anahtarı ve mesaj içeriği girmez', async () => {
+    // Anahtar normalde hata metninde geçmez; geçse bile loga gitmeden silinir.
+    const failing: FakeFetch = async () => {
+      throw new TypeError('fetch failed', { cause: new Error('beklenmeyen: Bearer test-anahtar') });
+    };
+    const error = await providerError(adapter(failing).createTurn(turnRequest()));
+
+    expect(error.code).toBe('AI_UNAVAILABLE');
+    expect(error.message).not.toContain('test-anahtar');
+    expect(error.message).toContain('[anahtar gizlendi]');
+    const userText = (HISTORY[0]?.content[0] as { text: string }).text;
+    expect(error.message).not.toContain(userText);
+    expect(error.message).not.toContain('Sen saha stok asistanısın.');
+  });
+
+  it('describeErrorCause: zinciri sırayla birleştirir, kodu bir kez yazar, döngüde durur', () => {
+    expect(describeErrorCause(new Error('dış'))).toBe('');
+    expect(describeErrorCause(new Error('Connection error.', { cause: connectionRefused('10.0.0.1:443') }))).toBe(
+      'fetch failed ← connect ECONNREFUSED 10.0.0.1:443',
+    );
+    const withCode = new Error('dış', { cause: Object.assign(new Error('getaddrinfo failed'), { code: 'ENOTFOUND' }) });
+    expect(describeErrorCause(withCode)).toBe('getaddrinfo failed (ENOTFOUND)');
+    expect(describeErrorCause(new Error('dış', { cause: 'düz metin neden' }))).toBe('düz metin neden');
+
+    const loop = new Error('a');
+    loop.cause = loop;
+    expect(describeErrorCause(new Error('dış', { cause: loop })).split(' ← ')).toHaveLength(4);
   });
 });
