@@ -4,6 +4,8 @@ import {
   listRecentMovementsToolInputSchema,
   listWarehousesToolInputSchema,
   MOVEMENT_TYPE_LABELS,
+  PARTY_TYPE_LABELS,
+  searchPartiesToolInputSchema,
   searchProductsToolInputSchema,
   WAREHOUSE_TYPE_LABELS,
 } from '@ambarci/shared';
@@ -179,5 +181,23 @@ export function createReadTools(services: ReadToolServices): RegisteredTool[] {
     },
   });
 
-  return [searchProducts, listWarehouses, getStock, listRecentMovements];
+  // 5. hafta (#74, chat-v2): öneri araçlarının cari alanı için. Kayıt defterinin sonuna eklenir; chat-v1'in araç
+  // listesi ve sırası değişmez.
+  const searchParties = defineTool({
+    name: 'search_parties',
+    description:
+      'Cari (tedarikçi ya da müşteri, şantiye) arar: adda geçen metin ya da vergi numarasının başı, Türkçe harf farkı gözetilmez. En fazla 5 aktif cari döner. Girişte tedarikçiyi, çıkışta müşteriyi bulmak için kullan.',
+    statusLabel: 'Cari aranıyor',
+    toolClass: 'read',
+    allowedRoles: EVERY_ROLE,
+    input: searchPartiesToolInputSchema,
+    async run(input, { organization }) {
+      const parties = await catalog.searchParties(organization.id, input.query, input.type, SEARCH_LIMIT);
+      return {
+        candidates: parties.map((party) => ({ party_id: party.id, name: party.name, type: PARTY_TYPE_LABELS[party.type] })),
+      };
+    },
+  });
+
+  return [searchProducts, listWarehouses, getStock, listRecentMovements, searchParties];
 }

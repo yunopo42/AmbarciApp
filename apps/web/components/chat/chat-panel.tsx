@@ -169,9 +169,11 @@ function ChatView({
       {/*
         Ters sütun (flex-col-reverse) tek bir iç kutuyu sarar: kaydırma kendiliğinden en altta durur ve yeni parça
         gelince altta kalır; iç kutudaki sıra (eskiden yeniye) ekran okuyucu için değişmez.
+        İç kutu küçülmemeli (shrink-0): küçülürse mesajlar kutunun alt kenarından taşar ve ters sütunda alttan taşan
+        kısım kaydırılamaz; uzun sohbette son cevap kesik kalıyordu (#74 denemesi).
       */}
       <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto">
-        <div role="log" aria-label="Mesajlar" aria-busy={chat.busy} className="flex min-h-full flex-col gap-4 p-4">
+        <div role="log" aria-label="Mesajlar" aria-busy={chat.busy} className="flex min-h-full shrink-0 flex-col gap-4 p-4">
           {content}
         </div>
       </div>

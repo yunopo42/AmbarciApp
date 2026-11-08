@@ -50,6 +50,12 @@ type LineInput = OperationItem;
 /** Doğrulanmış ve ana birime çevrilmiş kalem: hem kayda (girilen hâli) hem stok uygulamasına (ana birim) yeter. */
 type ResolvedLine = LineInput & ApplyLine;
 
+/** İşlem açılırken isteğe bağlı bilgiler. */
+export interface CreateOperationOptions {
+  /** Yalnızca sohbetten (source: CHAT) açılan öneride: cevaplanan kullanıcı mesajı (#74). */
+  sourceMessageId?: string | null;
+}
+
 @Injectable()
 export class OperationsService {
   constructor(
@@ -72,10 +78,11 @@ export class OperationsService {
     actor: OperationActor,
     input: CreateOperationInput,
     source: ActionSource = 'SCREEN',
+    options: CreateOperationOptions = {},
   ): Promise<Operation> {
     // Yetki transaction'dan önce: yetkisiz istek veritabanında transaction açtırmaz.
     await this.assertCreateAccess(this.db, organizationId, actor, input.type, warehousesOf(linesOf(input.items)));
-    return this.db.transaction((tx) => this.createWithin(tx, organizationId, actor, input, source));
+    return this.db.transaction((tx) => this.createWithin(tx, organizationId, actor, input, source, options));
   }
 
   /** Kullanıcı bu depolarda bu türde işlem açabilir mi; açılış stoğunu yalnızca yönetici girer. */
@@ -104,34 +111,16 @@ export class OperationsService {
     actor: OperationActor,
     input: CreateOperationInput,
     source: ActionSource,
+    options: CreateOperationOptions = {},
   ): Promise<Operation> {
-    const lines = linesOf(input.items);
-    const resolved = await this.resolveLines(executor, organizationId, input.type, lines);
-    const warehouseErrors = await this.checkWarehouses(executor, organizationId, lines);
-    const errors = [...resolved.errors, ...warehouseErrors].sort((a, b) => a.lineNo - b.lineNo);
-    if (errors.length > 0) {
-      throw linesInvalid(errors);
-    }
-    const partyId = input.partyId?.toLowerCase() ?? null;
-    if (partyId && !(await this.catalog.isActiveParty(executor, organizationId, partyId))) {
-      throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'PARTY_NOT_FOUND', 'Cari bulunamadı ya da pasif.');
-    }
-
+    const content = await this.validateContent(executor, organizationId, input);
     const operation = await this.repository.insert(executor, {
       organizationId,
       type: input.type,
       source,
-      partyId,
-      note: input.note || null,
       createdBy: actorId(actor),
-      items: resolved.lines.map(({ productId, warehouseId, targetWarehouseId, quantity, unit, unitCost }) => ({
-        productId,
-        warehouseId,
-        targetWarehouseId,
-        quantity,
-        unit,
-        unitCost,
-      })),
+      sourceMessageId: options.sourceMessageId ?? null,
+      ...content,
     });
     await this.audit.record(executor, {
       organizationId,
@@ -143,6 +132,96 @@ export class OperationsService {
       details: { type: operation.type, lineCount: operation.items.length },
     });
     return operation;
+  }
+
+  /**
+   * Sohbetten açılmış, onay bekleyen öneriyi düzenler (kartın "Düzenle"si sohbetle yapılır, #74). Kalemler ve cari
+   * baştan yazılır, sürüm bir artar; stok değişmez. Kullanıcı eski sürümü onaylamaya çalışırsa onay
+   * OPERATION_VERSION_MISMATCH ile reddedilir. Yalnızca öneriyi açan kullanıcı ve yalnızca aynı tür: tür değişecekse
+   * öneri iptal edilip yenisi açılır. İşlem satırı kilitlenir; aynı anda gelen onay ya da iptal sırayla karar verir.
+   */
+  async revise(
+    organizationId: string,
+    actor: Extract<OperationActor, { kind: 'user' }>,
+    operationId: string,
+    input: CreateOperationInput,
+  ): Promise<Operation> {
+    await this.assertCreateAccess(this.db, organizationId, actor, input.type, warehousesOf(linesOf(input.items)));
+    return this.db.transaction(async (tx) => {
+      const record = await this.repository.lockForUpdate(tx, organizationId, operationId);
+      if (!record) {
+        throw operationNotFound();
+      }
+      if (record.source !== 'CHAT' || record.createdBy !== actor.userId) {
+        throw new ApiException(
+          HttpStatus.FORBIDDEN,
+          'OPERATION_FORBIDDEN',
+          'Yalnızca sohbette kendi açtığın öneri düzenlenebilir.',
+        );
+      }
+      if (record.status !== 'PENDING_CONFIRMATION') {
+        throw new ApiException(HttpStatus.CONFLICT, 'OPERATION_NOT_PENDING', 'Bu işlem onay beklemiyor; düzenlenemez.', {
+          status: record.status,
+        });
+      }
+      if (record.type !== input.type) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'OPERATION_TYPE_MISMATCH',
+          'Önerinin türü değiştirilemez; bu öneri iptal edilip yeni bir öneri açılmalı.',
+          { type: record.type },
+        );
+      }
+      const content = await this.validateContent(tx, organizationId, input);
+      const revised = await this.repository.revise(tx, organizationId, operationId, content);
+      if (!revised) {
+        throw new Error('Kilitli işlem düzenlenemedi.');
+      }
+      await this.audit.record(tx, {
+        organizationId,
+        actorId: actor.userId,
+        action: 'operation.revised',
+        entityType: 'operation',
+        entityId: operationId,
+        source: record.source,
+        details: { type: revised.type, version: revised.version, lineCount: revised.items.length },
+      });
+      return revised;
+    });
+  }
+
+  /**
+   * İşlemin içeriğini (kalemler ve cari) katalogla doğrular: ürün, birim, depo ve cari bu şirkette var ve aktif mi.
+   * İşlem açılırken ve öneri düzenlenirken aynı kurallar geçerlidir.
+   */
+  private async validateContent(
+    executor: DbExecutor,
+    organizationId: string,
+    input: CreateOperationInput,
+  ): Promise<{ partyId: string | null; note: string | null; items: Omit<OperationItem, 'lineNo'>[] }> {
+    const lines = linesOf(input.items);
+    const resolved = await this.resolveLines(executor, organizationId, input.type, lines);
+    const warehouseErrors = await this.checkWarehouses(executor, organizationId, lines);
+    const errors = [...resolved.errors, ...warehouseErrors].sort((a, b) => a.lineNo - b.lineNo);
+    if (errors.length > 0) {
+      throw linesInvalid(errors);
+    }
+    const partyId = input.partyId?.toLowerCase() ?? null;
+    if (partyId && !(await this.catalog.isActiveParty(executor, organizationId, partyId))) {
+      throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'PARTY_NOT_FOUND', 'Cari bulunamadı ya da pasif.');
+    }
+    return {
+      partyId,
+      note: input.note || null,
+      items: resolved.lines.map(({ productId, warehouseId, targetWarehouseId, quantity, unit, unitCost }) => ({
+        productId,
+        warehouseId,
+        targetWarehouseId,
+        quantity,
+        unit,
+        unitCost,
+      })),
+    };
   }
 
   /**

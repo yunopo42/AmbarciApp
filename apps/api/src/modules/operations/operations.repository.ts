@@ -35,6 +35,15 @@ export interface NewOperation {
   partyId: string | null;
   note: string | null;
   createdBy: string | null;
+  /** Yalnızca sohbetten açılan işlemde: önerinin cevapladığı kullanıcı mesajı. */
+  sourceMessageId?: string | null;
+  items: Omit<OperationItem, 'lineNo'>[];
+}
+
+/** Onay bekleyen önerinin yeni hâli (sohbette düzenleme): kalemler baştan yazılır, sürüm artar. */
+export interface OperationRevision {
+  partyId: string | null;
+  note: string | null;
   items: Omit<OperationItem, 'lineNo'>[];
 }
 
@@ -157,23 +166,58 @@ export class OperationsRepository {
         partyId: input.partyId,
         note: input.note,
         createdBy: input.createdBy,
+        sourceMessageId: input.sourceMessageId ?? null,
       })
       .returning(OPERATION_COLUMNS);
     if (!record) {
       throw new Error('İşlem eklenemedi.');
     }
-    const items = await executor
-      .insert(operationItems)
-      .values(
-        input.items.map((item, index) => ({
-          ...item,
-          organizationId: input.organizationId,
-          operationId: record.id,
-          lineNo: index + 1,
-        })),
-      )
-      .returning(ITEM_COLUMNS);
+    const items = await this.insertItems(executor, input.organizationId, record.id, input.items);
     return toOperation(record, items);
+  }
+
+  /**
+   * Onay bekleyen işlemin kalemlerini yenileriyle değiştirir ve sürümü bir artırır. Çağıran işlemi FOR UPDATE ile
+   * kilitlemiş ve durumunu denetlemiş olmalı; durum koşulu ikinci bir güvencedir. Onay bekleyen işlemin hareketi
+   * olmadığı için kalemleri silmek hiçbir hareketi etkilemez. Eski sürümü gören onay isteği sürüm farkıyla reddedilir.
+   */
+  async revise(
+    executor: DbExecutor,
+    organizationId: string,
+    operationId: string,
+    revision: OperationRevision,
+  ): Promise<Operation | null> {
+    const [record] = await executor
+      .update(operations)
+      .set({ partyId: revision.partyId, note: revision.note, version: sql`${operations.version} + 1` })
+      .where(
+        and(
+          eq(operations.organizationId, organizationId),
+          eq(operations.id, operationId),
+          eq(operations.status, 'PENDING_CONFIRMATION'),
+        ),
+      )
+      .returning(OPERATION_COLUMNS);
+    if (!record) {
+      return null;
+    }
+    await executor
+      .delete(operationItems)
+      .where(and(eq(operationItems.organizationId, organizationId), eq(operationItems.operationId, operationId)));
+    const items = await this.insertItems(executor, organizationId, operationId, revision.items);
+    return toOperation(record, items);
+  }
+
+  private insertItems(
+    executor: DbExecutor,
+    organizationId: string,
+    operationId: string,
+    items: Omit<OperationItem, 'lineNo'>[],
+  ): Promise<OperationItem[]> {
+    return executor
+      .insert(operationItems)
+      .values(items.map((item, index) => ({ ...item, organizationId, operationId, lineNo: index + 1 })))
+      .returning(ITEM_COLUMNS);
   }
 
   async findById(executor: DbExecutor, organizationId: string, operationId: string): Promise<Operation | null> {

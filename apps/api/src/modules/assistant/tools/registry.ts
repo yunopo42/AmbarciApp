@@ -14,11 +14,16 @@ import { toStrictJsonSchema } from './strict-json-schema.js';
 export interface ToolContext {
   organization: OrganizationContext;
   userId: string;
+  /**
+   * Cevaplanan kullanıcı mesajı (ajan döngüsü verir). Öneri araçları açtıkları işlemi bu mesaja bağlar: sohbet yeniden
+   * açılınca işlem kartı bununla bulunur (#74, #75).
+   */
+  messageId?: string;
 }
 
 /**
- * read: yalnızca okur. propose: onay bekleyen bir işlem önerisi açar (5. hafta); stok tablolarına yazmaz. Stoğu
- * değiştiren ya da onaylayan araç sınıfı bilerek yoktur (mimari değişmez 1 ve 2).
+ * read: yalnızca okur. propose: onay bekleyen bir işlem önerisi açar ya da sohbette açılmış öneriyi düzenler (5. hafta,
+ * #74); stok tablolarına yazmaz. Stoğu değiştiren ya da onaylayan araç sınıfı bilerek yoktur (mimari değişmez 1 ve 2).
  */
 export type ToolClass = 'read' | 'propose';
 
@@ -101,21 +106,42 @@ export class ToolRegistry {
     this.tools = byName;
   }
 
-  /** Modele gönderilen araç tanımları. Sıra sabittir: değişirse önbellek ve düşünme blokları geçersiz olur. */
-  definitions(): AiToolDefinition[] {
-    return [...this.tools.values()].map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    }));
+  /**
+   * Modele gönderilen araç tanımları, kayıt defterindeki sırayla. `names` verilirse yalnızca o araçlar: her prompt
+   * sürümünün kendi araç listesi vardır (ChatPrompt.tools); süren bir sohbet başladığı sürümün araçlarıyla devam eder.
+   * Sıra sabittir: değişirse önbellek ve düşünme blokları geçersiz olur.
+   */
+  definitions(names?: readonly string[]): AiToolDefinition[] {
+    if (names) {
+      const unknown = names.filter((name) => !this.tools.has(name));
+      if (unknown.length > 0) {
+        throw new Error(`Kayıt defterinde olmayan araç: ${unknown.join(', ')}.`);
+      }
+    }
+    return [...this.tools.values()]
+      .filter((tool) => !names || names.includes(tool.name))
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      }));
+  }
+
+  /** Aracın sınıfı; araç yoksa null. */
+  toolClass(name: string): ToolClass | null {
+    return this.tools.get(name)?.toolClass ?? null;
   }
 
   statusLabel(name: string): string {
     return this.tools.get(name)?.statusLabel ?? 'Araç çalışıyor';
   }
 
-  async execute(name: string, rawInput: unknown, context: ToolContext): Promise<ToolOutcome> {
-    const tool = this.tools.get(name);
+  /**
+   * Aracı çalıştırır. `allowed` verilirse yalnızca o listedeki araçlar: modele gönderilmemiş bir araç (ör. eski prompt
+   * sürümüyle süren sohbette öneri aracı) bilinmeyen araç gibi reddedilir.
+   */
+  async execute(name: string, rawInput: unknown, context: ToolContext, allowed?: readonly string[]): Promise<ToolOutcome> {
+    const tool = allowed && !allowed.includes(name) ? undefined : this.tools.get(name);
     if (!tool) {
       return failure(`Bilinmeyen araç: ${name}. Yalnızca tanımlı araçları kullan.`);
     }

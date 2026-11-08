@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { readAiConfig } from '../src/modules/ai/ai.config.js';
 import { AiProviderError } from '../src/modules/ai/ai-provider.js';
 import { pricesFor } from '../src/modules/ai/pricing.js';
-import { CURRENT_CHAT_PROMPT, chatPrompt } from '../src/modules/ai/prompts/index.js';
+import { ALL_CHAT_PROMPTS, CURRENT_CHAT_PROMPT, chatPrompt } from '../src/modules/ai/prompts/index.js';
 import { aiResult, ScriptedAiProvider } from './support/scripted-ai-provider.js';
 
 describe('Asistan ayarları (ortam değişkenleri)', () => {
@@ -75,16 +75,39 @@ describe('Model fiyatları', () => {
 });
 
 describe('Prompt sürümleri', () => {
-  it('sürüm bilinmiyorsa güncel sürüm, biliniyorsa o sürüm döner', () => {
+  it('sürüm bilinmiyorsa güncel sürüm (chat-v2), biliniyorsa o sürüm döner; eski sürüm silinmez', () => {
     expect(chatPrompt()).toBe(CURRENT_CHAT_PROMPT);
+    expect(CURRENT_CHAT_PROMPT.version).toBe('chat-v2');
     expect(chatPrompt('chat-v1').version).toBe('chat-v1');
     expect(chatPrompt('chat-v0')).toBe(CURRENT_CHAT_PROMPT);
+    expect(ALL_CHAT_PROMPTS.map((prompt) => prompt.version)).toEqual(['chat-v1', 'chat-v2']);
   });
 
-  it('sohbet promptu asistanın okuma araçlarını adıyla anar', () => {
-    for (const tool of ['search_products', 'get_stock', 'list_warehouses', 'list_recent_movements']) {
-      expect(CURRENT_CHAT_PROMPT.text).toContain(tool);
+  it('her sürümün promptu kendi araçlarını adıyla anar', () => {
+    for (const prompt of ALL_CHAT_PROMPTS) {
+      for (const tool of prompt.tools) {
+        expect(prompt.text, `${prompt.version}: ${tool}`).toContain(tool);
+      }
     }
+  });
+
+  it('chat-v1 4. haftadaki gibi kalır: stok değiştiremeyeceğini söyler, öneri aracı yoktur', () => {
+    const v1 = chatPrompt('chat-v1');
+    expect(v1.text).toContain('Stoğu değiştiremezsin');
+    expect(v1.tools).toEqual(['search_products', 'list_warehouses', 'get_stock', 'list_recent_movements']);
+  });
+
+  it('chat-v2: onay kullanıcının, Markdown yok, toplam görebildiği depolarda, hitap "sen"', () => {
+    const { text } = chatPrompt('chat-v2');
+    expect(text).toContain("kartta Onayla'ya basınca");
+    expect(text).toContain('Sen onaylayamazsın');
+    expect(text).toContain('onaylandığını ya da stoğun değiştiğini asla söyleme');
+    expect(text).toContain('Markdown kullanma');
+    expect(text).toContain('görebildiğin depolarda');
+    expect(text).toContain('"sen" diye hitap et');
+    expect(text).toContain('operation_id');
+    // Metin sabittir: tarih ya da şirket adı gibi değişen bilgi yok (önbellek, ADR-001).
+    expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}|ABC Elektrik/);
   });
 });
 

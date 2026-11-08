@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { authUsers } from 'drizzle-orm/supabase';
 
+import { messages } from './assistant.ts';
 import { parties, products, productUnits } from './catalog.ts';
 import { actionSource, createdAtOnly, operationStatus, operationType, timestamps } from './common.ts';
 import { organizations } from './organizations.ts';
@@ -42,6 +43,9 @@ export const operations = pgTable(
     note: text('note'),
     // Yalnızca ters kayıtta: geri alınan işlem.
     reversedOperationId: uuid('reversed_operation_id'),
+    // Yalnızca sohbetten açılan işlemde: önerinin cevapladığı kullanıcı mesajı (#74). Sohbet yeniden açılınca işlem
+    // kartı bu bağla bulunur; denetimde "bu işlem hangi mesajdan geldi" sorusunun cevabıdır.
+    sourceMessageId: uuid('source_message_id'),
     // Başarılı onay isteğinin Idempotency-Key başlığı. Aynı anahtarla tekrar gelen istek aynı cevabı alır,
     // stok yeniden değişmez.
     applyIdempotencyKey: text('apply_idempotency_key'),
@@ -68,6 +72,16 @@ export const operations = pgTable(
       columns: [t.organizationId, t.reversedOperationId],
       foreignColumns: [t.organizationId, t.id],
     }),
+    // Mesaj yalnızca aynı şirketin mesajı olabilir. Mesaj silinince (hesap silme) işlem kalır, yalnızca bağlantısı
+    // boşalır. drizzle-kit kolon listeli SET NULL üretemediği için migration'da elle yazıldı:
+    // ON DELETE SET NULL (source_message_id); düz SET NULL organization_id'yi de boşaltmaya çalışırdı (ai_runs gibi).
+    foreignKey({
+      name: 'operations_source_message_fk',
+      columns: [t.organizationId, t.sourceMessageId],
+      foreignColumns: [messages.organizationId, messages.id],
+    }).onDelete('set null'),
+    // Sohbetin işlem kartları: bir mesajın açtığı işlemler (#75) ve yabancı anahtarın indeksi.
+    index('operations_org_source_message_idx').on(t.organizationId, t.sourceMessageId),
     // Onay kuyruğu ve "onay bekleyen işlemler": şirket + durum, tarihe göre.
     index('operations_org_status_created_idx').on(t.organizationId, t.status, t.createdAt),
     index('operations_org_party_idx').on(t.organizationId, t.partyId),
@@ -82,6 +96,8 @@ export const operations = pgTable(
     check('operations_not_self_reversal', sql`${t.reversedOperationId} <> ${t.id}`),
     // Uygulanmış (ve sonradan geri alınmış) işlemin uygulanma zamanı vardır; diğerlerinin yoktur.
     check('operations_applied_at', sql`(${t.status} in ('APPLIED', 'REVERSED')) = (${t.appliedAt} is not null)`),
+    // Kaynak mesaj yalnızca sohbetten açılan işlemde bulunur.
+    check('operations_source_message_chat', sql`${t.sourceMessageId} is null or ${t.source} = 'CHAT'`),
     memberCanRead('operations', t.organizationId),
   ],
 ).enableRLS();

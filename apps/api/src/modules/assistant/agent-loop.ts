@@ -52,7 +52,8 @@ export interface AgentTurnOutput {
 /**
  * Ajan döngüsü: modeli çağırır; model araç isterse araçları kullanıcının yetkisiyle çalıştırır, sonuçları geri verir ve
  * model metinle cevaplayana kadar tekrarlar. Döngü stoğa yazmaz: kayıt defterinde stok yazan ya da onaylayan araç
- * yoktur (mimari değişmez 1 ve 2). Mesajları kendisi kaydetmez; onRound ile çağırana bırakır (#57).
+ * yoktur; öneri araçları işlemi yalnızca onay bekleyen olarak açar (mimari değişmez 1 ve 2). Mesajları kendisi
+ * kaydetmez; onRound ile çağırana bırakır (#57).
  */
 @Injectable()
 export class AgentLoop {
@@ -62,13 +63,16 @@ export class AgentLoop {
   ) {}
 
   async run(input: AgentTurnInput): Promise<AgentTurnOutput> {
-    const { context, onEvent } = input;
+    const { onEvent } = input;
+    // Araçlar cevaplanan mesajı bilir: öneri araçları açtıkları işlemi bu mesaja bağlar (#74).
+    const context: ToolContext = { ...input.context, messageId: input.messageId };
     const organizationId = context.organization.id;
     // Bütçe her kullanıcı mesajının başında bir kez denetlenir, araç turlarının ortasında değil (#55).
     await this.ai.assertWithinBudget(organizationId, context.userId);
 
+    // Sohbet başladığı sürümün metni ve araçlarıyla sürer: chat-v1 sohbetine öneri aracı verilmez (#74).
     const prompt = chatPrompt(input.promptVersion);
-    const tools = this.tools.definitions();
+    const tools = this.tools.definitions(prompt.tools);
     const conversation: AiMessage[] = input.history.map(toAiMessage);
     const added: AgentMessage[] = [];
 
@@ -103,7 +107,7 @@ export class AgentLoop {
 
       // Aynı turdaki araç çağrıları birlikte çalışır; sonuçlar çağrı sırasıyla tek bir mesajda döner (API bunu ister;
       // sonuçları ayrı mesajlara bölmek modelin paralel çağrı yapmasını da azaltır).
-      const results = await Promise.all(result.toolCalls.map((call) => this.runTool(call, context, onEvent)));
+      const results = await Promise.all(result.toolCalls.map((call) => this.runTool(call, context, prompt.tools, onEvent)));
       const toolMessage: AgentMessage = { role: 'TOOL', content: results };
       conversation.push({ role: 'user', content: results });
       added.push(assistant, toolMessage);
@@ -114,11 +118,12 @@ export class AgentLoop {
   private async runTool(
     call: AiToolCall,
     context: ToolContext,
+    allowed: readonly string[],
     onEvent: AgentTurnInput['onEvent'],
   ): Promise<MessageContentBlock> {
     const label = this.tools.statusLabel(call.name);
     onEvent?.({ type: 'tool_status', tool: call.name, label, status: 'started' });
-    const outcome = await this.tools.execute(call.name, call.input, context);
+    const outcome = await this.tools.execute(call.name, call.input, context, allowed);
     onEvent?.({ type: 'tool_status', tool: call.name, label, status: outcome.isError ? 'failed' : 'succeeded' });
     return {
       type: 'tool_result',

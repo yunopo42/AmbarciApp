@@ -9,11 +9,11 @@ import { describe, expect, it } from 'vitest';
 import { ApiException } from '../src/common/api-exception.js';
 import type { AiToolCall } from '../src/modules/ai/ai-provider.js';
 import { CHAT_PROMPT_V1 } from '../src/modules/ai/prompts/chat.v1.js';
+import { CHAT_PROMPT_V2 } from '../src/modules/ai/prompts/chat.v2.js';
 import { AgentLoop, MAX_TOOL_ROUNDS } from '../src/modules/assistant/agent-loop.js';
 import type { AgentEvent, AgentMessage, AgentTurnInput } from '../src/modules/assistant/agent-loop.js';
-import { createReadTools } from '../src/modules/assistant/tools/read-tools.js';
-import { ToolRegistry } from '../src/modules/assistant/tools/registry.js';
-import { adminContext, fakeReadServices, InMemoryAiRuns, MAIN, PRODUCT, testAiService } from './support/assistant-fakes.js';
+import { adminContext, fullRegistry, InMemoryAiRuns, MAIN, PRODUCT, testAiService } from './support/assistant-fakes.js';
+import type { ProposalCall } from './support/assistant-fakes.js';
 import { aiResult, ScriptedAiProvider } from './support/scripted-ai-provider.js';
 
 const USER_MESSAGE: AgentMessage = { role: 'USER', content: [{ type: 'text', text: 'Merkez depoda NYM 3x2,5 kablodan kaç metre var?' }] };
@@ -31,14 +31,17 @@ function setup(): {
   loop: AgentLoop;
   provider: ScriptedAiProvider;
   runs: InMemoryAiRuns;
-  calls: ReturnType<typeof fakeReadServices>['calls'];
+  calls: ReturnType<typeof fullRegistry>['readCalls'];
+  proposals: ProposalCall[];
 } {
   const provider = new ScriptedAiProvider();
   const runs = new InMemoryAiRuns();
-  const { services, calls } = fakeReadServices();
-  const loop = new AgentLoop(testAiService(provider, runs), new ToolRegistry(createReadTools(services)));
-  return { loop, provider, runs, calls };
+  const { registry, readCalls, proposals } = fullRegistry();
+  const loop = new AgentLoop(testAiService(provider, runs), registry);
+  return { loop, provider, runs, calls: readCalls, proposals };
 }
+
+const V1_TOOLS = ['search_products', 'list_warehouses', 'get_stock', 'list_recent_movements'];
 
 function turnInput(overrides: Partial<AgentTurnInput> = {}): AgentTurnInput {
   return { context: adminContext, messageId: randomUUID(), history: [USER_MESSAGE], ...overrides };
@@ -69,7 +72,12 @@ describe('Ajan döngüsü', () => {
     );
     const events: AgentEvent[] = [];
     const rounds: AgentMessage[][] = [];
-    const input = turnInput({ onEvent: (event) => events.push(event), onRound: async (messages) => void rounds.push(messages) });
+    // 4. haftada başlamış (chat-v1) bir sohbet: istekler 4. haftadakiyle aynı kalmalı.
+    const input = turnInput({
+      promptVersion: 'chat-v1',
+      onEvent: (event) => events.push(event),
+      onRound: async (messages) => void rounds.push(messages),
+    });
 
     const output = await loop.run(input);
 
@@ -88,7 +96,7 @@ describe('Ajan döngüsü', () => {
     // Model her turda sabit sistem promptunu ve aynı araç listesini aldı; geçmiş yalnızca sona eklenerek büyüdü.
     expect(provider.requests).toHaveLength(3);
     expect(provider.requests.every((request) => request.system === CHAT_PROMPT_V1.text)).toBe(true);
-    expect(provider.requests[2]?.tools.map((tool) => tool.name)).toEqual(['search_products', 'list_warehouses', 'get_stock', 'list_recent_movements']);
+    expect(provider.requests.every((request) => request.tools.map((tool) => tool.name).join() === V1_TOOLS.join())).toBe(true);
     const lastHistory = provider.requests[2]?.messages ?? [];
     expect(lastHistory.map((message) => message.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user']);
     expect(lastHistory[1]?.content[0]).toEqual({ type: 'thinking', thinking: '', signature: 'imza-1' });
@@ -158,11 +166,72 @@ describe('Ajan döngüsü', () => {
     expect(rounds).toHaveLength(1);
   });
 
-  it('süren sohbet başladığı prompt sürümüyle devam eder; bilinmeyen sürümde güncel sürüm', async () => {
+  it('süren sohbet başladığı prompt sürümüyle devam eder; yeni ya da bilinmeyen sürümde güncel sürüm (chat-v2)', async () => {
+    const { loop, provider } = setup();
+    provider.push(aiResult(), aiResult(), aiResult());
+    expect((await loop.run(turnInput({ promptVersion: 'chat-v1' }))).promptVersion).toBe('chat-v1');
+    expect((await loop.run(turnInput({ promptVersion: 'chat-v0' }))).promptVersion).toBe('chat-v2');
+    expect((await loop.run(turnInput())).promptVersion).toBe('chat-v2');
+  });
+
+  it('her sürüm kendi araç listesini alır: chat-v1 dört okuma aracı, chat-v2 öneri araçları dahil on araç', async () => {
     const { loop, provider } = setup();
     provider.push(aiResult(), aiResult());
-    expect((await loop.run(turnInput({ promptVersion: 'chat-v1' }))).promptVersion).toBe('chat-v1');
-    expect((await loop.run(turnInput({ promptVersion: 'chat-v0' }))).promptVersion).toBe('chat-v1');
+    await loop.run(turnInput({ promptVersion: 'chat-v1' }));
+    await loop.run(turnInput());
+
+    const [v1, v2] = provider.requests;
+    expect(v1?.system).toBe(CHAT_PROMPT_V1.text);
+    expect(v1?.tools.map((tool) => tool.name)).toEqual(V1_TOOLS);
+    expect(v2?.system).toBe(CHAT_PROMPT_V2.text);
+    expect(v2?.tools.map((tool) => tool.name)).toEqual([...CHAT_PROMPT_V2.tools]);
+    expect(v2?.tools.map((tool) => tool.name)).toEqual([
+      ...V1_TOOLS,
+      'search_parties',
+      'propose_stock_in',
+      'propose_stock_out',
+      'propose_transfer',
+      'propose_count',
+      'propose_waste',
+    ]);
+  });
+
+  it('chat-v1 sohbetinde model öneri aracını çağırırsa araç çalışmaz: bilinmeyen araç olarak modele döner', async () => {
+    const { loop, provider, proposals } = setup();
+    const call = { product_id: PRODUCT, quantity: '2' };
+    provider.push(
+      toolTurn([{ id: 'toolu_1', name: 'propose_stock_out', input: { warehouse_id: MAIN, lines: [call] } }]),
+      aiResult({ text: 'Bunu asistanda henüz yapamıyorum.' }),
+    );
+    const output = await loop.run(turnInput({ promptVersion: 'chat-v1' }));
+
+    const [result] = output.messages[1]?.content ?? [];
+    expect(result).toMatchObject({ type: 'tool_result', is_error: true });
+    expect(String(result?.content)).toMatch(/Bilinmeyen araç: propose_stock_out/);
+    expect(proposals).toEqual([]);
+  });
+
+  it('öneri aracı işlemi cevaplanan mesaja bağlar ve onay bekleyen öneriyi açar (kaynak CHAT)', async () => {
+    const { loop, provider, proposals } = setup();
+    provider.push(
+      toolTurn([
+        {
+          id: 'toolu_1',
+          name: 'propose_stock_out',
+          input: { warehouse_id: MAIN, lines: [{ product_id: PRODUCT, quantity: '2', unit: 'koli' }] },
+        },
+      ]),
+      aiResult({ text: "Çıkış önerisi hazır; kartı kontrol edip Onayla'ya bas." }),
+    );
+    const input = turnInput();
+    const output = await loop.run(input);
+
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({ kind: 'create', source: 'CHAT', sourceMessageId: input.messageId });
+    const [result] = output.messages[1]?.content ?? [];
+    expect(result).toMatchObject({ type: 'tool_result', tool_use_id: 'toolu_1' });
+    expect(result?.is_error).toBeUndefined();
+    expect(JSON.parse(String(result?.content))).toMatchObject({ status: 'Onay bekliyor', type: 'Çıkış' });
   });
 
   it('saklanan TOOL mesajı API\'ye "user" rolüyle gider', async () => {
