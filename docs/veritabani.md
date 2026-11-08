@@ -125,11 +125,19 @@ operations → APPLIED
 
 14. **Kalem miktarı ve birimi.** `operation_items.quantity` kullanıcının girdiği birimdedir; birim boşsa ürünün ana birimidir. Sayımda bu, sayılan miktardır ve 0 olabilir; bu yüzden kalemde kısıt `>= 0`'dır. Diğer türlerde sıfır miktarı API reddeder; reddetmese bile hareket tablosundaki "sıfır hareket yazılamaz" kısıtı durdurur. Girişte `unit_cost` girilen birim başına fiyattır (koli fiyatı); ana birime onayda çevrilir (ADR-003). Ürünün birimi bir işlemde kullanıldıysa birimin adı değiştirilemez (yabancı anahtar); yeni bir birim eklenir.
 
+15. **Sohbetten gelen işlem mesajına bağlı (#74).** `operations.source_message_id`, asistanın öneriyi açarken cevapladığı kullanıcı mesajıdır. Sohbet yeniden açılınca işlem kartı bu bağla bulunur (#75); denetimde "bu işlem hangi mesajdan geldi" sorusunun cevabıdır. Üç kural veritabanında:
+    - Bağ `(organization_id, source_message_id)` → `messages (organization_id, id)` bileşik yabancı anahtarıdır; işlem başka şirketin mesajına bağlanamaz.
+    - Mesaj silinince (sohbet ya da hesap silme) işlem kalır, yalnızca bağ boşalır: `ON DELETE SET NULL (source_message_id)`. Kolon listesi şart; düz `SET NULL` `organization_id`'yi de boşaltmaya çalışır ve silme hata verirdi (`ai_runs` ile aynı, Asistan tabloları karar 9).
+    - CHECK: bağ yalnızca kaynağı `CHAT` olan işlemde bulunabilir.
+
+    Onay bekleyen öneri sohbette düzenlenebilir: kalemleri baştan yazılır ve `version` bir artar (karar 1'deki gibi kalemler ayrı tabloda; onay bekleyen işlemin hareketi olmadığı için kalemlerini silmek hiçbir hareketi etkilemez). Uygulanmış işlem düzenlenemez.
+
 ### İndeksler
 
 | İndeks | Hangi sorgu için |
 | --- | --- |
 | `operations (organization_id, status, created_at)` | Onay kuyruğu ve "onay bekleyen işlemlerim" |
+| `operations (organization_id, source_message_id)` | Sohbet geçmişinde mesajların işlem kartları (#75); mesaj silinince bağın boşaltılması |
 | `inventory_movements (organization_id, warehouse_id, product_id, created_at)` | Stok kartı: bir depodaki ürünün hareketleri |
 | `inventory_movements (organization_id, product_id, created_at)` | Ürünün bütün depolardaki son hareketleri (mobil ürün detayı, asistanın `list_recent_movements` aracı) |
 | `audit_logs (organization_id, created_at)`, `(organization_id, entity_type, entity_id)` | Denetim listesi ve bir kaydın geçmişi |
@@ -229,12 +237,15 @@ Asistanın ürün arama aracı (`search_products`, #56) için. Sahada ürün ad�
 | `0004_outbox_grants.sql` | `outbox_events` üzerindeki istemci yetkilerinin geri alınması | Elle (`drizzle-kit generate --custom`) |
 | `0005_trigram_search.sql` | `pg_trgm` ve `btree_gin` eklentileri, `private.fold_search` fonksiyonu | Elle (`drizzle-kit generate --custom`) |
 | `0006_conversations_and_ai_runs.sql` | 3 enum, asistanın 3 tablosu, kısıtlar, indeksler, 3 okuma politikası; ürün adı ve alternatif ad trigram indeksleri | `drizzle-kit generate` (bir yabancı anahtar elle düzeltildi, aşağıda) |
+| `0007_operation_source_message.sql` | `operations.source_message_id`, mesaja bileşik yabancı anahtar, indeks, CHECK (#74) | `drizzle-kit generate` (yabancı anahtar elle düzeltildi, aşağıda) |
 
 Sıra önemlidir: politikalar fonksiyonları, fonksiyonlar da tabloları kullanır. RLS ilk migration'da açılır; politikalar gelene kadar tablolar herkese kapalıdır, açık kalmaz.
 
 `0003` üretildiğinde drizzle-kit, `parties (organization_id, id)` benzersizlik kısıtını dosyanın sonuna, ona dayanan `operations_party_fk` yabancı anahtarından sonraya yazdı; PostgreSQL bu sırayı reddeder. Kısıt, uygulanmadan önce elle yabancı anahtarların önüne alındı (dosyada yorumla işaretli). Migration önce canlı veritabanında geri alınan bir transaction içinde denendi, sonra uygulandı.
 
 `0005` elle yazıldı ve `0006`'dan önce gelir: trigram indeksleri `private.fold_search` fonksiyonunu kullandığı için fonksiyon indekslerden önce var olmalı. `0006`'da drizzle-kit `ai_runs_message_fk` için kolon listesiz `ON DELETE set null` üretti; elle `ON DELETE SET NULL (message_id)` yapıldı ([Asistan tabloları](#asistan-tabloları), karar 9; dosyada yorumla işaretli). İki migration da önce geri alınan bir transaction'da denendi, sonra uygulandı.
+
+`0007`'de de aynı düzeltme yapıldı: `operations_source_message_fk` için `ON DELETE SET NULL ("source_message_id")` (Stok defteri tabloları, karar 15; dosyada yorumla işaretli).
 
 0001'deki varsayılan yetkiler (`ALTER DEFAULT PRIVILEGES`) sayesinde yeni tablolar da anon'a kapalı ve authenticated için salt okunur başlar; bunun için ayrıca migration yazılmadı.
 

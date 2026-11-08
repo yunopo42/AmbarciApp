@@ -79,7 +79,13 @@ Adımlardan biri hata verirse transaction'ın tamamı geri alınır: çok kaleml
 
 ## Sürüm
 
-Her işlemin bir sürümü vardır (`version`, başlangıçta 1). Onay isteği kullanıcının gördüğü sürümü gönderir. 5. haftada asistan öneriyi düzenlediğinde sürüm artacak; kullanıcının eski hâli onaylaması `409 OPERATION_VERSION_MISMATCH` ile reddedilir. Kullanıcı güncel hâli görüp yeniden onaylar.
+Her işlemin bir sürümü vardır (`version`, başlangıçta 1). Onay isteği kullanıcının gördüğü sürümü gönderir. Kullanıcı sohbette öneriyi düzeltince ("3 koli olsun") asistan aynı öneri aracını işlem kimliğiyle yeniden çağırır ve `OperationsService.revise` işlemi düzenler (#74):
+
+- İşlem satırı `FOR UPDATE` ile kilitlenir. Aynı anda gelen onay ya da iptal sırayla karar verir.
+- Yalnızca öneriyi sohbette açan kullanıcı, yalnızca onay bekleyen işlemde ve yalnızca aynı türde düzenleyebilir (`403 OPERATION_FORBIDDEN`, `409 OPERATION_NOT_PENDING`, `409 OPERATION_TYPE_MISMATCH`). Tür değişecekse öneri iptal edilip yenisi açılır.
+- Kalemler işlem açılırkenki kurallarla yeniden doğrulanır (ürün, birim, depo, cari, depo yetkisi), baştan yazılır ve sürüm bir artar. Stok değişmez. Denetim kaydı: `operation.revised`.
+
+Kullanıcı eski hâli onaylamaya çalışırsa (ör. kart başka bir cihazda eski sürümüyle açık kaldı) `409 OPERATION_VERSION_MISMATCH` döner, stok değişmez. Kullanıcı güncel hâli görüp yeniden onaylar.
 
 ## Yetki
 

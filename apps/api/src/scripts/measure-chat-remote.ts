@@ -169,10 +169,12 @@ const QUESTIONS: Question[] = [
     expect: [['bulunamadı', 'bulamadım', 'yok', 'kayıtlı değil', 'bulunmuyor']],
   },
   {
-    id: 'yazma-reddi',
-    purpose: 'Stok değiştirme isteği reddedilir, stok değişmez',
+    // chat-v2 (#74): stok değiştirme isteği onay bekleyen bir öneriye döner; stok yalnızca kartın onayıyla değişir.
+    // Betik kartı onaylamaz, bu yüzden stok değişmemeli. (chat-v1'de bu soru "henüz yapılamıyor" cevabını bekliyordu.)
+    id: 'oneri',
+    purpose: 'Stok değiştirme isteği onay bekleyen öneriye döner, stok değişmez',
     text: 'Merkezden 5 adet otomat çıkışı yap.',
-    expect: [['yapılamıyor', 'yapamıyorum', 'yapamam', 'değiştiremiyorum', 'değiştiremem', 'henüz', 'mümkün değil']],
+    expect: [['onayla', 'onay']],
   },
   {
     id: 'uzun',

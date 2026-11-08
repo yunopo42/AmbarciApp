@@ -1,9 +1,10 @@
 import type { DbExecutor } from '@ambarci/db';
-import type { ProductInput, ProductList, ProductListQuery } from '@ambarci/shared';
+import type { Party, PartyType, Product, ProductInput, ProductList, ProductListQuery } from '@ambarci/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { CatalogRepository } from './catalog.repository.js';
 import type { ProductSummary, UnitConversion, UnitConversionInput } from './catalog.repository.js';
+import { PartiesRepository } from './parties.repository.js';
 import { ProductsRepository } from './products.repository.js';
 import type { SimilarProduct } from './products.repository.js';
 
@@ -13,7 +14,28 @@ export class CatalogService {
   constructor(
     @Inject(CatalogRepository) private readonly repository: CatalogRepository,
     @Inject(ProductsRepository) private readonly products: ProductsRepository,
+    @Inject(PartiesRepository) private readonly parties: PartiesRepository,
   ) {}
+
+  /** Ürün, birimleriyle; bu şirkette yoksa (başka şirketinki de) null. Asistan, bulunamayan birimde seçenekleri söyler. */
+  findProduct(organizationId: string, productId: string): Promise<Product | null> {
+    return this.products.findById(organizationId, productId);
+  }
+
+  /**
+   * Aktif cariler adda geçen ya da vergi numarasıyla başlayan metinle (cari listesindeki aramayla aynı, Türkçe harf
+   * farkı gözetilmez); ada göre, en fazla `limit` kayıt (asistanın search_parties aracı).
+   */
+  async searchParties(organizationId: string, search: string, type: PartyType | undefined, limit: number): Promise<Party[]> {
+    const result = await this.parties.list(organizationId, {
+      search,
+      ...(type ? { type } : {}),
+      status: 'active',
+      page: 1,
+      pageSize: limit,
+    });
+    return result.items;
+  }
 
   convertToBaseUnits(
     executor: DbExecutor,
