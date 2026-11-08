@@ -12,6 +12,8 @@ import type { components, paths } from './schema.js';
 
 export type { components, paths } from './schema.js';
 export { ApiRequestError, describeApiError } from './errors.js';
+export { splitBoldText } from './bold-text.js';
+export type { TextSegment } from './bold-text.js';
 export type { ApiFailure } from './errors.js';
 export { readServerSentEvents, STREAM_INTERRUPTED, streamChatMessage } from './chat-stream.js';
 export type { ChatStreamEnd, ChatStreamOptions, ServerSentEvent } from './chat-stream.js';

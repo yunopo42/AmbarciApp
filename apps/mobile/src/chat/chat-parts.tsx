@@ -1,4 +1,4 @@
-import { turnStatusLabel } from '@ambarci/api-client';
+import { splitBoldText, turnStatusLabel } from '@ambarci/api-client';
 import type { ChatRow, SavedChatMessage } from '@ambarci/api-client';
 import type { JSX } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
@@ -36,8 +36,17 @@ export function AssistantBubble({ text }: { text: string }): JSX.Element {
         </View>
       </View>
       <View style={[styles.bubble, styles.assistantBubble]}>
+        {/* Kalın parçalar iç içe metinle: satır kaydırma ve seçme tek metin gibi çalışır. */}
         <AppText variant="bodyLg" selectable>
-          {text}
+          {splitBoldText(text).map((segment, index) =>
+            segment.bold ? (
+              <AppText key={index} variant="bodyLgBold">
+                {segment.text}
+              </AppText>
+            ) : (
+              segment.text
+            ),
+          )}
         </AppText>
       </View>
     </View>

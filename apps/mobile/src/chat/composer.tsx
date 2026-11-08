@@ -32,6 +32,19 @@ export function Composer({
 }): JSX.Element {
   const hasText = value.trim().length > 0;
 
+  // Ses uyarısı ("Ses algılanmadı" gibi) yalnızca son ses denemesiyle ilgilidir. Kullanıcı yazmaya başlayınca ya da
+  // mesajı gönderince kaldırılır; 4. hafta kapı denemesinde sonraki mesajlar gönderildiği hâlde ekranda kalıyordu.
+  const changeText = (text: string): void => {
+    if (speech.error) {
+      speech.clearError();
+    }
+    onChangeText(text);
+  };
+  const send = (): void => {
+    speech.clearError();
+    onSend();
+  };
+
   let action: JSX.Element;
   if (speech.listening) {
     action = <Button label="Dur" accessibilityHint="Dinlemeyi bitirir" onPress={speech.stop} />;
@@ -41,7 +54,7 @@ export function Composer({
         label="Gönder"
         disabled={busy}
         accessibilityHint={busy ? 'Önceki mesajın cevabı bekleniyor' : 'Mesajı asistana gönderir'}
-        onPress={onSend}
+        onPress={send}
       />
     );
   } else {
@@ -63,7 +76,7 @@ export function Composer({
       <View style={styles.row}>
         <TextField
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={changeText}
           placeholder="Mesaj yaz veya konuş…"
           accessibilityLabel="Mesaj"
           multiline

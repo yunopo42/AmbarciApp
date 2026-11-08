@@ -1,8 +1,9 @@
 'use client';
 
-import { turnStatusLabel } from '@ambarci/api-client';
+import { splitBoldText, turnStatusLabel } from '@ambarci/api-client';
 import type { ChatRow, SavedChatMessage } from '@ambarci/api-client';
 import { LoaderCircle, RotateCcw } from 'lucide-react';
+import { Fragment } from 'react';
 import type { JSX } from 'react';
 
 import { Alert } from '@/components/ui/alert';
@@ -28,7 +29,16 @@ function AssistantBubble({ text }: { text: string }): JSX.Element {
         <Badge variant="info">Yapay zeka</Badge>
       </div>
       <div className="whitespace-pre-wrap wrap-break-word rounded-lg border border-border bg-card p-4 text-body-md text-text shadow-1">
-        {text}
+        {/* Kalın yazı tasarımdaki kalın ağırlıkla (600, body-lg-bold ile aynı). */}
+        {splitBoldText(text).map((segment, index) =>
+          segment.bold ? (
+            <strong key={index} className="font-semibold">
+              {segment.text}
+            </strong>
+          ) : (
+            <Fragment key={index}>{segment.text}</Fragment>
+          ),
+        )}
       </div>
     </div>
   );

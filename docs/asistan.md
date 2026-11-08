@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm, altıncı bölüm). 5. hafta: #72 (Claude API adresinin sabitlenmesi, ilk bölümün 12. kararı). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm, altıncı bölüm). 5. hafta: #72 (Claude API adresinin sabitlenmesi, ilk bölümün 12. kararı), #73 (ses uyarısının temizlenmesi ve kalın yazı; mobil bölümün 12., web bölümünün 8. kararı). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -220,6 +220,7 @@ Kod: `apps/mobile/src/app/index.tsx` (ana ekran) ve `apps/mobile/src/chat/` (`us
 9. **Gezinme.** Sohbet ana ekran oldu; stok listesi `/stock`'a taşındı ve başlıktaki **Stok**'tan açılıyor. Tasarımdaki alt sekme çubuğu (Sohbet, Stok, İşlemlerim) ikon gerektirdiği ve "İşlemlerim" ekranı henüz olmadığı için yapılmadı.
 10. **İstemci kimliği.** React Native'de `crypto.randomUUID` yok; kimlik UUID v4 biçiminde `Math.random` ile üretiliyor (`randomUuid`, `packages/api-client/src/chat-turn.ts`). Gizli bir değer değil, yalnızca kendi sohbetinde benzersiz olması gerekiyor; bunun için `expo-crypto` eklenmedi.
 11. **Klavye.** Mesaj kutusu klavyenin üstünde kalsın diye `KeyboardAvoidingView` kullanılıyor; ekran başlığının yüksekliği, ekranın pencere içindeki konumu ölçülerek veriliyor. Klavye kapalıyken kutu telefonun alt çubuğunun üstünde durur.
+12. **Ses uyarısı son denemeyle ilgilidir (#73).** "Ses algılanmadı" gibi bir uyarı yeni bir **Konuş** denemesinde, kullanıcı kutuya yazmaya başlayınca ya da mesajı gönderince kalkar. 4. hafta kapı denemesinde uyarı sonraki mesajlar gönderildiği hâlde ekranda kalıyordu; kullanıcı yeni mesajda da bir sorun olduğunu sanabilirdi.
 
 ### Ekranda görünen hatalar
 
@@ -228,7 +229,7 @@ Kod: `apps/mobile/src/app/index.tsx` (ana ekran) ve `apps/mobile/src/chat/` (`us
 | Sunucuya ulaşılamadı (`NETWORK_ERROR`) | "API'ye ulaşılamadı. Sunucu uykudaysa bir dakika sonra tekrar deneyin." |
 | Akış koptu (`STREAM_INTERRUPTED`) | "Bağlantı koptu. Cevap sunucuda tamamlanmış olabilir; tekrar gönderince kaydedilen cevap gelir." |
 | 409, 404 ve akıştaki `error` olayı (`AI_*`, `AGENT_TOOL_LIMIT`) | API'nin Türkçe mesajı (yukarıdaki tablolar) |
-| Ses: izin yok, servis yok, ses algılanmadı, Türkçe yok, internet yok | Mesaj kutusunun üstünde Türkçe açıklama (`use-speech-input.ts`) |
+| Ses: izin yok, servis yok, ses algılanmadı, Türkçe yok, internet yok | Mesaj kutusunun üstünde Türkçe açıklama (`use-speech-input.ts`); yeni ses denemesinde, kutuya yazınca ya da mesaj gönderilince kalkar |
 
 İlk mesaj gönderilirken "Gönderiliyor… Sunucu uykudaysa ilk cevap bir dakika sürebilir." yazar: Render'daki ücretsiz servis 15 dakika istek almazsa uyur.
 
@@ -262,6 +263,7 @@ Kod: `apps/web/components/chat/` (`chat-panel.tsx` panel ve açık sohbet, `use-
 5. **Kaydırma en altta durur.** Mesaj listesi ters sütunlu (`flex-col-reverse`) bir kaydırma kutusunun içinde tek bir kutudur: tarayıcı kaydırmayı kendiliğinden en altta tutar, yeni parça gelince altta kalır; JavaScript gerekmez. İç kutudaki sıra eskiden yeniye olduğu için ekran okuyucu mesajları doğru sırayla okur. Liste `role="log"` ve cevap sürerken `aria-busy`: ekran okuyucu her parçayı ayrı ayrı okumaz.
 6. **Ses yok.** Web paneli masa başındaki yönetici içindir; ses düğmesi yalnızca mobilde.
 7. **İstemci kimliği güvenli olmayan sayfada da üretilir.** Tarayıcıda `crypto.randomUUID` yalnızca güvenli bağlamda (https, localhost) var. Panel başka bir cihazdan bilgisayarın ağ adresiyle (http) açılırsa kimlik `Math.random` ile üretilir (`randomUuid`, `chat-turn.ts`).
+8. **Kalın yazı, mobilde de (#73).** Model bazı cevaplarda Markdown kalın yazı (`**…**`) kullanıyor; düz metinde yıldızlar görünüyordu. Ortak paketteki `splitBoldText` (`packages/api-client/src/bold-text.ts`) cevabı düz ve kalın parçalara ayırır; web `<strong>` (600 ağırlık), mobil iç içe `AppText` (`bodyLgBold`) ile gösterir. İç içe metin olduğu için satır kaydırma ve metin seçme tek metindeki gibi çalışır. Markdown kütüphanesi eklenmedi (yeni bağımlılık yok): yalnızca kalın yazı desteklenir; başlık, liste ya da italik işaretleri olduğu gibi görünür. Kapanmamış işaret düz kalır: akış sürerken `**180 ad` önce yıldızlarıyla, kapanış gelince kalın görünür. Kullanıcının kendi mesajı biçimlendirilmez; yazdığı yıldızlar olduğu gibi kalır. "Markdown kullanma" kuralı prompt'un yeni sürümüne (`chat-v2`, #74) eklenecek; görünüm yine de düzeltildi, çünkü süren sohbetler `chat-v1` ile devam ediyor ve model kuralı her zaman tutmayabilir.
 
 ### Testler
 
@@ -269,6 +271,7 @@ Kod: `apps/web/components/chat/` (`chat-panel.tsx` panel ve açık sohbet, `use-
 | --- | --- | --- |
 | `packages/api-client/test/chat-turn.spec.ts` | CI | Olayların tura işlenmesi (metin parçalarının eklenmesi, araç etiketinin araç bitince kalkması, `done`'ın cevabın tamamıyla değiştirmesi, `error` ve istek hatası); durum satırları; yalnızca son kullanıcı mesajına "başarısız" ya da "sürüyor" notu; tur sürerken kayıtlı kaydının gizlenmesi; cevap gelen turun geçmiş yenilenince çekilmesi; başarısız turun kayıtlı kaydın yerine gösterilmesi; `crypto.randomUUID` yokken de UUID v4 üretilmesi |
 | `packages/api-client/test/chat-stream.spec.ts` | CI | Akışın okunması (#58) |
+| `packages/api-client/test/bold-text.spec.ts` | CI | Kalın yazının ayrılması (#73): tek ve birden çok kalın parça, satır sonları, kapanmamış ve içi boş işaret, tek yıldız, Türkçe harfler, akış sürerken yarım gelen işaret, parçaların birleşiminin metnin kendisi olması |
 
 Web paneli için bileşen testi yok (web paketinde test altyapısı yok); `next build` geçiyor. Panel 7 Kasım 2026'da yerelde (web `localhost:3000`, API `localhost:3001`) elle denendi: stok sorusu ve parça parça gelen cevap, cevap akarken sayfa değiştirme, geniş ve dar ekranda yerleşim, Esc ve sayfa yenilenince açık kalması, telefondan açılan sohbetlerin listede görünmesi, şirket değişince o şirketin sohbetleri, tarayıcı çevrimdışıyken hata ve aynı kimlikle tekrar gönderme. Ortak koda taşınan mobil ekran da telefonda yeniden denendi.
 
@@ -317,10 +320,10 @@ Denemede bulunan ortam sorunu: geliştirici bilgisayarında Windows kullanıcı 
 ### Sınırlamalar ve sonraki adımlar
 
 - **Örneklem küçük:** betikte 9, telefonda 9 soru; tek gün, tek ağ. Sayılar ölçülen değerler ama genelleme yapmaya yetmez; asıl değerlendirme 6. haftada.
-- **Markdown:** Model bazı cevaplarda kalın yazı (`**…**`) kullanıyor. Mobil ve web düz metin gösterdiği için yıldızlar ekranda görünüyor. Prompta "Markdown kullanma" kuralı eklemek prompt sürümünü değiştirir (`chat-v2`); 6. haftadaki değerlendirmeyle birlikte ele alınacak ya da görünümde basit biçimlendirme yapılacak.
+- **Markdown:** Model bazı cevaplarda kalın yazı (`**…**`) kullanıyor; mobil ve web düz metin gösterdiği için yıldızlar ekranda görünüyordu. #73'te kalın yazı görünümde düzeltildi (Web sohbet paneli, karar 8). "Markdown kullanma" kuralı prompt sürümünü değiştirdiği için öneri araçlarıyla aynı sürümde (`chat-v2`, #74) gelecek.
 - **"Toplam" ifadesi:** Çalışana verilen toplam, yalnızca yetkili olduğu depoların toplamı; cevap bunu açıkça söylemiyor ("toplam 240 adet"). Prompta "görebildiğin depolarda" ifadesi aynı sürümde eklenebilir.
 - **Hitap:** Bir cevapta "sen" yerine "siz" kullanıldı.
-- **Ses uyarısı ekranda kalıyor:** Telefonda "Ses algılanmadı" uyarısı, sonraki mesajlar gönderildiği hâlde ekranda kaldı. Mesaj gönderilince ya da kutuya yazılınca temizlenmeli.
+- **Ses uyarısı ekranda kalıyordu:** Telefonda "Ses algılanmadı" uyarısı, sonraki mesajlar gönderildiği hâlde ekranda kaldı. #73'te düzeltildi: uyarı kutuya yazınca ya da mesaj gönderilince kalkıyor (Mobil sohbet ekranı, karar 12).
 - **Telefonda süre:** Telefonda istemci tarafı süre ölçülmedi.
 - **Yerel geliştirme:** Geliştirici bilgisayarında tanımlı bir `ANTHROPIC_BASE_URL` SDK'nın adresini değiştirebiliyordu (#59 denemesi, Web sohbet paneli bölümü). #72'de adres kodda sabitlendi (Model çağrısı, karar 12).
 
