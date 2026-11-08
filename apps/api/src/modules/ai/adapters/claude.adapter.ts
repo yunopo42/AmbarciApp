@@ -15,6 +15,13 @@ import type { AiEffort, AiToolCall, AiTurnRequest, AiTurnResult } from '../ai-pr
  */
 export const CHAT_MAX_TOKENS = 4096;
 
+/**
+ * Claude API'nin adresi; bilerek kodda sabit. Adres verilmezse SDK ANTHROPIC_BASE_URL ortam değişkenini okur: o
+ * değişken başka bir araç için tanımlıysa istekler ve API anahtarı oraya gider (4. haftada geliştirici bilgisayarında
+ * 127.0.0.1:1337'ye gitti). Testler kendi adresini ClaudeAdapterOptions.client ile verebilir.
+ */
+export const CLAUDE_API_BASE_URL = 'https://api.anthropic.com';
+
 export interface ClaudeAdapterOptions {
   apiKey: string | null;
   model: string;
@@ -27,13 +34,18 @@ export class ClaudeAdapter extends AIProvider {
   readonly model: string;
   readonly effort: AiEffort;
   private readonly client: Anthropic | null;
+  private readonly apiKey: string | null;
 
   constructor(options: ClaudeAdapterOptions) {
     super();
     this.model = options.model;
     this.effort = options.effort;
-    // 429, 5xx ve bağlantı hatalarını SDK kendisi iki kez yeniden dener (varsayılan).
-    this.client = options.apiKey ? new Anthropic({ timeout: 60_000, ...options.client, apiKey: options.apiKey }) : null;
+    this.apiKey = options.apiKey;
+    // 429, 5xx ve bağlantı hatalarını SDK kendisi iki kez yeniden dener (varsayılan). Adres options.client'tan önce
+    // gelir: üretimde sabit adres geçerli, test kendi adresini ya da sahte fetch'ini verebilir.
+    this.client = options.apiKey
+      ? new Anthropic({ baseURL: CLAUDE_API_BASE_URL, timeout: 60_000, ...options.client, apiKey: options.apiKey })
+      : null;
   }
 
   async createTurn(request: AiTurnRequest): Promise<AiTurnResult> {
@@ -84,7 +96,7 @@ export class ClaudeAdapter extends AIProvider {
       const message = await stream.finalMessage();
       return toResult(message, this.effort, elapsed(), firstTokenMs);
     } catch (error) {
-      throw toProviderError(error, elapsed());
+      throw toProviderError(error, elapsed(), { host: new URL(this.client.baseURL).host, apiKey: this.apiKey });
     }
   }
 }
@@ -118,8 +130,48 @@ function toResult(message: Anthropic.Message, effort: AiEffort, durationMs: numb
   };
 }
 
-/** SDK hatalarını port hatasına çevirir; en özelden en genele (alt sınıflar önce). */
-function toProviderError(error: unknown, durationMs: number): unknown {
+interface ErrorContext {
+  /** İsteğin gittiği sunucu (ör. api.anthropic.com); bağlantı hatasında nereye gidilemediği görünsün. */
+  host: string;
+  /** Hata metnine karışırsa loga yazılmadan önce silinir. */
+  apiKey: string | null;
+}
+
+/** Hata zincirindeki en fazla bu kadar neden okunur (döngüye karşı). */
+const MAX_CAUSE_DEPTH = 4;
+
+/**
+ * Bağlantı hatasının alttaki nedeni. SDK bağlantı hatasında yalnızca "Connection error." yazar; asıl neden `cause`
+ * zincirindedir (Node'un fetch'i: "fetch failed" → "connect ECONNREFUSED 127.0.0.1:1337"). Zincirdeki mesajlar ve hata
+ * kodları sırayla birleştirilir. Nedeni olmayan hatada boş metin döner.
+ */
+export function describeErrorCause(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error instanceof Error ? error.cause : undefined;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && current !== undefined && current !== null; depth += 1) {
+    if (current instanceof Error) {
+      const code = (current as Error & { code?: unknown }).code;
+      const text = typeof code === 'string' && !current.message.includes(code) ? `${current.message} (${code})` : current.message;
+      parts.push(text);
+      current = current.cause;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+  return parts.join(' ← ');
+}
+
+/** Metindeki API anahtarını siler. Anahtar normalde hata mesajlarında geçmez; bu son savunma hattıdır. */
+function redact(text: string, apiKey: string | null): string {
+  return apiKey ? text.split(apiKey).join('[anahtar gizlendi]') : text;
+}
+
+/**
+ * SDK hatalarını port hatasına çevirir; en özelden en genele (alt sınıflar önce). Mesaj yalnızca loga yazılır
+ * (ai.service); kullanıcı genel bir Türkçe mesaj görür. Mesaja istek ya da cevap içeriği konmaz.
+ */
+function toProviderError(error: unknown, durationMs: number, context: ErrorContext): unknown {
   if (error instanceof Anthropic.APIUserAbortError) {
     return new AiProviderError('AI_ABORTED', 'Model çağrısı iptal edildi.', durationMs);
   }
@@ -135,14 +187,18 @@ function toProviderError(error: unknown, durationMs: number): unknown {
     error instanceof Anthropic.UnprocessableEntityError
   ) {
     // Bizim isteğimizde bir hata var (ör. geçmiş bozuk); mesaj loga gider, kullanıcıya genel hata gösterilir.
-    return new AiProviderError('AI_REQUEST_REJECTED', `Claude API isteği reddetti (${error.status}): ${error.message}`, durationMs);
+    const message = `Claude API isteği reddetti (${error.status}): ${error.message}`;
+    return new AiProviderError('AI_REQUEST_REJECTED', redact(message, context.apiKey), durationMs);
   }
   if (error instanceof Anthropic.InternalServerError && error.status === 529) {
     return new AiProviderError('AI_OVERLOADED', 'Claude API aşırı yüklü (529).', durationMs);
   }
   if (error instanceof Anthropic.APIError) {
-    // Bağlantı hatası, zaman aşımı ve diğer 5xx.
-    return new AiProviderError('AI_UNAVAILABLE', `Claude API'ye ulaşılamadı: ${error.message}`, durationMs);
+    // Bağlantı hatası, zaman aşımı ve diğer 5xx. Logda hedef sunucu ve alttaki neden görünsün: 4. haftada
+    // "Connection error." yazısından adresin yanlış olduğu anlaşılamamıştı.
+    const cause = describeErrorCause(error);
+    const message = `Claude API'ye ulaşılamadı (${context.host}): ${error.message}${cause ? ` Neden: ${cause}` : ''}`;
+    return new AiProviderError('AI_UNAVAILABLE', redact(message, context.apiKey), durationMs);
   }
   // Programlama hatası: olduğu gibi yukarı çıkar.
   return error;

@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm, altıncı bölüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm, altıncı bölüm). 5. hafta: #72 (Claude API adresinin sabitlenmesi, ilk bölümün 12. kararı). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -30,6 +30,7 @@ Kod: `apps/api/src/modules/ai/`. Uç noktası yok; asistan modülü (#56) kullan
 9. **Model reddederse ya da cevap yarım kalırsa.** `stop_reason: "refusal"` → `422 AI_REFUSED` ve kullanıcıya sorusunu farklı sorması söylenir; Haiku 5.5'te sunucu tarafında yedek model yoktur. Araç çağrısı yazılırken çıktı sınırına takılan cevap (`max_tokens`) çalıştırılmaz: yarım kalmış girdi geçerli görünebilir → `502 AI_RESPONSE_TRUNCATED`. İki durumda da çağrı önce kaydedilir; reddedilen ya da yarım içerik geçmişe eklenmez.
 10. **Günlük token bütçesi.** Bugünkü (Türkiye saatiyle gece yarısından beri) giriş, çıkış ve önbellek tokenlarının toplamı; kullanıcı başına 500.000, şirket başına 2.000.000 (ortam değişkeniyle değişir). 2. hafta denemesinde bir mesaj önbelleksiz ~9.000 token tuttu: kullanıcı başına ~55, şirket başına ~220 mesaj. Sınır `ai_runs`'tan tek sorguyla okunur (`(organization_id, created_at)` indeksi). Kontrol her kullanıcı mesajının başında bir kez yapılır, her araç turunda değil: bir cevabın araç turlarının ortasında kesilmemesi için. Bu yüzden sınır en fazla bir cevabın çağrıları kadar aşılabilir. Önce şirketin sınırına bakılır: şirketin sınırı dolduysa kullanıcıya kendi sınırı dolmuş gibi görünmesin.
 11. **Anahtar yoksa API yine açılır.** `ANTHROPIC_API_KEY` boşsa asistan kapalıdır ve sohbet isteği `503 AI_NOT_CONFIGURED` alır; API'nin geri kalanı çalışır. Böylece Render'a anahtar eklenmeden birleşen bir sürüm yayını durdurmaz. Buna karşılık yanlış yazılmış bir effort ya da fiyatı bilinmeyen bir model açılışta hata verir: maliyeti yazılamayacak bir çağrı yapılmamalı.
+12. **Adres kodda sabit (#72).** Adaptör SDK'ya `https://api.anthropic.com` adresini açıkça verir (`CLAUDE_API_BASE_URL`). Adres verilmezse SDK `ANTHROPIC_BASE_URL` ortam değişkenini okur; 4. haftada geliştirici bilgisayarında bu değişken başka bir araç için `http://127.0.0.1:1337` olarak tanımlıydı ve yerel API'nin istekleri o boş porta gitti (Web sohbet paneli bölümü). Sabit adres iki şeyi önler: yanlış ortam ayarı asistanı kapatmaz ve API anahtarı beklenmeyen bir sunucuya gönderilmez. Testler kendi adresini ya da sahte fetch'ini adaptörün `client` ayarıyla verir; bu ayar sabit adresten sonra uygulanır. Bağlantı hatasında SDK yalnızca "Connection error." yazdığı için log, hedef sunucuyu ve hatanın alttaki nedenini de yazar (`Claude API'ye ulaşılamadı (api.anthropic.com): Connection error. Neden: fetch failed ← connect ECONNREFUSED …`). Mesaj içeriği loga girmez; API anahtarı hata metnine karışsa bile loga yazılmadan silinir.
 
 ### Hata kodları
 
@@ -55,6 +56,7 @@ Kullanıcı Türkçe mesajı görür; sağlayıcının teknik mesajı yalnızca 
 | `CLAUDE_CHAT_EFFORT` | `low` | `low`, `medium`, `high`, `xhigh`, `max` |
 | `AI_DAILY_TOKEN_LIMIT_USER` | 500000 | Kullanıcının o şirketteki günlük tokenları |
 | `AI_DAILY_TOKEN_LIMIT_ORG` | 2000000 | Şirketin günlük tokenları |
+| `ANTHROPIC_BASE_URL` | — | **Okunmaz.** Adres kodda sabit (karar 12); tanımlı olsa da istekler `api.anthropic.com`'a gider |
 
 ### Bağımlılık notu
 
@@ -64,7 +66,7 @@ Kullanıcı Türkçe mesajı görür; sağlayıcının teknik mesajı yalnızca 
 
 | Test | Ortam | Ne doğrular |
 | --- | --- | --- |
-| `apps/api/test/ai-claude-adapter.spec.ts` | CI (SDK'ya sahte fetch) | SDK'nın gönderdiği gövde: örnekleme parametresi yok, adaptive thinking, effort, `max_tokens`, önbellek işaretleri, strict araçlar, geçmiş ve düşünme blokları birebir; akışın sonuca çevrilmesi (bloklar, metin parçaları, araç çağrısı, token sayıları); 429, 529, 500, 401, 400, bağlantı hatası ve iptalin hata kodları |
+| `apps/api/test/ai-claude-adapter.spec.ts` | CI (SDK'ya sahte fetch) | SDK'nın gönderdiği gövde: örnekleme parametresi yok, adaptive thinking, effort, `max_tokens`, önbellek işaretleri, strict araçlar, geçmiş ve düşünme blokları birebir; akışın sonuca çevrilmesi (bloklar, metin parçaları, araç çağrısı, token sayıları); 429, 529, 500, 401, 400, bağlantı hatası ve iptalin hata kodları; `ANTHROPIC_BASE_URL` başka bir adrese ayarlıyken isteğin yine `api.anthropic.com`'a gitmesi, testin kendi adresini verebilmesi, bağlantı hatası mesajında hedef sunucu ve alttaki neden (`ECONNREFUSED`), mesajda API anahtarı ve mesaj içeriğinin olmaması (#72) |
 | `apps/api/test/ai-rules.spec.ts` | CI | Ortam değişkenleri (varsayılanlar, boş değerler, geçersiz effort, bilinmeyen model), uzun istem fiyatı, prompt sürümleri, sahte sağlayıcı |
 | `apps/api/test-db/ai.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Maliyetin dört token türüyle SQL'de hesaplanması (546,5 / 1.000.000 $), uzun istem fiyatı, reddin ve yarım cevabın kaydedilip hataya çevrilmesi, sağlayıcı hatasının sıfır tokenla kaydı, anahtar yokken kayıt yazılmaması; günlük bütçe: dünkü ve başka şirketteki kullanım sayılmaz, kullanıcı sınırı, aynı şirketteki başka kullanıcı, şirket sınırı |
 
@@ -74,6 +76,7 @@ Kullanıcı Türkçe mesajı görür; sağlayıcının teknik mesajı yalnızca 
 - **"Maliyeti nasıl biliyorsunuz?"** Her model çağrısının token sayıları API'nin cevabından `ai_runs`'a yazılır ve maliyet o anki fiyatla SQL'de hesaplanır. Mesaj başına maliyet, o mesaja bağlı satırların toplamıdır.
 - **"Bir kullanıcı API anahtarınızı tüketebilir mi?"** Kullanıcı ve şirket başına günlük token bütçesi var; sınır `ai_runs`'tan okunur ve aşılınca istek modele gitmeden reddedilir. Ayrıca Anthropic konsolunda aylık harcama sınırı tanımlı (2. hafta).
 - **"Model reddederse kullanıcı ne görür?"** "Asistan bu isteğe cevap veremedi" mesajını; reddedilen içerik sohbet geçmişine eklenmez, çağrı yine maliyetiyle kaydedilir.
+- **"API anahtarınız yanlış bir sunucuya gidebilir mi?"** Hayır. Adres kodda sabit (`https://api.anthropic.com`); SDK'nın ortam değişkeninden adres okuması kapalı. Test, değişken başka bir adrese ayarlıyken isteğin yine Anthropic'e gittiğini doğruluyor; düzeltme geri alınınca aynı test isteğin `127.0.0.1:1337`'ye gittiğini gösterip kırılıyor.
 - **"Neden temperature yok?"** Haiku 5.5 varsayılan dışı örnekleme ayarını kabul etmiyor; kullandığımız API sürümü bu alanları tamamen kaldırdı. Tutarlılık, strict araç şemaları ve sistem promptuyla sağlanıyor.
 
 ## Ajan döngüsü ve okuma araçları (`assistant` modülü, #56)
@@ -269,7 +272,7 @@ Kod: `apps/web/components/chat/` (`chat-panel.tsx` panel ve açık sohbet, `use-
 
 Web paneli için bileşen testi yok (web paketinde test altyapısı yok); `next build` geçiyor. Panel 7 Kasım 2026'da yerelde (web `localhost:3000`, API `localhost:3001`) elle denendi: stok sorusu ve parça parça gelen cevap, cevap akarken sayfa değiştirme, geniş ve dar ekranda yerleşim, Esc ve sayfa yenilenince açık kalması, telefondan açılan sohbetlerin listede görünmesi, şirket değişince o şirketin sohbetleri, tarayıcı çevrimdışıyken hata ve aynı kimlikle tekrar gönderme. Ortak koda taşınan mobil ekran da telefonda yeniden denendi.
 
-Denemede bulunan ortam sorunu: geliştirici bilgisayarında Windows kullanıcı değişkeni olarak `ANTHROPIC_BASE_URL=http://127.0.0.1:1337` tanımlıydı. Claude SDK'sı bu değişkeni okuduğu için yerel API istekleri o boş porta gönderdi (`AI_UNAVAILABLE`, altta `ECONNREFUSED`). Terminalde değişken kaldırılınca (`Remove-Item Env:ANTHROPIC_BASE_URL`) çalıştı. Render'da bu değişken yok. Adresin kodda sabitlenmesi ayrı bir iş olarak önerildi.
+Denemede bulunan ortam sorunu: geliştirici bilgisayarında Windows kullanıcı değişkeni olarak `ANTHROPIC_BASE_URL=http://127.0.0.1:1337` tanımlıydı. Claude SDK'sı bu değişkeni okuduğu için yerel API istekleri o boş porta gönderdi (`AI_UNAVAILABLE`, altta `ECONNREFUSED`). Terminalde değişken kaldırılınca (`Remove-Item Env:ANTHROPIC_BASE_URL`) çalıştı. Render'da bu değişken yok. Adres #72'de kodda sabitlendi (Model çağrısı, karar 12); değişkeni kaldırmak artık gerekmiyor.
 
 ### Savunmada sorulabilecek sorular
 
@@ -319,7 +322,7 @@ Denemede bulunan ortam sorunu: geliştirici bilgisayarında Windows kullanıcı 
 - **Hitap:** Bir cevapta "sen" yerine "siz" kullanıldı.
 - **Ses uyarısı ekranda kalıyor:** Telefonda "Ses algılanmadı" uyarısı, sonraki mesajlar gönderildiği hâlde ekranda kaldı. Mesaj gönderilince ya da kutuya yazılınca temizlenmeli.
 - **Telefonda süre:** Telefonda istemci tarafı süre ölçülmedi.
-- **Yerel geliştirme:** Geliştirici bilgisayarında tanımlı bir `ANTHROPIC_BASE_URL` SDK'nın adresini değiştirebiliyor (#59 denemesi, Web sohbet paneli bölümü). Adresin kodda sabitlenmesi ayrı bir iş olarak önerildi.
+- **Yerel geliştirme:** Geliştirici bilgisayarında tanımlı bir `ANTHROPIC_BASE_URL` SDK'nın adresini değiştirebiliyordu (#59 denemesi, Web sohbet paneli bölümü). #72'de adres kodda sabitlendi (Model çağrısı, karar 12).
 
 ### Savunmada sorulabilecek sorular
 
