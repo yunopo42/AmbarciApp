@@ -18,6 +18,7 @@ function saved(role: SavedChatMessage['role'], text: string, extra: Partial<Save
     text,
     status: role === 'user' ? 'COMPLETED' : null,
     clientMessageId: role === 'user' ? randomUuid() : null,
+    operationIds: [],
     createdAt: new Date(Date.UTC(2026, 10, 7, 9, sequence)).toISOString(),
     ...extra,
   };
@@ -68,6 +69,40 @@ describe('Turun olayları', () => {
     const network = failTurn({ ...turn, status: 'streaming', tool: 'Stok sorgulanıyor' }, { code: 'NETWORK_ERROR', message: 'Ulaşılamadı.' });
     expect(network).toMatchObject({ status: 'failed', tool: null, error: { code: 'NETWORK_ERROR' } });
     expect(turnStatusLabel(network)).toBeNull();
+  });
+});
+
+describe('İşlem kartı olayları (#75)', () => {
+  const first = '6a3f2c10-4b1e-4c8a-9d2e-0a0b0c0d0e01';
+  const second = '6a3f2c10-4b1e-4c8a-9d2e-0a0b0c0d0e02';
+
+  it('kart tura öneri sırasıyla eklenir; düzenlenen öneri kartı çoğaltmaz, sürümünü günceller; done kartları korur', () => {
+    const states = play(startTurn(randomUuid(), 'Merkezden 2 koli priz çıkışı yap'), [
+      { type: 'message_started', messageId: MESSAGE, clientMessageId: randomUuid() },
+      { type: 'tool_status', tool: 'propose_stock_out', label: 'Çıkış önerisi hazırlanıyor', status: 'started' },
+      { type: 'tool_status', tool: 'propose_stock_out', label: 'Çıkış önerisi hazırlanıyor', status: 'succeeded' },
+      { type: 'operation_card', operationId: first, version: 1 },
+      { type: 'operation_card', operationId: second, version: 1 },
+      { type: 'operation_card', operationId: first, version: 2 },
+      { type: 'text_delta', text: 'Öneri hazır.' },
+      { type: 'done', messageId: MESSAGE, text: "Öneri hazır; kartı kontrol edip Onayla'ya bas.", replayed: false },
+    ]);
+    expect(states[3]).toMatchObject({ status: 'streaming', operations: [{ operationId: first, version: 1 }] });
+    expect(states[5]?.operations).toEqual([
+      { operationId: first, version: 2 },
+      { operationId: second, version: 1 },
+    ]);
+    expect(states.at(-1)).toMatchObject({ status: 'done', operations: [{ operationId: first, version: 2 }, { operationId: second, version: 1 }] });
+  });
+
+  it('yeni turun kartı yoktur; model hatasında önerilen kart turda kalır', () => {
+    const turn = startTurn(randomUuid(), 'Merkezden 2 koli priz çıkışı yap');
+    expect(turn.operations).toEqual([]);
+    const [, failed] = play(turn, [
+      { type: 'operation_card', operationId: first, version: 1 },
+      { type: 'error', code: 'AI_UNAVAILABLE', message: 'Asistana şu anda ulaşılamıyor.' },
+    ]);
+    expect(failed).toMatchObject({ status: 'failed', operations: [{ operationId: first, version: 1 }] });
   });
 });
 

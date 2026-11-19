@@ -143,6 +143,14 @@ export class OperationDto implements Operation {
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description: 'Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an (son değişiklik + 30 dakika)',
+  })
+  expiresAt!: string | null;
+
   @ApiProperty({ type: [OperationItemDto] })
   items!: OperationItemDto[];
 }
@@ -266,6 +274,14 @@ export class OperationPreviewDto implements OperationPreview {
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
+
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description: 'Sohbet önerisinin onaylanabileceği son an; süresi olmayan işlemde null',
+  })
+  expiresAt!: string | null;
 
   @ApiProperty({ type: [OperationPreviewLineDto] })
   lines!: OperationPreviewLineDto[];

@@ -3244,6 +3244,12 @@
             "type": "string",
             "format": "date-time"
           },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an (son değişiklik + 30 dakika)"
+          },
           "items": {
             "type": "array",
             "items": {
@@ -3263,6 +3269,7 @@
           "appliedBy",
           "appliedAt",
           "createdAt",
+          "expiresAt",
           "items"
         ]
       },
@@ -3549,6 +3556,12 @@
             "type": "string",
             "format": "date-time"
           },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Sohbet önerisinin onaylanabileceği son an; süresi olmayan işlemde null"
+          },
           "lines": {
             "type": "array",
             "items": {
@@ -3565,6 +3578,7 @@
           "partyName",
           "note",
           "createdAt",
+          "expiresAt",
           "lines"
         ]
       },
@@ -4052,6 +4066,14 @@
             "nullable": true,
             "description": "Yalnızca kullanıcı mesajında"
           },
+          "operationIds": {
+            "description": "Bu mesajın altında gösterilecek işlem kartları: turda önerilen işlemler, öneri sırasıyla (kart turun cevabının altında; cevap yoksa kullanıcının mesajının altında)",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -4063,6 +4085,7 @@
           "text",
           "status",
           "clientMessageId",
+          "operationIds",
           "createdAt"
         ]
       },

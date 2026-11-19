@@ -50,6 +50,14 @@ export class ChatMessageDto implements ChatMessage {
   @ApiProperty({ format: 'uuid', nullable: true, type: String, description: 'Yalnızca kullanıcı mesajında' })
   clientMessageId!: string | null;
 
+  @ApiProperty({
+    type: [String],
+    format: 'uuid',
+    description:
+      'Bu mesajın altında gösterilecek işlem kartları: turda önerilen işlemler, öneri sırasıyla (kart turun cevabının altında; cevap yoksa kullanıcının mesajının altında)',
+  })
+  operationIds!: string[];
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 }

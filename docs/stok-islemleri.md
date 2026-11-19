@@ -105,8 +105,19 @@ Kullanıcı eski hâli onaylamaya çalışırsa (ör. kart başka bir cihazda es
 | 404 | `OPERATION_NOT_FOUND` | İşlem yok ya da başka şirketin |
 | 409 | `INSUFFICIENT_STOCK` | Stok yetmiyor (`details`: kalem, ürün, depo, istenen, mevcut) |
 | 409 | `OPERATION_ALREADY_APPLIED`, `OPERATION_NOT_PENDING`, `OPERATION_VERSION_MISMATCH`, `IDEMPOTENCY_KEY_REUSED` | Yukarıdaki bölümler |
+| 409 | `OPERATION_EXPIRED` | Sohbet önerisinin süresi doldu (aşağıda: Süre aşımı) |
+| 409 | `OPERATION_TYPE_MISMATCH`, `OPERATION_FORBIDDEN` (düzenlemede) | Sohbette düzenlemede tür değişiyor ya da öneri başkasının (Sürüm) |
 | 422 | `OPERATION_LINES_INVALID` | Ürün, birim ya da depo yok/pasif; miktar ana birime çevrilince sıfır (`details`: kalem no, alan, kod) |
 | 422 | `PARTY_NOT_FOUND`, `WAREHOUSE_INACTIVE` | Cari yok ya da pasif; onay anında pasif depo |
+
+## Süre aşımı (sohbet önerisi, #75)
+
+Asistanın sohbette açtığı öneri (kaynak `CHAT`), son değişikliğinden (açılış ya da sohbette düzenleme) **30 dakika** sonra onaylanamaz (`CHAT_PROPOSAL_TTL_MINUTES`). Ekrandan açılan fişlerin ve içe aktarmanın süresi yoktur.
+
+- **Okuma:** `GET /v1/operations/{id}`, önizleme ve liste süresi dolmuş öneriyi `EXPIRED` gösterir. Önizleme stok etkisini hesaplamaz (`stock: null`). Bekleyenler listesinde görünmez, `?status=EXPIRED` listesinde görünür. İşlem ve önizleme `expiresAt` verir (sohbet önerisinde son değişiklik + 30 dakika, diğerlerinde `null`). Okuma veritabanına yazmaz.
+- **Yazma:** Onay, düzenleme ve iptal işlem satırını `FOR UPDATE` ile kilitler ve süreyi kilit altında, veritabanının saatiyle denetler. Süre dolmuşsa işlem kalıcı olarak `EXPIRED` yazılır, denetim kaydına `operation.expired` eklenir (kişi boş) ve `409 OPERATION_EXPIRED` döner. Stok değişmez.
+- **Sıra:** Uygulanmış işlemin aynı anahtarla tekrar gelen onayı süreden önce tanınır ve ilk cevabı alır. Süre aşımı yalnızca onay bekleyen öneriyi etkiler.
+- **Neden zamanlanmış iş yok:** Outbox'ı okuyan worker 7. haftada geliyor. O zamana kadar süre okumada hesaplanıyor, kalıcı geçiş ilk yazma isteğinde yapılıyor. Kural tek bir SQL ifadesinde (`operations.repository.ts`).
 
 ## Önizleme (onaydan önce "önce → sonra")
 

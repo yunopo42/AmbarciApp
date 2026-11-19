@@ -223,6 +223,7 @@ export function fakeProposeServices(): { services: ProposeToolServices; calls: P
         partyName: input.partyId ? 'Yıldız Yapı İnşaat' : null,
         note: input.note ?? null,
         createdAt: '2026-11-09T09:00:00.000Z',
+        expiresAt: '2026-11-09T09:30:00.000Z',
         lines: input.items.map((item, index) => {
           const base = item.unit === 'koli' ? `${item.quantity}00.000` : `${item.quantity}`;
           const out = input.type !== 'STOCK_IN';

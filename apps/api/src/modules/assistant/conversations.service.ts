@@ -14,6 +14,8 @@ import { ApiException } from '../../common/api-exception.js';
 import { postgresErrorOf } from '../../common/postgres-error.js';
 import { DATABASE } from '../../database/database.module.js';
 import { AiService } from '../ai/ai.service.js';
+import type { MessageOperation } from '../operations/operations.repository.js';
+import { OperationsService } from '../operations/operations.service.js';
 import type { OrganizationContext } from '../organizations/organization-context.js';
 import { AgentLoop } from './agent-loop.js';
 import { ConversationsRepository } from './conversations.repository.js';
@@ -61,9 +63,43 @@ export function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
         text,
         status: message.status,
         clientMessageId: message.clientMessageId,
+        operationIds: [],
         createdAt: message.createdAt,
       },
     ];
+  });
+}
+
+/**
+ * İşlem kartlarını ekrandaki mesajlara yerleştirir (#75). Bir kullanıcı mesajının cevabında önerilen işlemler o turun
+ * son asistan metninin altına konur; tur cevapsız kaldıysa (öneriden sonra model hatası) kullanıcının mesajının altına.
+ * Kartlar işlemlerin açılış sırasıyladır; düzenlenen öneri aynı işlem olduğu için tek kart kalır.
+ */
+export function attachOperationCards(
+  stored: StoredMessage[],
+  messages: ChatMessage[],
+  operations: Pick<MessageOperation, 'id' | 'sourceMessageId'>[],
+): ChatMessage[] {
+  if (operations.length === 0) {
+    return messages;
+  }
+  const shown = new Set(messages.map((message) => message.id));
+  const cards = new Map<string, string[]>();
+  for (const operation of operations) {
+    const userMessage = stored.find((message) => message.id === operation.sourceMessageId);
+    if (!userMessage) {
+      continue;
+    }
+    const after = stored.filter((message) => message.position > userMessage.position);
+    const nextUser = after.findIndex((message) => message.role === 'USER');
+    const turn = nextUser === -1 ? after : after.slice(0, nextUser);
+    const answer = turn.filter((message) => message.role === 'ASSISTANT' && shown.has(message.id)).at(-1);
+    const host = answer?.id ?? userMessage.id;
+    cards.set(host, [...(cards.get(host) ?? []), operation.id]);
+  }
+  return messages.map((message) => {
+    const operationIds = cards.get(message.id);
+    return operationIds ? { ...message, operationIds } : message;
   });
 }
 
@@ -90,6 +126,7 @@ export class ConversationsService {
     @Inject(ConversationsRepository) private readonly repository: ConversationsRepository,
     @Inject(AgentLoop) private readonly agent: AgentLoop,
     @Inject(AiService) private readonly ai: AiService,
+    @Inject(OperationsService) private readonly operations: OperationsService,
   ) {}
 
   create(organization: OrganizationContext, userId: string): Promise<Conversation> {
@@ -101,9 +138,18 @@ export class ConversationsService {
     return { items, total, page: query.page, pageSize: query.pageSize };
   }
 
+  /**
+   * Ekranda gösterilen mesajlar ve işlem kartları. Kartın işlemi, kullanıcı mesajına operations.source_message_id ile
+   * bağlıdır (#74); işlemler operations modülünün servisinden okunur (modül sınırı). Sohbeti yalnızca sahibi görür.
+   */
   async messages(organization: OrganizationContext, userId: string, conversationId: string): Promise<ChatMessageList> {
     await this.findOwned(organization.id, userId, conversationId);
-    return { items: toChatMessages(await this.repository.listMessages(this.db, organization.id, conversationId)) };
+    const stored = await this.repository.listMessages(this.db, organization.id, conversationId);
+    const operations = await this.operations.listBySourceMessages(
+      organization.id,
+      stored.filter((message) => message.role === 'USER').map((message) => message.id),
+    );
+    return { items: attachOperationCards(stored, toChatMessages(stored), operations) };
   }
 
   /**
@@ -126,6 +172,10 @@ export class ConversationsService {
     try {
       sink.send({ type: 'message_started', messageId: message.id, clientMessageId: input.clientMessageId });
       if (turn.kind === 'replay') {
+        // Cevap daha önce üretilmişti: model çağrılmaz, yeni işlem açılmaz; turun kartları kayıttan yeniden gönderilir.
+        for (const operation of await this.operations.listBySourceMessages(organization.id, [message.id])) {
+          sink.send({ type: 'operation_card', operationId: operation.id, version: operation.version });
+        }
         if (turn.text !== '') {
           sink.send({ type: 'text_delta', text: turn.text });
         }

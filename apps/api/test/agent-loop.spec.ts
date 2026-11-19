@@ -234,6 +234,40 @@ describe('Ajan döngüsü', () => {
     expect(JSON.parse(String(result?.content))).toMatchObject({ status: 'Onay bekliyor', type: 'Çıkış' });
   });
 
+  it('öneri başarılıysa araç bitince akışa kart olayı gider (#75); başarısız öneride kart yok', async () => {
+    const { loop, provider } = setup();
+    provider.push(
+      toolTurn([
+        { id: 'toolu_1', name: 'propose_stock_out', input: { warehouse_id: MAIN, lines: [{ product_id: PRODUCT, quantity: '2' }] } },
+        // Başka şirketin ürünü: kalem hatası, işlem açılmaz.
+        { id: 'toolu_2', name: 'propose_waste', input: { warehouse_id: MAIN, lines: [{ product_id: randomUUID(), quantity: '1' }] } },
+      ]),
+      aiResult({ text: 'Çıkış önerisi hazır.' }),
+    );
+    const events: AgentEvent[] = [];
+    const output = await loop.run(turnInput({ onEvent: (event) => events.push(event) }));
+
+    const opened = JSON.parse(String(output.messages[1]?.content[0]?.content)) as { operation_id: string };
+    // Sahte model metni birkaç parça hâlinde akıtır; metin parçaları ayrı denetlenir.
+    const sequence = events.map((event) => (event.type === 'tool_status' ? `${event.tool}:${event.status}` : event.type));
+    expect(sequence.filter((type) => type !== 'text_delta')).toEqual([
+      'propose_stock_out:started',
+      'propose_waste:started',
+      'propose_stock_out:succeeded',
+      'operation_card',
+      'propose_waste:failed',
+    ]);
+    // Kart, cevabın metni gelmeden gelir.
+    expect(sequence.indexOf('operation_card')).toBeLessThan(sequence.indexOf('text_delta'));
+    expect(events.find((event) => event.type === 'operation_card')).toEqual({
+      type: 'operation_card',
+      operationId: opened.operation_id,
+      version: 1,
+    });
+    // Kart olayı modele gitmez: araç sonucu yalnızca modelin okuyacağı özettir.
+    expect(String(output.messages[1]?.content[0]?.content)).not.toContain('operation_card');
+  });
+
   it('saklanan TOOL mesajı API\'ye "user" rolüyle gider', async () => {
     const { loop, provider } = setup();
     provider.push(aiResult());

@@ -1,6 +1,6 @@
 # Asistan altyapısı
 
-Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm, altıncı bölüm). 5. hafta: #72 (Claude API adresinin sabitlenmesi, ilk bölümün 12. kararı), #73 (ses uyarısının temizlenmesi ve kalın yazı; mobil bölümün 12., web bölümünün 8. kararı), #74 (öneri araçları ve `chat-v2`, yedinci bölüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
+Bu belge 4. haftada kurulan asistan altyapısını anlatır ve işler birleştikçe büyür. İlgili işler: #54 (sohbet, mesaj ve `ai_runs` tabloları; tablolar [veritabani.md](veritabani.md#asistan-tabloları)), #55 (model çağrısı, bu belgenin ilk bölümü), #56 (ajan döngüsü ve okuma araçları, ikinci bölüm), #57 (sohbet uçları ve SSE akışı, üçüncü bölüm), #58 (mobil sohbet ekranı, dördüncü bölüm), #59 (web sohbet paneli, beşinci bölüm), #60 (kapı denemesi ve ölçüm, altıncı bölüm). 5. hafta: #72 (Claude API adresinin sabitlenmesi, ilk bölümün 12. kararı), #73 (ses uyarısının temizlenmesi ve kalın yazı; mobil bölümün 12., web bölümünün 8. kararı), #74 (öneri araçları ve `chat-v2`, yedinci bölüm), #75 (sohbette işlem kartı için API ve süre aşımı, sekizinci bölüm). Model seçimi: [ADR-001](kararlar/ADR-001-sohbet-modeli.md).
 
 ## Model çağrısı (`ai` modülü, #55)
 
@@ -136,7 +136,7 @@ Kod: `apps/api/src/modules/assistant/` (`agent-loop.ts`, `tools/registry.ts`, `t
 | --- | --- |
 | `POST /v1/conversations` | Yeni sohbet açar (başlık ilk mesajdan konur) |
 | `GET /v1/conversations?page=&pageSize=` | Kullanıcının aktif şirketteki sohbetleri, en son konuşulan önce |
-| `GET /v1/conversations/{id}/messages` | Ekranda gösterilen mesajlar: kullanıcının yazdıkları ve asistanın metin cevapları; araç sonuçları ve düşünme blokları gönderilmez |
+| `GET /v1/conversations/{id}/messages` | Ekranda gösterilen mesajlar: kullanıcının yazdıkları ve asistanın metin cevapları; araç sonuçları ve düşünme blokları gönderilmez. Her mesajda `operationIds`: altında gösterilecek işlem kartları (#75) |
 | `POST /v1/conversations/{id}/messages` | Gövde `{ clientMessageId, text }`; cevap `text/event-stream` olarak akar |
 
 Kod: `apps/api/src/modules/assistant/` (`conversations.controller.ts`, `conversations.service.ts`, `conversations.repository.ts`, `sse-stream.ts`). Şemalar: `packages/shared/src/conversations.ts`.
@@ -147,6 +147,7 @@ Kod: `apps/api/src/modules/assistant/` (`conversations.controller.ts`, `conversa
 event: message_started   {"messageId": "...", "clientMessageId": "..."}   mesaj kaydedildi
 event: tool_status       {"tool": "search_products", "label": "Ürün aranıyor", "status": "started"}
 event: tool_status       {... "status": "succeeded"}
+event: operation_card    {"operationId": "...", "version": 1}              yalnızca öneri aracından sonra (#75)
 event: text_delta        {"text": "Merkez Depo’da "}                       parça parça
 event: text_delta        {"text": "1.400 metre var."}
 event: done              {"messageId": "...", "text": "<son cevap>", "replayed": false}
@@ -395,3 +396,55 @@ Kod: `apps/api/src/modules/assistant/tools/propose-tools.ts` (araçlar), `read-t
 - **"Kullanıcı öneriyi değiştirdikten sonra eski kartı onaylarsa?"** Düzenleme sürümü artırır. Eski kart eski sürümü gönderir ve `409 OPERATION_VERSION_MISMATCH` alır; stok değişmez. Testte 2 kolilik ilk hâlin onayı reddedildi, 1 kolilik yeni hâl bir kez uygulandı.
 - **"4. haftada başlamış bir sohbette yeni araçlar ne oluyor?"** O sohbet v1 promptu ve v1'in dört aracıyla devam ediyor. Araç listesi sohbetin ortasında değişirse modelin geri gönderilen düşünme blokları geçersiz olur; bu yüzden yeni araçlar yalnızca yeni sohbetlerde var. Kullanıcı stok işlemi için yeni bir sohbet açar.
 - **"Çalışan yetkisi olmayan bir depoda öneri açabilir mi?"** Hayır. Öneri aracı ekrandaki fiş formuyla aynı servisi kullanır; depo yetkisi işlem açılırken ve onayda kilit altında yeniden denetlenir. Testte çalışan Ostim'e transfer önerisi açamadı.
+
+## Sohbette işlem kartı: akış, geçmiş ve süre aşımı (#75)
+
+Mobil ve web kartının (#76, #77) dayandığı API. Kart, işlemin güncel hâlini (durum, sürüm, önce → sonra, son onay anı) her zaman `GET /v1/operations/{id}/preview`'dan okur. Akışta ve geçmişte yalnızca işlemin kimliği gider. Böylece başka cihazdan onaylanan, iptal edilen ya da süresi dolan öneri her ekranda doğru görünür.
+
+```text
+POST .../messages (SSE)
+  message_started → tool_status (propose_stock_out, started) → tool_status (succeeded)
+  → operation_card { operationId, version }                 ← istemci kartı cevap metninden önce gösterir
+  → text_delta … → done
+
+GET .../messages
+  [ user "Merkezden 2 koli priz çıkışı yap"  operationIds: [] ]
+  [ assistant "Öneri hazır; kartı …"          operationIds: [id] ]   ← kart turun cevabının altında
+```
+
+Kod: `assistant/agent-loop.ts` (kart olayı), `assistant/tools/registry.ts` (`operationOf`, `ToolOutcome.operation`), `assistant/conversations.service.ts` (`attachOperationCards`, tekrar gönderimde kartlar), `operations/operations.repository.ts` ve `operations.service.ts` (süre aşımı, `listBySourceMessages`), `packages/shared` (`operation_card`, `operationIds`, `expiresAt`, `CHAT_PROPOSAL_TTL_MINUTES`), `packages/api-client/src/chat-turn.ts` (turun kartları).
+
+### Kararlar
+
+1. **Olay adı mimari belgedeki gibi `operation_card`.** Olay, öneri aracı başarılı olunca, aracın "succeeded" durum satırından hemen sonra gönderilir; cevabın metni ondan sonra gelir. Başarısız öneride (kalem hatası, yetki) olay yoktur. Kayıt defteri, öneri aracının sonucundan işlemin kimliğini ve sürümünü `operationOf` ile alır; bu bilgi modele gönderilen metne eklenmez. Olayı tanımayan eski istemci onu atlar (#58), yani yeni olay eski uygulamayı bozmaz.
+2. **Kart turun cevabının altında.** `GET .../messages` her mesajda `operationIds` döner. Bir kullanıcı mesajının cevabında önerilen işlemler o turun son asistan metninin altına konur; tur cevapsız kaldıysa (öneriden sonra model hatası) kullanıcının mesajının altına. Sıra, işlemlerin açılış sırasıdır. Bağ #74'teki `operations.source_message_id`'dir; işlemler operations modülünün servisinden okunur (modül sınırı).
+3. **Düzenlenen öneri aynı kart, yeni yer.** Sohbette düzenlenen öneri aynı işlemdir: akışta aynı `operationId` yeni sürümle gelir, istemci kartı çoğaltmaz. Düzenleme işlemin bağını düzenlemeyi isteyen mesaja taşır. Kart, önerinin son hâlini üreten turun altında durur; canlı akışta ve geçmiş yeniden yüklendiğinde aynı yerdedir. İlk mesaj ve her düzenleme denetim kaydında (`operation.created`, `operation.revised`) kalır.
+4. **Tekrar gönderimde aynı kart.** Aynı `clientMessageId` ile gelen mesaj için model çağrılmaz, yeni işlem açılmaz. Turun kartları kayıttan, kayıtlı cevaptan önce yeniden gönderilir.
+5. **Süre aşımı: yalnızca sohbet önerisi, 30 dakika (karar, 8 Kasım).** Sohbetten açılan öneri, son değişikliğinden (açılış ya da düzenleme) 30 dakika sonra onaylanamaz. Önerideki "önce → sonra" bilgisi zamanla eskir; kullanıcı yarım saat sonra eski bir kartı onaylamasın. Ekrandan açılan fişler 3. haftadaki gibi süresiz bekler; içe aktarmanın açılış işlemi de öyle.
+6. **Süre veritabanının saatiyle ve tek ifadeyle.** "Süresi doldu mu" sorusunun tek tanımı repository'deki SQL ifadesidir: kaynak `CHAT`, durum onay bekliyor ve `updated_at < now() − 30 dakika`. Saat veritabanınındır; uygulama sunucusunun saati kaymış olabilir. Düzenleme `updated_at`'i de veritabanının saatiyle yazar.
+7. **Okumada görünür, yazmada kalıcı.** Süre aşımını işleyecek zamanlanmış bir iş yok (worker 7. haftada). Bu yüzden:
+   - **Okuma:** İşlem, önizleme ve liste süresi dolmuş öneriyi `EXPIRED` gösterir; önizleme stok etkisini hesaplamaz. Bekleyenler listesinde görünmez, `EXPIRED` listesinde görünür. Okuma veritabanına yazmaz.
+   - **Yazma:** Onay, sohbetteki düzenleme ya da iptal geldiğinde işlem satırı kilitlenir, süre kilit altında denetlenir. Süre dolmuşsa işlem kalıcı olarak `EXPIRED` yazılır, denetim kaydına `operation.expired` (kişi boş: süre aşımını kimse yapmaz) eklenir ve `409 OPERATION_EXPIRED` döner.
+   - Hata transaction'ın içinden fırlatılsaydı `EXPIRED` geçişi de geri alınırdı. Geçiş yazılıp transaction tamamlanır, 409 ondan sonra döner.
+8. **Son onay anı istemciye gider.** İşlem ve önizleme `expiresAt` verir: sohbet önerisinde son değişiklik + 30 dakika, diğerlerinde boş. Kart bunu gösterebilir; asıl kontrol onayda, kilit altındadır.
+
+### Hata kodu
+
+| Durum | Kod | Ne zaman |
+| --- | --- | --- |
+| 409 | `OPERATION_EXPIRED` | Sohbet önerisinin süresi doldu; onay, düzenleme ya da iptal geldiğinde. İşlem kalıcı olarak `EXPIRED` olur, stok değişmez. Sonraki deneme `409 OPERATION_NOT_PENDING` alır |
+
+### Testler
+
+| Test | Ortam | Ne doğrular |
+| --- | --- | --- |
+| `apps/api/test/agent-loop.spec.ts` | CI (sahte model) | Kart olayı araç bitince ve metinden önce gelir; başarısız öneride kart yok; kart bilgisi modele gitmez |
+| `apps/api/test/conversations-rules.spec.ts` | CI | Kart turun cevabının altında, cevapsız turda kullanıcının mesajının altında, öneri sırasıyla; kartsız mesajda boş liste |
+| `packages/api-client/test/chat-turn.spec.ts` | CI | Kart tura öneri sırasıyla eklenir; düzenlenen öneri kartı çoğaltmaz, sürümü güncellenir; `done` ve model hatası kartları korur |
+| `apps/api/test-db/operation-cards.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`, sahte model) | Olay sırası; geçmişte kart; tekrar gönderimde model çağrılmadan aynı kart, yeni işlem yok; düzenlemede aynı kart yeni sürümle ve yeni turun altında; süresi dolan öneri işlemde, önizlemede ve listede `EXPIRED`, okuma yazmaz; onayı 409, kalıcı `EXPIRED`, denetimde kişi boş, stok değişmez, ikinci deneme `OPERATION_NOT_PENDING`; süresi dolan öneri düzenlenemez ve iptal edilmez; 29. dakikada onay; ekran işleminin süresi dolmaz |
+
+### Savunmada sorulabilecek sorular
+
+- **"Kullanıcı yarım saat önceki bir kartı onaylarsa?"** Onay işlem satırını kilitler ve süreyi veritabanının saatiyle kilit altında denetler. Süre dolmuşsa işlem kalıcı olarak `EXPIRED` olur, `409 OPERATION_EXPIRED` döner ve stok değişmez. Kart da süresi dolmuş öneriyi "Süresi doldu" gösterir.
+- **"Zamanlanmış bir iş yokken süre nasıl doluyor?"** Durum okumada aynı SQL ifadesiyle hesaplanıyor; ekranlar süresi dolmuş öneriyi hemen `EXPIRED` görüyor. Kalıcı geçiş, işlemi değiştirmeye çalışan ilk istekte, kilit altında yazılıyor. Worker 7. haftada geldiğinde bekleyenleri toplu da işaretleyebilir; kural değişmez.
+- **"Sohbet yeniden açılınca kart nereden geliyor?"** İşlem, öneriyi isteyen mesaja `source_message_id` ile bağlı. Mesajlar ucu her turun kartlarını cevabın altında döndürüyor; kart da güncel hâlini önizleme ucundan okuyor.

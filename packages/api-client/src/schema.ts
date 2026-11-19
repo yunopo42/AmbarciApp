@@ -736,6 +736,11 @@ export interface components {
             appliedAt: string | null;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an (son değişiklik + 30 dakika)
+             */
+            expiresAt: string | null;
             items: components["schemas"]["OperationItemDto"][];
         };
         WarehouseRefDto: {
@@ -834,6 +839,11 @@ export interface components {
             note: string | null;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description Sohbet önerisinin onaylanabileceği son an; süresi olmayan işlemde null
+             */
+            expiresAt: string | null;
             lines: components["schemas"]["OperationPreviewLineDto"][];
         };
         ConfirmOperationDto: {
@@ -1027,6 +1037,8 @@ export interface components {
              * @description Yalnızca kullanıcı mesajında
              */
             clientMessageId: string | null;
+            /** @description Bu mesajın altında gösterilecek işlem kartları: turda önerilen işlemler, öneri sırasıyla (kart turun cevabının altında; cevap yoksa kullanıcının mesajının altında) */
+            operationIds: string[];
             /** Format: date-time */
             createdAt: string;
         };
