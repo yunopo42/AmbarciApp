@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { FlatList, KeyboardAvoidingView, StyleSheet, View } from 'react-native';
+import type { TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useOrganizations } from '@/api/organization-provider';
@@ -88,6 +89,14 @@ function ChatView({
   const chat = useChat(conversationId, onConversationCreated);
   const [draft, setDraft] = useState('');
   const speech = useSpeechInput((transcript) => setDraft(transcript.slice(0, MESSAGE_TEXT_MAX_LENGTH)));
+  // Kartın "Düzenle"si (#76): düzeltme sohbetle yapılır; kutuya odaklanılır, ipucu değişir. Asistan aynı öneriyi
+  // düzenler ve sürümü artırır (#74).
+  const inputRef = useRef<TextInput>(null);
+  const [editing, setEditing] = useState(false);
+  const handleEditOperation = useCallback(() => {
+    setEditing(true);
+    inputRef.current?.focus();
+  }, []);
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
 
@@ -105,6 +114,7 @@ function ChatView({
     }
     chat.send(draft);
     setDraft('');
+    setEditing(false);
   }
 
   let content: JSX.Element;
@@ -120,7 +130,9 @@ function ChatView({
         inverted
         data={data}
         keyExtractor={rowKey}
-        renderItem={({ item }) => <ChatRowView row={item} busy={chat.busy} onRetry={chat.retry} onReload={chat.reload} />}
+        renderItem={({ item }) => (
+          <ChatRowView row={item} busy={chat.busy} onRetry={chat.retry} onReload={chat.reload} onEditOperation={handleEditOperation} />
+        )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
@@ -143,6 +155,8 @@ function ChatView({
           busy={chat.busy}
           speech={speech}
           bottomInset={keyboardVisible ? 0 : insets.bottom}
+          inputRef={inputRef}
+          placeholder={editing ? 'Neyi değiştirelim? (ör. 3 koli olsun)' : undefined}
         />
       </KeyboardAvoidingView>
     </View>

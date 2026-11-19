@@ -1,6 +1,7 @@
 import { MESSAGE_TEXT_MAX_LENGTH } from '@ambarci/shared';
-import type { JSX } from 'react';
+import type { JSX, Ref } from 'react';
 import { StyleSheet, View } from 'react-native';
+import type { TextInput } from 'react-native';
 
 import { AppText } from '@/components/app-text';
 import { Button, TextField } from '@/components/ui';
@@ -20,6 +21,8 @@ export function Composer({
   busy,
   speech,
   bottomInset,
+  inputRef,
+  placeholder = 'Mesaj yaz veya konuş…',
 }: {
   value: string;
   onChangeText: (text: string) => void;
@@ -29,6 +32,9 @@ export function Composer({
   speech: SpeechInput;
   /** Klavye kapalıyken telefonun alt çubuğunun yüksekliği. */
   bottomInset: number;
+  /** İşlem kartının "Düzenle"si kutuya odaklanır (#76). */
+  inputRef?: Ref<TextInput>;
+  placeholder?: string;
 }): JSX.Element {
   const hasText = value.trim().length > 0;
 
@@ -75,9 +81,10 @@ export function Composer({
       ) : null}
       <View style={styles.row}>
         <TextField
+          ref={inputRef}
           value={value}
           onChangeText={changeText}
-          placeholder="Mesaj yaz veya konuş…"
+          placeholder={placeholder}
           accessibilityLabel="Mesaj"
           multiline
           maxLength={MESSAGE_TEXT_MAX_LENGTH}
