@@ -16,10 +16,11 @@ export interface AgentMessage {
   content: MessageContentBlock[];
 }
 
-/** Cevap sürerken istemciye aktarılan olaylar (SSE, #57). */
+/** Cevap sürerken istemciye aktarılan olaylar (SSE, #57; işlem kartı #75). */
 export type AgentEvent =
   | { type: 'text_delta'; text: string }
-  | { type: 'tool_status'; tool: string; label: string; status: 'started' | 'succeeded' | 'failed' };
+  | { type: 'tool_status'; tool: string; label: string; status: 'started' | 'succeeded' | 'failed' }
+  | { type: 'operation_card'; operationId: string; version: number };
 
 export interface AgentTurnInput {
   /** Şirket, rol ve kullanıcı: oturumdan. */
@@ -125,6 +126,10 @@ export class AgentLoop {
     onEvent?.({ type: 'tool_status', tool: call.name, label, status: 'started' });
     const outcome = await this.tools.execute(call.name, call.input, context, allowed);
     onEvent?.({ type: 'tool_status', tool: call.name, label, status: outcome.isError ? 'failed' : 'succeeded' });
+    // Öneri aracı işlem açtı ya da düzenledi: istemci kartı cevap metni gelmeden gösterebilir (#75).
+    if (outcome.operation) {
+      onEvent?.({ type: 'operation_card', ...outcome.operation });
+    }
     return {
       type: 'tool_result',
       tool_use_id: call.id,

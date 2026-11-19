@@ -148,9 +148,20 @@ export const operationSchema = z.object({
   appliedBy: z.uuid().nullable(),
   appliedAt: z.iso.datetime({ offset: true }).nullable(),
   createdAt: z.iso.datetime({ offset: true }),
+  /**
+   * Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an (son değişiklik + 30 dakika, #75).
+   * Bu andan sonra durum EXPIRED görünür ve onay 409 OPERATION_EXPIRED alır. Diğer işlemlerde null.
+   */
+  expiresAt: z.iso.datetime({ offset: true }).nullable(),
   items: z.array(operationItemSchema),
 });
 export type Operation = z.infer<typeof operationSchema>;
+
+/**
+ * Sohbetten açılan önerinin geçerlilik süresi, dakika (mimari referans: EXPIRED, 30 dk). Süre önerinin son
+ * değişikliğinden (açılış ya da sohbette düzenleme) sayılır. Ekrandan açılan işlemlerin süresi yoktur.
+ */
+export const CHAT_PROPOSAL_TTL_MINUTES = 30;
 
 /** Onayla yazılan stok hareketi; miktar ana birimde ve işaretli (giriş +, çıkış −). */
 export const movementSchema = z.object({

@@ -1,5 +1,6 @@
 import { operationItems, operations } from '@ambarci/db';
 import type { DbExecutor } from '@ambarci/db';
+import { CHAT_PROPOSAL_TTL_MINUTES } from '@ambarci/shared';
 import type {
   ActionSource,
   CreatableOperationType,
@@ -9,13 +10,14 @@ import type {
   OperationType,
 } from '@ambarci/shared';
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 
 /** İşlem satırı (kalemsiz); onay sırasında FOR UPDATE ile okunur. */
 export interface OperationRecord {
   id: string;
   type: OperationType;
+  /** Kayıtlı durum. Süresi dolmuş sohbet önerisi kalıcı olarak EXPIRED'a geçene kadar burada onay bekler görünür. */
   status: OperationStatus;
   source: ActionSource;
   version: number;
@@ -26,7 +28,24 @@ export interface OperationRecord {
   appliedBy: string | null;
   appliedAt: Date | null;
   createdAt: Date;
+  /** Son değişiklik (açılış ya da sohbette düzenleme); sohbet önerisinin süresi buradan sayılır. */
+  updatedAt: Date;
+  /** Sohbetten açılmış, onay bekleyen ve son değişikliğinden bu yana 30 dakika geçmiş mi (veritabanının saatiyle). */
+  expired: boolean;
 }
+
+/**
+ * Süre aşımının tek tanımı (#75): sohbetten açılmış, onay bekleyen ve son değişikliğinden bu yana
+ * CHAT_PROPOSAL_TTL_MINUTES geçmiş öneri. Saat veritabanınındır (uygulama sunucusunun saati kaymış olabilir).
+ * Zamanlanmış bir iş olmadığı için durum okumada bu ifadeyle hesaplanır; onay, düzenleme ya da iptal geldiğinde
+ * kilit altında kalıcı olarak EXPIRED yazılır.
+ */
+const TTL = sql.raw(`interval '${CHAT_PROPOSAL_TTL_MINUTES} minutes'`);
+const EXPIRED = sql<boolean>`(${operations.source} = 'CHAT' and ${operations.status} = 'PENDING_CONFIRMATION' and ${operations.updatedAt} < now() - ${TTL})`;
+/** Aynı ifade, işlem listesinin ham sorgusundaki "o" takma adıyla. */
+const EXPIRED_IN_LIST = sql`(o.source = 'CHAT' and o.status = 'PENDING_CONFIRMATION' and o.updated_at < now() - ${TTL})`;
+/** Ekranda görünen durum: süresi dolmuş öneri, kalıcı olarak yazılmadan önce de EXPIRED görünür. */
+const EFFECTIVE_STATUS_IN_LIST = sql`(case when ${EXPIRED_IN_LIST} then 'EXPIRED' else o.status::text end)`;
 
 export interface NewOperation {
   organizationId: string;
@@ -45,6 +64,8 @@ export interface OperationRevision {
   partyId: string | null;
   note: string | null;
   items: Omit<OperationItem, 'lineNo'>[];
+  /** Verilirse işlemin bağı bu mesaja taşınır: düzenlemeyi isteyen kullanıcı mesajı (#75). */
+  sourceMessageId?: string;
 }
 
 const OPERATION_COLUMNS = {
@@ -60,6 +81,8 @@ const OPERATION_COLUMNS = {
   appliedBy: operations.appliedBy,
   appliedAt: operations.appliedAt,
   createdAt: operations.createdAt,
+  updatedAt: operations.updatedAt,
+  expired: EXPIRED,
 };
 
 const ITEM_COLUMNS = {
@@ -72,12 +95,23 @@ const ITEM_COLUMNS = {
   unitCost: operationItems.unitCost,
 };
 
-/** API cevabındaki biçim: tarihler ISO metni; onay anahtarı istemciye dönmez. */
+/**
+ * Sohbet önerisinin onaylanabileceği son an: son değişiklik + 30 dakika. Yalnızca sohbetten açılmış ve kayıtlı durumu
+ * onay bekleyen işlemde (süresi dolmuşsa geçmiş bir an); diğerlerinde null.
+ */
+export function expiresAtOf(record: Pick<OperationRecord, 'source' | 'status' | 'updatedAt'>): Date | null {
+  if (record.source !== 'CHAT' || record.status !== 'PENDING_CONFIRMATION') {
+    return null;
+  }
+  return new Date(record.updatedAt.getTime() + CHAT_PROPOSAL_TTL_MINUTES * 60_000);
+}
+
+/** API cevabındaki biçim: tarihler ISO metni; onay anahtarı istemciye dönmez; süresi dolmuş öneri EXPIRED görünür. */
 export function toOperation(record: OperationRecord, items: OperationItem[]): Operation {
   return {
     id: record.id,
     type: record.type,
-    status: record.status,
+    status: record.expired ? 'EXPIRED' : record.status,
     source: record.source,
     version: record.version,
     partyId: record.partyId,
@@ -86,8 +120,16 @@ export function toOperation(record: OperationRecord, items: OperationItem[]): Op
     appliedBy: record.appliedBy,
     appliedAt: record.appliedAt?.toISOString() ?? null,
     createdAt: record.createdAt.toISOString(),
+    expiresAt: expiresAtOf(record)?.toISOString() ?? null,
     items,
   };
+}
+
+/** Sohbet geçmişinde kart: bir mesajın açtığı işlem ve sürümü. */
+export interface MessageOperation {
+  id: string;
+  sourceMessageId: string;
+  version: number;
 }
 
 /** İşlem listesindeki satır: kalem sayısı ve dokunduğu depolar (transferde hedef dahil). */
@@ -131,10 +173,17 @@ export class OperationsRepository {
           sql`, `,
         )}]`
       : sql``;
+    // Süresi dolmuş sohbet önerisi, kalıcı olarak yazılmadan önce de "onay bekleyen" listesinde görünmez, EXPIRED
+    // listesinde görünür (#75). Kayıtlı durumla önce daraltılır: (şirket, durum, tarih) indeksi kullanılsın.
+    const stored: OperationStatus[] = filter.status === 'EXPIRED' ? ['EXPIRED', 'PENDING_CONFIRMATION'] : [filter.status];
+    const storedIn = sql.join(
+      stored.map((status) => sql`${status}`),
+      sql`, `,
+    );
     // Kalemler işlemle birleştirilir: kalem sayısı ve çıkış/hedef depoların tekrarsız listesi.
     const summaries = sql`
       with s as (
-        select o.id, o.type, o.status, o.source, o.created_at, count(*)::int as line_count,
+        select o.id, o.type, ${EFFECTIVE_STATUS_IN_LIST} as status, o.source, o.created_at, count(*)::int as line_count,
                array(
                  select distinct w
                  from unnest(array_agg(i.warehouse_id) || array_agg(i.target_warehouse_id)) as w
@@ -142,7 +191,8 @@ export class OperationsRepository {
                ) as warehouse_ids
         from ${operations} o
         join ${operationItems} i on i.organization_id = o.organization_id and i.operation_id = o.id
-        where o.organization_id = ${organizationId} and o.status = ${filter.status} ${excluded}
+        where o.organization_id = ${organizationId} and o.status in (${storedIn})
+          and ${EFFECTIVE_STATUS_IN_LIST} = ${filter.status} ${excluded}
         group by o.id
       )`;
     const [totalRow] = await executor.execute<{ total: number }>(sql`${summaries} select count(*)::int as total from s ${visible}`);
@@ -189,7 +239,14 @@ export class OperationsRepository {
   ): Promise<Operation | null> {
     const [record] = await executor
       .update(operations)
-      .set({ partyId: revision.partyId, note: revision.note, version: sql`${operations.version} + 1` })
+      // Son değişiklik veritabanının saatiyle: önerinin süresi (30 dakika) bundan sayılır ve aynı saatle denetlenir.
+      .set({
+        partyId: revision.partyId,
+        note: revision.note,
+        version: sql`${operations.version} + 1`,
+        updatedAt: sql`now()`,
+        ...(revision.sourceMessageId ? { sourceMessageId: revision.sourceMessageId } : {}),
+      })
       .where(
         and(
           eq(operations.organizationId, organizationId),
@@ -283,6 +340,32 @@ export class OperationsRepository {
       )
       .returning(OPERATION_COLUMNS);
     return record ?? null;
+  }
+
+  /**
+   * Süresi dolmuş sohbet önerisini kalıcı olarak EXPIRED yapar (onay, düzenleme ya da iptal geldiğinde, kilit altında).
+   * Koşul ikinci bir güvencedir: yalnızca gerçekten süresi dolmuş ve onay bekleyen öneri güncellenir.
+   */
+  async markExpired(executor: DbExecutor, organizationId: string, operationId: string): Promise<OperationRecord | null> {
+    const [record] = await executor
+      .update(operations)
+      .set({ status: 'EXPIRED' })
+      .where(and(eq(operations.organizationId, organizationId), eq(operations.id, operationId), EXPIRED))
+      .returning(OPERATION_COLUMNS);
+    return record ?? null;
+  }
+
+  /** Mesajların açtığı işlemler (sohbet geçmişindeki kartlar, #75), açılış sırasıyla. */
+  async listBySourceMessages(executor: DbExecutor, organizationId: string, messageIds: string[]): Promise<MessageOperation[]> {
+    if (messageIds.length === 0) {
+      return [];
+    }
+    const rows = await executor
+      .select({ id: operations.id, sourceMessageId: operations.sourceMessageId, version: operations.version })
+      .from(operations)
+      .where(and(eq(operations.organizationId, organizationId), inArray(operations.sourceMessageId, messageIds)))
+      .orderBy(asc(operations.createdAt), asc(operations.id));
+    return rows.flatMap((row) => (row.sourceMessageId ? [{ id: row.id, sourceMessageId: row.sourceMessageId, version: row.version }] : []));
   }
 
   async markCancelled(executor: DbExecutor, organizationId: string, operationId: string): Promise<OperationRecord | null> {

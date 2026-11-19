@@ -18,7 +18,7 @@ export type { ApiFailure } from './errors.js';
 export { readServerSentEvents, STREAM_INTERRUPTED, streamChatMessage } from './chat-stream.js';
 export type { ChatStreamEnd, ChatStreamOptions, ServerSentEvent } from './chat-stream.js';
 export { applyChatEvent, buildChatRows, failTurn, randomUuid, startTurn, turnStatusLabel } from './chat-turn.js';
-export type { ChatRow, ChatTurn, ChatTurnStatus, SavedChatMessage } from './chat-turn.js';
+export type { ChatRow, ChatTurn, ChatTurnStatus, SavedChatMessage, TurnOperation } from './chat-turn.js';
 
 export type ApiClient = Client<paths>;
 

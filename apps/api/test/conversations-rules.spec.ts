@@ -7,7 +7,7 @@ import type { Response } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StoredMessage } from '../src/modules/assistant/conversations.repository.js';
-import { answerTo, titleFrom, toChatMessages } from '../src/modules/assistant/conversations.service.js';
+import { answerTo, attachOperationCards, titleFrom, toChatMessages } from '../src/modules/assistant/conversations.service.js';
 import { SseStream } from '../src/modules/assistant/sse-stream.js';
 
 /** Express yanıtının SSE yazıcısının kullandığı kısmı. */
@@ -128,6 +128,23 @@ describe('Ekrandaki mesajlar ve kayıtlı cevap', () => {
       { role: 'assistant', text: '1.400 metre var.', status: null },
       { role: 'user', text: 'Ostim?', status: 'FAILED' },
     ]);
+  });
+
+  it('işlem kartı turun cevabının altına; cevapsız turda kullanıcının mesajının altına; öneri sırasıyla (#75)', () => {
+    const [ask, , , answer, failed] = CONVERSATION as [StoredMessage, StoredMessage, StoredMessage, StoredMessage, StoredMessage];
+    const [first, second, orphan] = [randomUUID(), randomUUID(), randomUUID()];
+    const messages = attachOperationCards(CONVERSATION, toChatMessages(CONVERSATION), [
+      { id: first, sourceMessageId: ask.id },
+      { id: second, sourceMessageId: ask.id },
+      { id: orphan, sourceMessageId: failed.id },
+    ]);
+    expect(messages.map((message) => [message.id, message.operationIds])).toEqual([
+      [ask.id, []],
+      [answer.id, [first, second]],
+      [failed.id, [orphan]],
+    ]);
+    // Kart yoksa her mesajda boş liste.
+    expect(toChatMessages(CONVERSATION).every((message) => message.operationIds.length === 0)).toBe(true);
   });
 
   it('kullanıcı mesajının kayıtlı cevabı, sıradaki kullanıcı mesajından önceki son asistan metnidir', () => {

@@ -41,6 +41,12 @@ export const chatMessageSchema = z.object({
   status: messageStatusSchema.nullable(),
   /** Yalnızca kullanıcı mesajında: istemcinin ürettiği kimlik. */
   clientMessageId: z.uuid().nullable(),
+  /**
+   * Bu mesajın altında gösterilecek işlem kartları (#75): turda asistanın önerdiği işlemler, öneri sırasıyla. Kart
+   * turun cevabının altındadır; cevap yoksa (tur başarısız) kullanıcının mesajının altında. Kart, işlemin güncel
+   * hâlini GET /v1/operations/{id}/preview'dan okur. Kart yoksa boş liste.
+   */
+  operationIds: z.array(z.uuid()),
   createdAt: timestamp,
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
@@ -80,6 +86,12 @@ export const chatStreamEventSchema = z.discriminatedUnion('type', [
     label: z.string(),
     status: z.enum(['started', 'succeeded', 'failed']),
   }),
+  /**
+   * Asistan onay bekleyen bir işlem önerdi ya da önerisini düzenledi (#75): istemci kartı gösterir. Yalnızca kimlik ve
+   * sürüm gelir; kart işlemin güncel hâlini önizleme ucundan okur. Aynı işlem düzenlenince yeni sürümle tekrar gelir.
+   * Bu olayı tanımayan eski istemci olayı atlar.
+   */
+  z.object({ type: z.literal('operation_card'), operationId: z.uuid(), version: z.number().int().min(1) }),
   /** Cevap bitti. `text` cevabın tamamı; `replayed` true ise cevap daha önce üretilmişti, model çağrılmadı. */
   z.object({ type: z.literal('done'), messageId: z.uuid(), text: z.string(), replayed: z.boolean() }),
   /** Cevap üretilemedi; kullanıcı mesajı başarısız olarak kalır, aynı kimlikle tekrar gönderilebilir. */

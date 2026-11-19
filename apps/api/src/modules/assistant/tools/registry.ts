@@ -41,6 +41,17 @@ export interface ToolSpec<TInput> {
   input: z.ZodType<TInput>;
   /** Aracın sonucu JSON'a çevrilip modele verilir. Hata için ApiException fırlatır (Türkçe mesaj modele gider). */
   run(input: TInput, context: ToolContext): Promise<unknown>;
+  /**
+   * Yalnızca öneri araçlarında: sonuçtaki işlem (kimlik ve sürüm). Ajan döngüsü bunu akışa `operation_card` olayı
+   * olarak verir, istemci kartı gösterir (#75).
+   */
+  operationOf?(result: unknown): OperationRef | null;
+}
+
+/** Önerilen ya da düzenlenen işlem: kartın gösterileceği işlem ve sürümü. */
+export interface OperationRef {
+  operationId: string;
+  version: number;
 }
 
 /** Kayıt defterindeki araç: girdi tipi içeride kalır, dışarıya ham girdi alan tek bir çağrı açılır. */
@@ -53,6 +64,7 @@ export interface RegisteredTool {
   readonly inputSchema: Record<string, unknown>;
   /** Girdi şemaya uymuyorsa Türkçe hata listesi, uyuyorsa aracın sonucu. */
   invoke(rawInput: unknown, context: ToolContext): Promise<{ ok: true; value: unknown } | { ok: false; issues: string[] }>;
+  operationOf?(result: unknown): OperationRef | null;
 }
 
 export function defineTool<TInput>(spec: ToolSpec<TInput>): RegisteredTool {
@@ -63,6 +75,7 @@ export function defineTool<TInput>(spec: ToolSpec<TInput>): RegisteredTool {
     toolClass: spec.toolClass,
     allowedRoles: spec.allowedRoles,
     inputSchema: toStrictJsonSchema(spec.input),
+    ...(spec.operationOf ? { operationOf: spec.operationOf } : {}),
     async invoke(rawInput, context) {
       const parsed = spec.input.safeParse(rawInput);
       if (!parsed.success) {
@@ -80,6 +93,8 @@ export function defineTool<TInput>(spec: ToolSpec<TInput>): RegisteredTool {
 export interface ToolOutcome {
   content: string;
   isError: boolean;
+  /** Öneri aracı başarılıysa açtığı ya da düzenlediği işlem (akışta kart olayı için); modele gitmez. */
+  operation?: OperationRef;
 }
 
 /**
@@ -153,7 +168,8 @@ export class ToolRegistry {
       if (!result.ok) {
         return failure(`Girdi geçersiz: ${result.issues.join('; ')}`);
       }
-      return { content: JSON.stringify(result.value), isError: false };
+      const operation = tool.operationOf?.(result.value) ?? null;
+      return { content: JSON.stringify(result.value), isError: false, ...(operation ? { operation } : {}) };
     } catch (error) {
       if (error instanceof ApiException) {
         // Okuma servislerinin Türkçe hatası (ör. "Ürün bulunamadı."); başka şirketin kaydı da bulunamadı görünür.

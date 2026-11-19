@@ -58,6 +58,8 @@ export const operationPreviewSchema = z.object({
   partyName: z.string().nullable(),
   note: z.string().nullable(),
   createdAt: z.iso.datetime({ offset: true }),
+  /** Sohbet önerisinin onaylanabileceği son an (Operation.expiresAt ile aynı); süresi olmayan işlemde null. */
+  expiresAt: z.iso.datetime({ offset: true }).nullable(),
   lines: z.array(operationPreviewLineSchema),
 });
 export type OperationPreview = z.infer<typeof operationPreviewSchema>;

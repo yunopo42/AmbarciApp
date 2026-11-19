@@ -1,5 +1,5 @@
 import type { Database, DbExecutor } from '@ambarci/db';
-import { isZeroQuantity } from '@ambarci/shared';
+import { CHAT_PROPOSAL_TTL_MINUTES, isZeroQuantity } from '@ambarci/shared';
 import type {
   ActionSource,
   ConfirmOperationInput,
@@ -28,7 +28,7 @@ import type { OrganizationContext } from '../organizations/organization-context.
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { canTransition } from './operation-state.js';
 import { OperationsRepository, toOperation } from './operations.repository.js';
-import type { OperationRecord } from './operations.repository.js';
+import type { MessageOperation, OperationRecord } from './operations.repository.js';
 
 /**
  * İşlemi kim yapıyor: oturumdaki kullanıcı (rolü, OrganizationGuard'ın doğruladığı) ya da sistem (açılış stoğu
@@ -49,6 +49,12 @@ type LineInput = OperationItem;
 
 /** Doğrulanmış ve ana birime çevrilmiş kalem: hem kayda (girilen hâli) hem stok uygulamasına (ana birim) yeter. */
 type ResolvedLine = LineInput & ApplyLine;
+
+/**
+ * Transaction'ın "süresi doldu" sonucu. Hata transaction'ın içinden fırlatılsaydı EXPIRED geçişi de geri alınırdı;
+ * geçiş yazılıp transaction tamamlanır, 409 ondan sonra döner.
+ */
+const EXPIRED_NOW = Symbol('expired');
 
 /** İşlem açılırken isteğe bağlı bilgiler. */
 export interface CreateOperationOptions {
@@ -145,9 +151,10 @@ export class OperationsService {
     actor: Extract<OperationActor, { kind: 'user' }>,
     operationId: string,
     input: CreateOperationInput,
+    options: CreateOperationOptions = {},
   ): Promise<Operation> {
     await this.assertCreateAccess(this.db, organizationId, actor, input.type, warehousesOf(linesOf(input.items)));
-    return this.db.transaction(async (tx) => {
+    const outcome = await this.db.transaction(async (tx): Promise<Operation | typeof EXPIRED_NOW> => {
       const record = await this.repository.lockForUpdate(tx, organizationId, operationId);
       if (!record) {
         throw operationNotFound();
@@ -158,6 +165,11 @@ export class OperationsService {
           'OPERATION_FORBIDDEN',
           'Yalnızca sohbette kendi açtığın öneri düzenlenebilir.',
         );
+      }
+      // Süresi dolmuş öneri düzenlenerek yeniden canlandırılmaz: yeni öneri açılır.
+      if (record.expired) {
+        await this.expire(tx, organizationId, record);
+        return EXPIRED_NOW;
       }
       if (record.status !== 'PENDING_CONFIRMATION') {
         throw new ApiException(HttpStatus.CONFLICT, 'OPERATION_NOT_PENDING', 'Bu işlem onay beklemiyor; düzenlenemez.', {
@@ -173,7 +185,12 @@ export class OperationsService {
         );
       }
       const content = await this.validateContent(tx, organizationId, input);
-      const revised = await this.repository.revise(tx, organizationId, operationId, content);
+      // Kart, önerinin son hâlini üreten turun altında durur (#75): bağ düzenlemeyi isteyen mesaja taşınır. İlk mesaj
+      // ve her düzenleme denetim kaydında kalır.
+      const revised = await this.repository.revise(tx, organizationId, operationId, {
+        ...content,
+        ...(options.sourceMessageId ? { sourceMessageId: options.sourceMessageId } : {}),
+      });
       if (!revised) {
         throw new Error('Kilitli işlem düzenlenemedi.');
       }
@@ -187,6 +204,30 @@ export class OperationsService {
         details: { type: revised.type, version: revised.version, lineCount: revised.items.length },
       });
       return revised;
+    });
+    if (outcome === EXPIRED_NOW) {
+      throw proposalExpired();
+    }
+    return outcome;
+  }
+
+  /**
+   * Süresi dolmuş sohbet önerisini kalıcı olarak EXPIRED yapar ve denetim kaydını yazar (çağıran işlemi kilitlemiştir).
+   * Süre aşımını kimse "yapmaz": kayıttaki kişi boştur, sistemin kararıdır.
+   */
+  private async expire(tx: DbExecutor, organizationId: string, record: OperationRecord): Promise<void> {
+    const expired = await this.repository.markExpired(tx, organizationId, record.id);
+    if (!expired) {
+      throw new Error('Kilitli işlem süresi dolmuş olarak işaretlenemedi.');
+    }
+    await this.audit.record(tx, {
+      organizationId,
+      actorId: null,
+      action: 'operation.expired',
+      entityType: 'operation',
+      entityId: record.id,
+      source: record.source,
+      details: { type: record.type, version: record.version },
     });
   }
 
@@ -296,7 +337,8 @@ export class OperationsService {
       }
       return { item, conversion, sku: conversion.sku, productName: conversion.productName };
     });
-    // Onaylanmış ya da iptal edilmiş işlemde "önce → sonra" anlamsızdır: stok o işlemden sonra da değişmiştir.
+    // Onaylanmış ya da iptal edilmiş işlemde "önce → sonra" anlamsızdır: stok o işlemden sonra da değişmiştir. Süresi
+    // dolmuş öneri de (durumu EXPIRED görünür) onaylanamayacağı için hesaplanmaz.
     const effects =
       operation.status === 'PENDING_CONFIRMATION'
         ? await this.inventory.previewStock(
@@ -322,6 +364,7 @@ export class OperationsService {
       partyName,
       note: operation.note,
       createdAt: operation.createdAt,
+      expiresAt: operation.expiresAt,
       lines: lines.map(({ item, conversion, sku, productName }) => ({
         lineNo: item.lineNo,
         productId: item.productId,
@@ -356,20 +399,25 @@ export class OperationsService {
     input: ConfirmOperationInput,
     idempotencyKey: string,
   ): Promise<ConfirmOperationResult> {
-    return this.db.transaction(async (tx) => {
+    const outcome = await this.db.transaction(async (tx): Promise<ConfirmOperationResult | typeof EXPIRED_NOW> => {
       // 1. Aynı işlem için aynı anda gelen ikinci onay burada bekler.
       const record = await this.repository.lockForUpdate(tx, organizationId, operationId);
       if (!record) {
         throw operationNotFound();
       }
 
-      // 2. Durum, tekrar ve sürüm.
+      // 2. Durum, süre, tekrar ve sürüm.
       if (record.status === 'APPLIED') {
         if (record.applyIdempotencyKey === idempotencyKey) {
           // Aynı istek tekrar geldi (ağ koptu, kullanıcı iki kez bastı): stok yeniden değişmez, ilk cevap döner.
           return this.replay(tx, organizationId, operationId);
         }
         throw new ApiException(HttpStatus.CONFLICT, 'OPERATION_ALREADY_APPLIED', 'Bu işlem zaten onaylanmış.');
+      }
+      // Sohbet önerisinin süresi kilit altında, veritabanının saatiyle denetlenir (mimari değişmez 3: süre).
+      if (record.expired) {
+        await this.expire(tx, organizationId, record);
+        return EXPIRED_NOW;
       }
       if (!canTransition(record.status, 'APPLIED')) {
         throw new ApiException(HttpStatus.CONFLICT, 'OPERATION_NOT_PENDING', 'Bu işlem onay beklemiyor.', {
@@ -426,11 +474,18 @@ export class OperationsService {
       });
       return { operation: toOperation(applied, items), movements };
     });
+    if (outcome === EXPIRED_NOW) {
+      throw proposalExpired();
+    }
+    return outcome;
   }
 
-  /** Onay bekleyen işlemi iptal eder. Yalnızca işlemi açan kişi ya da yönetici. Zaten iptalse aynı cevap döner. */
+  /**
+   * Onay bekleyen işlemi iptal eder. Yalnızca işlemi açan kişi ya da yönetici. Zaten iptalse aynı cevap döner. Süresi
+   * dolmuş sohbet önerisi iptal edilmez, kalıcı olarak EXPIRED olur (409 OPERATION_EXPIRED): ikisinde de stok değişmez.
+   */
   async cancel(organizationId: string, actor: OperationActor, operationId: string): Promise<Operation> {
-    return this.db.transaction(async (tx) => {
+    const outcome = await this.db.transaction(async (tx): Promise<Operation | typeof EXPIRED_NOW> => {
       const record = await this.repository.lockForUpdate(tx, organizationId, operationId);
       if (!record) {
         throw operationNotFound();
@@ -441,6 +496,10 @@ export class OperationsService {
           'OPERATION_FORBIDDEN',
           'İşlemi yalnızca açan kişi ya da yönetici iptal edebilir.',
         );
+      }
+      if (record.expired) {
+        await this.expire(tx, organizationId, record);
+        return EXPIRED_NOW;
       }
       const items = await this.repository.listItems(tx, organizationId, operationId);
       if (record.status === 'CANCELLED') {
@@ -465,6 +524,15 @@ export class OperationsService {
       });
       return toOperation(cancelled, items);
     });
+    if (outcome === EXPIRED_NOW) {
+      throw proposalExpired();
+    }
+    return outcome;
+  }
+
+  /** Mesajların açtığı işlemler: sohbet geçmişindeki kartlar (#75). Mesajların sahipliğini çağıran denetler. */
+  listBySourceMessages(organizationId: string, messageIds: string[]): Promise<MessageOperation[]> {
+    return this.repository.listBySourceMessages(this.db, organizationId, messageIds);
   }
 
   /** Bu Idempotency-Key ile uygulanmış işlem (açılış betiği tekrar çalıştırıldığında ikinci kez açmamak için). */
@@ -614,6 +682,14 @@ function actorId(actor: OperationActor): string | null {
 function warehousesOf(lines: Pick<LineInput, 'warehouseId' | 'targetWarehouseId'>[]): string[] {
   const ids = lines.flatMap((line) => (line.targetWarehouseId ? [line.warehouseId, line.targetWarehouseId] : [line.warehouseId]));
   return [...new Set(ids)];
+}
+
+function proposalExpired(): ApiException {
+  return new ApiException(
+    HttpStatus.CONFLICT,
+    'OPERATION_EXPIRED',
+    `Önerinin süresi doldu (${CHAT_PROPOSAL_TTL_MINUTES} dakika); stok değişmedi. Yeni bir öneri açılmalı.`,
+  );
 }
 
 function operationNotFound(): ApiException {

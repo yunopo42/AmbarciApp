@@ -179,12 +179,19 @@ function proposalTool<TInput extends { operation_id?: string | undefined }>(
       };
       try {
         const operation = input.operation_id
-          ? await operations.revise(organizationId, actor, input.operation_id.toLowerCase(), request)
+          ? await operations.revise(organizationId, actor, input.operation_id.toLowerCase(), request, {
+              sourceMessageId: sourceMessageOf(context),
+            })
           : await operations.create(organizationId, actor, request, 'CHAT', { sourceMessageId: sourceMessageOf(context) });
         return summarize(await operations.preview(organizationId, actor, operation.id));
       } catch (error) {
         throw await explainForModel(catalog, organizationId, request, error);
       }
+    },
+    // Akışa kart olayı (#75): yalnızca kimlik ve sürüm; kart işlemin güncel hâlini önizleme ucundan okur.
+    operationOf: (result) => {
+      const { operation_id: operationId, version } = result as ProposalSummary;
+      return { operationId, version };
     },
   });
 }
@@ -265,11 +272,18 @@ function shortage(line: OperationPreviewLine): Record<string, string> {
   };
 }
 
+/** Öneri aracının modele dönen sonucu (anahtarlar modele dönük olduğu için snake_case). */
+interface ProposalSummary {
+  operation_id: string;
+  version: number;
+  [key: string]: unknown;
+}
+
 /**
  * Modele dönen özet: kartta görünecek bilgiler (önizleme ucuyla aynı hesap, SQL'de). İç kimlik yalnızca
  * operation_id'dir (düzenleme için); ürün ve depo adlarıyla verilir.
  */
-function summarize(preview: OperationPreview): Record<string, unknown> {
+function summarize(preview: OperationPreview): ProposalSummary {
   const lines = preview.lines.map((line) => {
     const entered = amount(line.quantity, line.unit ?? line.baseUnit);
     // Yalnızca stoğu azalan depo yetmeyebilir (çıkış, fire, transferin çıkış deposu); giriş ve sayım her zaman yeter.

@@ -25,6 +25,17 @@ export interface ChatTurn {
   tool: string | null;
   status: ChatTurnStatus;
   error: ApiFailure | null;
+  /**
+   * Bu turda asistanın önerdiği işlemler (`operation_card` olayları, #75), öneri sırasıyla. Düzenlenen öneri aynı
+   * işlemdir: kartı çoğalmaz, sürümü güncellenir. Kart işlemin güncel hâlini önizleme ucundan okur.
+   */
+  operations: TurnOperation[];
+}
+
+/** Turda önerilen işlem: kimlik ve kartın gösterdiği sürüm. */
+export interface TurnOperation {
+  operationId: string;
+  version: number;
 }
 
 /** Sohbet ekranının bir satırı, eskiden yeniye. */
@@ -39,7 +50,7 @@ export type ChatRow =
 
 /** Yeni gönderim (ya da aynı kimlikle tekrar gönderim) için boş tur. */
 export function startTurn(clientMessageId: string, text: string): ChatTurn {
-  return { clientMessageId, text, answer: '', tool: null, status: 'sending', error: null };
+  return { clientMessageId, text, answer: '', tool: null, status: 'sending', error: null, operations: [] };
 }
 
 /** Akıştan gelen olayı tura işler. */
@@ -47,6 +58,17 @@ export function applyChatEvent(turn: ChatTurn, event: ChatStreamEvent): ChatTurn
   switch (event.type) {
     case 'message_started':
       return { ...turn, status: 'streaming' };
+    case 'operation_card': {
+      const card = { operationId: event.operationId, version: event.version };
+      const known = turn.operations.some((operation) => operation.operationId === event.operationId);
+      return {
+        ...turn,
+        status: 'streaming',
+        operations: known
+          ? turn.operations.map((operation) => (operation.operationId === event.operationId ? card : operation))
+          : [...turn.operations, card],
+      };
+    }
     case 'tool_status':
       return { ...turn, status: 'streaming', tool: event.status === 'started' ? event.label : null };
     case 'text_delta':
