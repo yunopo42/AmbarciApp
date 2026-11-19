@@ -19,11 +19,14 @@ export function ChatComposer({
   onChange,
   onSend,
   busy,
+  placeholder = 'Stok sor…',
 }: {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
   busy: boolean;
+  /** İşlem kartının "Düzenle"sinden sonra: "Neyi değiştirelim?" (#77). */
+  placeholder?: string;
 }): JSX.Element {
   const canSend = !busy && value.trim().length > 0;
 
@@ -45,7 +48,7 @@ export function ChatComposer({
         rows={1}
         value={value}
         maxLength={MESSAGE_TEXT_MAX_LENGTH}
-        placeholder="Stok sor…"
+        placeholder={placeholder}
         aria-describedby={`${CHAT_INPUT_ID}-hint`}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
