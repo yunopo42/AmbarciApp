@@ -7,6 +7,8 @@ import { AppText } from '@/components/app-text';
 import { Button } from '@/components/ui';
 import { colors, radius, shadows, spacing } from '@/theme';
 
+import { OperationCard } from './operation-card';
+
 // Sohbet ekranının parçaları (docs/tasarim/1-mobil-sohbet.png): kullanıcının balonu primary zeminli, asistanın
 // cevabı kart zeminli; ikisi de radius-lg ve body-lg (docs/tasarim.md).
 
@@ -81,14 +83,19 @@ export function ChatRowView({
   busy,
   onRetry,
   onReload,
+  onEditOperation,
 }: {
   row: ChatRow;
   busy: boolean;
   onRetry: (clientMessageId: string, text: string) => void;
   onReload: () => void;
+  /** Kartın "Düzenle"si: düzeltme sohbetle yapılır, mesaj kutusuna odaklanılır. */
+  onEditOperation: () => void;
 }): JSX.Element {
   if (row.kind === 'message') {
-    return <SavedRow message={row.message} note={row.note} busy={busy} onRetry={onRetry} onReload={onReload} />;
+    return (
+      <SavedRow message={row.message} note={row.note} busy={busy} onRetry={onRetry} onReload={onReload} onEditOperation={onEditOperation} />
+    );
   }
   const { turn } = row;
   const status = turnStatusLabel(turn);
@@ -96,6 +103,10 @@ export function ChatRowView({
     <View style={styles.row}>
       <UserBubble text={turn.text} />
       {turn.answer ? <AssistantBubble text={turn.answer} /> : null}
+      {/* Kart, akışta operation_card gelince cevabın metninden önce görünür (#75). */}
+      {turn.operations.map((operation) => (
+        <OperationCard key={operation.operationId} operationId={operation.operationId} version={operation.version} onEdit={onEditOperation} />
+      ))}
       {status ? <StatusLine label={status} /> : null}
       {turn.status === 'failed' && turn.error ? (
         <FailureNote message={turn.error.message} disabled={busy} onRetry={() => onRetry(turn.clientMessageId, turn.text)} />
@@ -110,17 +121,24 @@ function SavedRow({
   busy,
   onRetry,
   onReload,
+  onEditOperation,
 }: {
   message: SavedChatMessage;
   note: 'failed' | 'in_progress' | null;
   busy: boolean;
   onRetry: (clientMessageId: string, text: string) => void;
   onReload: () => void;
+  onEditOperation: () => void;
 }): JSX.Element {
+  // Turun kartları cevabın altında; cevapsız turda kullanıcının mesajının altında (#75).
+  const cards = message.operationIds.map((operationId) => (
+    <OperationCard key={operationId} operationId={operationId} onEdit={onEditOperation} />
+  ));
   if (message.role === 'assistant') {
     return (
       <View style={styles.row}>
         <AssistantBubble text={message.text} />
+        {cards}
       </View>
     );
   }
@@ -128,6 +146,7 @@ function SavedRow({
   return (
     <View style={styles.row}>
       <UserBubble text={message.text} />
+      {cards}
       {note === 'failed' && clientMessageId ? (
         <FailureNote message="Bu mesaja cevap alınamadı." disabled={busy} onRetry={() => onRetry(clientMessageId, message.text)} />
       ) : null}
@@ -150,7 +169,8 @@ export function EmptyChat(): JSX.Element {
         Yazarak ya da &quot;Konuş&quot;a basarak sorabilirsin. Örnek: &quot;Merkez depoda NYM 3x2,5 kablo kaç metre var?&quot;
       </AppText>
       <AppText variant="labelMd" tone="muted" style={styles.center}>
-        Asistan şimdilik yalnızca bilgi verir; stoğu değiştirmez.
+        Giriş, çıkış, transfer, sayım ya da fire için asistan bir öneri hazırlar; stok yalnızca sen kartta
+        &quot;Onayla&quot;ya basınca değişir.
       </AppText>
     </View>
   );

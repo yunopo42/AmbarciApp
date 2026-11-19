@@ -12,6 +12,7 @@ const TONES = {
   primary: colors.primary,
   critical: colors.critical,
   applied: colors.applied,
+  pending: colors.pending,
   onPrimary: colors.onPrimary,
 } as const;
 

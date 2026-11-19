@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { JSX } from 'react';
+import type { JSX, Ref } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import type { PressableProps, TextInputProps, ViewProps } from 'react-native';
 
@@ -84,10 +84,11 @@ export function Button({
  * Giriş alanı: en az 48, kenarlık 1,5 border-strong, köşe 8. Odakta kenarlık 2 px primary-action olur (tasarımdaki
  * odak halkasının mobil karşılığı).
  */
-export function TextField({ style, onFocus, onBlur, ...props }: TextInputProps): JSX.Element {
+export function TextField({ style, onFocus, onBlur, ref, ...props }: TextInputProps & { ref?: Ref<TextInput> }): JSX.Element {
   const [focused, setFocused] = useState(false);
   return (
     <TextInput
+      ref={ref}
       placeholderTextColor={colors.textSubtle}
       style={[styles.input, focused ? styles.inputFocused : null, style]}
       onFocus={(event) => {
