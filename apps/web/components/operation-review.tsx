@@ -1,14 +1,10 @@
 'use client';
 
-import { describeApiError } from '@ambarci/api-client';
 import type { ConfirmOperationResult, OperationPreview, OperationPreviewLine, OperationStatus, StockEffect } from '@ambarci/shared';
-import { useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
 import type { JSX } from 'react';
 
-import { useApi } from '@/components/api-provider';
 import { OrganizationGate } from '@/components/organization-gate';
 import { PageHeader } from '@/components/page-header';
 import { Alert } from '@/components/ui/alert';
@@ -16,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { errorMessage } from '@/lib/api-client';
+import { useOperationActions } from '@/components/use-operation-actions';
 import { formatDecimal } from '@/lib/format';
 import { formatDateTime, MOVEMENT_TYPE_LABELS, OPERATION_STATUS_LABELS, OPERATION_TYPE_LABELS } from '@/lib/labels';
 
@@ -53,74 +49,30 @@ export function OperationReview({ operationId }: { operationId: string }): JSX.E
 }
 
 function ReviewBody({ operationId }: { operationId: string }): JSX.Element {
-  const { $api } = useApi();
-  const queryClient = useQueryClient();
-  const previewInit = { params: { path: { operationId } } };
-  const query = $api.useQuery('get', '/v1/operations/{operationId}/preview', previewInit);
-  const confirm = $api.useMutation('post', '/v1/operations/{operationId}/confirm');
-  const cancel = $api.useMutation('post', '/v1/operations/{operationId}/cancel');
-  // Bu ekrandaki bütün onay denemeleri aynı anahtarı taşır. Çift tıklamada ya da ağ hatasından sonra tekrar
-  // denendiğinde API işlemi uygulanmış ve anahtarı aynı bulur, ilk cevabı döner: stok ikinci kez değişmez.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
-  const [shortages, setShortages] = useState<Map<number, Shortage>>(() => new Map());
-  const [result, setResult] = useState<ConfirmOperationResult | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const busy = confirm.isPending || cancel.isPending;
+  // Önizleme, onay ve iptal sohbet panelindeki işlem kartıyla ortak (use-operation-actions.ts). Bu ekrandaki bütün onay
+  // denemeleri aynı anahtarı taşır: çift tıklamada ya da ağ hatasından sonra tekrar denendiğinde API işlemi uygulanmış
+  // ve anahtarı aynı bulur, ilk cevabı döner; stok ikinci kez değişmez.
+  const actions = useOperationActions(operationId);
+  const { busy, result } = actions;
+  const actionError = actions.failure?.message ?? null;
+  const shortages = new Map<number, Shortage>(
+    actions.failure?.code === 'INSUFFICIENT_STOCK' && Array.isArray(actions.failure.details)
+      ? actions.failure.details.filter(isShortage).map((shortage) => [shortage.lineNo, shortage])
+      : [],
+  );
 
-  async function refresh(): Promise<void> {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: $api.queryOptions('get', '/v1/operations/{operationId}/preview', previewInit).queryKey,
-      }),
-      // Stok listesi, hareket geçmişi ve onay bekleyen işlemler bir sonraki açılışta sunucudan yeniden okunur.
-      queryClient.invalidateQueries({ queryKey: ['get', '/v1/operations'] }),
-      queryClient.invalidateQueries({ queryKey: ['get', '/v1/warehouses/{warehouseId}/stock'] }),
-      queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/movements'] }),
-    ]);
-  }
-
-  async function handleConfirm(preview: OperationPreview): Promise<void> {
-    setActionError(null);
-    setShortages(new Map());
-    try {
-      const confirmed = await confirm.mutateAsync({
-        params: { path: { operationId }, header: { 'Idempotency-Key': idempotencyKey } },
-        body: { version: preview.version },
-      });
-      setResult(confirmed);
-    } catch (reason) {
-      const failure = describeApiError(reason);
-      if (failure.code === 'INSUFFICIENT_STOCK' && Array.isArray(failure.details)) {
-        setShortages(new Map(failure.details.filter(isShortage).map((shortage) => [shortage.lineNo, shortage])));
-      }
-      setActionError(failure.message);
-    }
-    // Başarıda durum, hatada güncel stok (arada başka bir işlem onaylanmış olabilir) yeniden okunur.
-    await refresh();
-  }
-
-  async function handleCancel(): Promise<void> {
-    setActionError(null);
-    try {
-      await cancel.mutateAsync({ params: { path: { operationId } } });
-    } catch (reason) {
-      setActionError(errorMessage(reason));
-    }
-    await refresh();
-  }
-
-  if (query.isPending) {
+  if (actions.loading) {
     return (
       <p aria-live="polite" className="text-text-muted">
         İşlem yükleniyor…
       </p>
     );
   }
-  if (query.isError) {
-    return <Alert>{errorMessage(query.error)}</Alert>;
+  if (!actions.preview) {
+    return <Alert>{actions.loadError ?? 'İşlem okunamadı.'}</Alert>;
   }
 
-  const preview = query.data;
+  const preview: OperationPreview = actions.preview;
   const pending = preview.status === 'PENDING_CONFIRMATION';
   const hasShortage = preview.lines.some((line) => line.stock?.sufficient === false || line.targetStock?.sufficient === false);
   const showCost = preview.type === 'STOCK_IN' || preview.type === 'OPENING';
@@ -196,15 +148,15 @@ function ReviewBody({ operationId }: { operationId: string }): JSX.Element {
       {pending ? (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={() => void handleConfirm(preview)} disabled={busy || hasShortage}>
-              {confirm.isPending ? 'Onaylanıyor…' : 'Onayla'}
+            <Button onClick={() => void actions.confirm(preview.version)} disabled={busy || hasShortage}>
+              {actions.confirming ? 'Onaylanıyor…' : 'Onayla'}
             </Button>
-            <Button variant="secondary" onClick={() => void handleCancel()} disabled={busy}>
-              {cancel.isPending ? 'İptal ediliyor…' : 'İptal et'}
+            <Button variant="secondary" onClick={() => void actions.cancel()} disabled={busy}>
+              {actions.cancelling ? 'İptal ediliyor…' : 'İptal et'}
             </Button>
             {hasShortage ? (
               // Bu arada depoya giriş yapıldıysa özet yeniden hesaplanır ve onay açılır.
-              <Button variant="ghost" onClick={() => void refresh()} disabled={busy || query.isFetching}>
+              <Button variant="ghost" onClick={() => void actions.refresh()} disabled={busy || actions.fetching}>
                 <RefreshCw aria-hidden />
                 Stoğu yeniden oku
               </Button>

@@ -127,6 +127,13 @@ function ChatView({
 }): JSX.Element {
   const chat = useChat(conversationId, onConversationCreated);
   const [draft, setDraft] = useState('');
+  // Kartın "Düzenle"si (#77): düzeltme sohbetle yapılır; kutuya odaklanılır, ipucu değişir. Asistan aynı öneriyi
+  // düzenler ve sürümü artırır (#74).
+  const [editing, setEditing] = useState(false);
+  const handleEditOperation = useCallback(() => {
+    setEditing(true);
+    document.getElementById(CHAT_INPUT_ID)?.focus();
+  }, []);
 
   function handleSend(): void {
     if (chat.busy || !draft.trim()) {
@@ -134,6 +141,7 @@ function ChatView({
     }
     chat.send(draft);
     setDraft('');
+    setEditing(false);
   }
 
   let content: JSX.Element;
@@ -158,7 +166,14 @@ function ChatView({
     content = (
       <>
         {chat.rows.map((row) => (
-          <ChatRowView key={rowKey(row)} row={row} busy={chat.busy} onRetry={chat.retry} onReload={chat.reload} />
+          <ChatRowView
+            key={rowKey(row)}
+            row={row}
+            busy={chat.busy}
+            onRetry={chat.retry}
+            onReload={chat.reload}
+            onEditOperation={handleEditOperation}
+          />
         ))}
       </>
     );
@@ -177,7 +192,13 @@ function ChatView({
           {content}
         </div>
       </div>
-      <ChatComposer value={draft} onChange={setDraft} onSend={handleSend} busy={chat.busy} />
+      <ChatComposer
+        value={draft}
+        onChange={setDraft}
+        onSend={handleSend}
+        busy={chat.busy}
+        placeholder={editing ? 'Neyi değiştirelim? (ör. 3 koli olsun)' : undefined}
+      />
     </>
   );
 }
