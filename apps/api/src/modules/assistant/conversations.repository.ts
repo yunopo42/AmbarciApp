@@ -122,6 +122,22 @@ export class ConversationsRepository {
     return rows.map(toStoredMessage);
   }
 
+  /** Sohbetteki kullanıcı mesajlarının kimlikleri (işlemler bu mesajlara bağlıdır, #74). İçerik okunmaz. */
+  async listUserMessageIds(executor: DbExecutor, organizationId: string, conversationId: string): Promise<string[]> {
+    const rows = await executor
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.organizationId, organizationId),
+          eq(messages.conversationId, conversationId),
+          eq(messages.role, 'USER'),
+        ),
+      )
+      .orderBy(asc(messages.position));
+    return rows.map((row) => row.id);
+  }
+
   async findByClientMessageId(
     executor: DbExecutor,
     organizationId: string,
@@ -172,11 +188,26 @@ export class ConversationsRepository {
   }
 
   /** Kullanıcı mesajını sohbetin sonuna ekler; sıra numarası aynı ifadede hesaplanır. */
+  /**
+   * Kullanıcı mesajını yazar. İlk metin bloğu kullanıcının yazdığıdır (ekranda yalnızca o görünür); verilirse ikinci
+   * blok sunucunun durum notudur (#79). Not mesajla birlikte saklanır: sonraki turlarda model geçmişi aynen görür,
+   * önbellek ve düşünme blokları bozulmaz.
+   */
   async insertUserMessage(
     executor: DbExecutor,
-    input: { organizationId: string; conversationId: string; userId: string; text: string; clientMessageId: string },
+    input: {
+      organizationId: string;
+      conversationId: string;
+      userId: string;
+      text: string;
+      clientMessageId: string;
+      note?: string | null;
+    },
   ): Promise<StoredMessage> {
-    const content: MessageContentBlock[] = [{ type: 'text', text: input.text }];
+    const content: MessageContentBlock[] = [
+      { type: 'text', text: input.text },
+      ...(input.note ? [{ type: 'text', text: input.note }] : []),
+    ];
     const [row] = await executor.execute<Omit<StoredMessage, 'content'> & { content: MessageContentBlock[] }>(sql`
       insert into ${messages} (organization_id, conversation_id, user_id, position, role, content, client_message_id, status)
       select ${input.organizationId}, ${input.conversationId}, ${input.userId}, coalesce(max(position), 0) + 1, 'USER',

@@ -125,11 +125,13 @@ export function toOperation(record: OperationRecord, items: OperationItem[]): Op
   };
 }
 
-/** Sohbet geçmişinde kart: bir mesajın açtığı işlem ve sürümü. */
+/** Sohbet geçmişinde kart: bir mesajın açtığı işlem, sürümü, türü ve görünen durumu (süresi dolmuşsa EXPIRED). */
 export interface MessageOperation {
   id: string;
   sourceMessageId: string;
   version: number;
+  type: OperationType;
+  status: OperationStatus;
 }
 
 /** İşlem listesindeki satır: kalem sayısı ve dokunduğu depolar (transferde hedef dahil). */
@@ -355,17 +357,74 @@ export class OperationsRepository {
     return record ?? null;
   }
 
+  /**
+   * Aynı mesajdan öneri açan istekleri sıraya sokar (#79): transaction bitene kadar mesajın kimliğinden üretilen
+   * anahtarla PostgreSQL'in "advisory" kilidi tutulur. Mesajın kendi satırı kilitlenmez (o tablo asistan modülünün);
+   * bu kilit yalnızca aynı anahtarı isteyen öteki transaction'ı bekletir. İki farklı mesajın anahtarı çakışırsa
+   * yalnızca biraz bekleme olur, sonuç değişmez.
+   */
+  async lockChatProposals(executor: DbExecutor, sourceMessageId: string): Promise<void> {
+    await executor.execute(sql`select pg_advisory_xact_lock(hashtextextended(${sourceMessageId}::text, 0))`);
+  }
+
+  /** Mesajın açtığı, onay bekleyen ve süresi dolmamış, verilen türdeki sohbet önerileri, kalemleriyle (#79). */
+  async listOpenChatProposals(
+    executor: DbExecutor,
+    organizationId: string,
+    sourceMessageId: string,
+    type: OperationType,
+  ): Promise<Operation[]> {
+    const records = await executor
+      .select(OPERATION_COLUMNS)
+      .from(operations)
+      .where(
+        and(
+          eq(operations.organizationId, organizationId),
+          eq(operations.sourceMessageId, sourceMessageId),
+          eq(operations.type, type),
+          eq(operations.source, 'CHAT'),
+          eq(operations.status, 'PENDING_CONFIRMATION'),
+          sql`not ${EXPIRED}`,
+        ),
+      )
+      .orderBy(asc(operations.createdAt), asc(operations.id));
+    const result: Operation[] = [];
+    for (const record of records) {
+      result.push(toOperation(record, await this.listItems(executor, organizationId, record.id)));
+    }
+    return result;
+  }
+
   /** Mesajların açtığı işlemler (sohbet geçmişindeki kartlar, #75), açılış sırasıyla. */
   async listBySourceMessages(executor: DbExecutor, organizationId: string, messageIds: string[]): Promise<MessageOperation[]> {
     if (messageIds.length === 0) {
       return [];
     }
     const rows = await executor
-      .select({ id: operations.id, sourceMessageId: operations.sourceMessageId, version: operations.version })
+      .select({
+        id: operations.id,
+        sourceMessageId: operations.sourceMessageId,
+        version: operations.version,
+        type: operations.type,
+        status: operations.status,
+        expired: EXPIRED,
+      })
       .from(operations)
       .where(and(eq(operations.organizationId, organizationId), inArray(operations.sourceMessageId, messageIds)))
       .orderBy(asc(operations.createdAt), asc(operations.id));
-    return rows.flatMap((row) => (row.sourceMessageId ? [{ id: row.id, sourceMessageId: row.sourceMessageId, version: row.version }] : []));
+    return rows.flatMap((row) =>
+      row.sourceMessageId
+        ? [
+            {
+              id: row.id,
+              sourceMessageId: row.sourceMessageId,
+              version: row.version,
+              type: row.type,
+              status: row.expired ? ('EXPIRED' as const) : row.status,
+            },
+          ]
+        : [],
+    );
   }
 
   async markCancelled(executor: DbExecutor, organizationId: string, operationId: string): Promise<OperationRecord | null> {

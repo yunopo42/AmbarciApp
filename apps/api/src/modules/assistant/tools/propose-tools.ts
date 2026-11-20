@@ -40,6 +40,13 @@ const NEXT_STEP =
 const NEXT_STEP_INSUFFICIENT =
   'Stok yetmeyen kalem var: öneri bu hâliyle onaylanamaz, onay reddedilir ve stok eksiye düşmez. Stok henüz değişmedi. Kullanıcıya eldeki miktarı söyle; miktarı düşürmek, başka depodan transfer etmek ya da öneriyi kartta iptal etmek isteyip istemediğini sor.';
 
+/**
+ * Aynı mesajda aynı öneri ikinci kez istendiğinde (#79). Kapı denemesinde model, notu ekleyemeyince aynı fire
+ * önerisini dört kez çağırmıştı; artık yeni kart açılmaz ve model bunu sonuçtan öğrenir.
+ */
+const NEXT_STEP_REUSED =
+  'Bu mesajda aynı kalemlerle açılmış bir öneri zaten var; yeni öneri açılmadı, kullanıcının ekranında aynı kart duruyor. Aynı öneriyi yeniden açmaya çalışma; bir şeyi değiştirmek gerekirse aynı aracı bu operation_id ile çağır.';
+
 export interface ProposeToolServices {
   operations: OperationsService;
   catalog: CatalogService;
@@ -177,13 +184,21 @@ function proposalTool<TInput extends { operation_id?: string | undefined }>(
         userId: context.userId,
         role: context.organization.role,
       };
+      const sourceMessageId = sourceMessageOf(context);
       try {
-        const operation = input.operation_id
-          ? await operations.revise(organizationId, actor, input.operation_id.toLowerCase(), request, {
-              sourceMessageId: sourceMessageOf(context),
-            })
-          : await operations.create(organizationId, actor, request, 'CHAT', { sourceMessageId: sourceMessageOf(context) });
-        return summarize(await operations.preview(organizationId, actor, operation.id));
+        if (input.operation_id) {
+          const revised = await operations.revise(organizationId, actor, input.operation_id.toLowerCase(), request, {
+            sourceMessageId,
+          });
+          return summarize(await operations.preview(organizationId, actor, revised.id));
+        }
+        // Sohbet turunda yeni öneri: aynı mesajda aynı öneri zaten açıksa yenisi açılmaz, o döner (#79).
+        if (sourceMessageId) {
+          const { operation, reused } = await operations.proposeFromChat(organizationId, actor, request, sourceMessageId);
+          return summarize(await operations.preview(organizationId, actor, operation.id), { reused });
+        }
+        const created = await operations.create(organizationId, actor, request, 'CHAT');
+        return summarize(await operations.preview(organizationId, actor, created.id));
       } catch (error) {
         throw await explainForModel(catalog, organizationId, request, error);
       }
@@ -283,7 +298,7 @@ interface ProposalSummary {
  * Modele dönen özet: kartta görünecek bilgiler (önizleme ucuyla aynı hesap, SQL'de). İç kimlik yalnızca
  * operation_id'dir (düzenleme için); ürün ve depo adlarıyla verilir.
  */
-function summarize(preview: OperationPreview): ProposalSummary {
+function summarize(preview: OperationPreview, { reused = false }: { reused?: boolean } = {}): ProposalSummary {
   const lines = preview.lines.map((line) => {
     const entered = amount(line.quantity, line.unit ?? line.baseUnit);
     // Yalnızca stoğu azalan depo yetmeyebilir (çıkış, fire, transferin çıkış deposu); giriş ve sayım her zaman yeter.
@@ -315,6 +330,8 @@ function summarize(preview: OperationPreview): ProposalSummary {
     note: preview.note,
     lines,
     insufficient_stock: insufficient,
-    next_step: insufficient ? NEXT_STEP_INSUFFICIENT : NEXT_STEP,
+    next_step: [reused ? NEXT_STEP_REUSED : null, insufficient ? NEXT_STEP_INSUFFICIENT : NEXT_STEP]
+      .filter((text) => text !== null)
+      .join(' '),
   };
 }
