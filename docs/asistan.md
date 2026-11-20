@@ -491,7 +491,7 @@ Kapı: sohbette önerilen işlem kartla onaylanınca stok tam bir kez değişir.
 
 | Test | Ortam | Ne doğrular |
 | --- | --- | --- |
-| `apps/api/test-db/proposal-gate.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`, sahte model) | Öneriler gerçek sohbet akışından açılır; onay ve iptal kartın yaptığı gibi HTTP'den gider. Aynı anahtarla tekrar (aynı cevap, stok bir kez); aynı anda çift dokunma (aynı anahtar); iki cihazdan aynı anda (farklı anahtar: biri 200, öteki `OPERATION_ALREADY_APPLIED`); onay ile iptalin yarışı; sohbette düzenleme ile eski kartın onayının yarışı; süresi dolmuş öneriye iki onay (hiçbiri uygulanmaz, süre aşımı bir kez yazılır); model aynı öneriyi bir turda tekrar tekrar ve paralel çağırınca tek öneri, tek kart; aynı mesajdan aynı öneri aynı anda iki kez (biri açar, öteki onu alır; farklı kalemli öneri ayrı açılır). Her senaryoda hareket, denetim ve outbox sayıları ile "stok = hareketlerin toplamı" |
+| `apps/api/test-db/proposal-gate.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`, sahte model) | Öneriler gerçek sohbet akışından açılır; onay ve iptal kartın yaptığı gibi HTTP'den gider. Aynı anahtarla tekrar (aynı cevap, stok bir kez); aynı anda çift dokunma (aynı anahtar); iki cihazdan aynı anda (farklı anahtar: biri 200, öteki `OPERATION_ALREADY_APPLIED`); onay ile iptalin yarışı; sohbette düzenleme ile eski kartın onayının yarışı; süresi dolmuş öneriye iki onay (hiçbiri uygulanmaz, süre aşımı bir kez yazılır); model aynı öneriyi bir turda tekrar tekrar ve paralel çağırınca tek öneri, tek kart; aynı turda aynı öneri hem yeniden açılır hem düzenlenirse yine tek öneri; aynı mesajdan aynı öneri aynı anda iki kez (biri açar, öteki onu alır; farklı kalemli öneri ayrı açılır). Her senaryoda hareket, denetim ve outbox sayıları ile "stok = hareketlerin toplamı" |
 | `apps/api/test/assistant-tools.spec.ts` | CI (sahte servisler) | Aynı mesajda aynı öneri ikinci kez istenince aynı `operation_id` ve "yeni öneri açılmadı" uyarısı |
 | `apps/api/test/conversations-rules.spec.ts` | CI | Durum notu: öneri yoksa not yok; her öneri kimliği, türü ve şu anki durumuyla; en fazla 10, en yenileri; not ekranda görünmez |
 | `apps/api/test-db/proposal-gate.db.spec.ts` (9. adım) | Gerçek veritabanı | Kart HTTP'den onaylandıktan sonra aynı sohbetteki yeni mesajda modele giden istek önce kullanıcının yazdığını, sonra "Uygulandı" diyen notu taşır; mesajlar ucu kullanıcı mesajını yalnızca yazıldığı gibi döndürür |
@@ -500,7 +500,13 @@ Yarışlar 3. haftanın yöntemiyle kurulur (`raceWhileLocked`): test satırı y
 
 ### Telefon denemesi
 
-Protokol ve gözlemler: [eval/kapi-denemesi-hafta-5.md](../eval/kapi-denemesi-hafta-5.md). Sonuçlar deneme bitince buraya özetlenecek.
+Protokol ve adım adım gözlemler: [eval/kapi-denemesi-hafta-5.md](../eval/kapi-denemesi-hafta-5.md). 19–20 Kasım 2026'da Android development build ile, Render'daki API'ye karşı, çalışan hesabıyla yapıldı.
+
+- **Kapı geçti.** Onaylanan her kart stoğu tam bir kez değiştirdi. Çift dokunma, bağlantı kesikken onay ve tekrar, iki cihazdan onay dahil her onaylanan önerinin kalem başına tek hareketi ve tek `operation.applied` kaydı var. İptal edilen ve süresi dolan önerilerin hiç hareketi yok.
+- **İlk geçişte 12 adımın 10'u doğruydu.** Yanlış olan iki adım (6: aynı öneri dört kez; 9: model onaylanmış kartları bekliyor sandı) modelin davranışından çıktı. İkisi de sunucuda düzeltildi (karar 1 ve 3) ve düzeltmeden sonraki tekrarlarda doğruydu.
+- **Belirsiz kalan:** Yeni sürüm yayına çıktıktan 18 saniye sonraki bir denemede (6b) yine iki kart açıldı. Modelin o çağrı düzeni testle kuruldu ve yeni kodda tek öneri kaldı. İsteği yayın geçişi sırasında eski sunucunun mu, yenisinin mi cevapladığı kesinleştirilemedi; yayın kesinleştikten sonraki denemede tek kart açıldı.
+- **Açık bulgular:** fire nedeni nota yazılmıyor (karar 2). Günlük kullanım sınırı önbellek okumasını tam saydığı için deneme ilk gün 16 mesajda durdu ve ertesi sabah sürdü.
+- **Ölçüm** (`ai_runs`, 26 mesaj): mesaj başına ortalama 2,9 model çağrısı, modelin toplam süresi medyan 5,5 sn, p90 10,8 sn; mesaj başına ortalama 30.000 token ve 0,0011 USD. Model hatası yok.
 
 ### Savunmada sorulabilecek sorular
 
