@@ -6,6 +6,8 @@ Kaynak: `docs/raporlar/hafta-01-arastirma-ve-oneri.md`, bölüm 8 (kapılar) ve 
 
 **Plan değişikliği (1 Kasım 2026):** 2–6 Kasım sınav haftası olduğu için 4. hafta ve sonrası bir hafta kaydırıldı; işlere 7 Kasım'da devam edilir. 4. haftanın kapısı 8 Kasım'a alındı, 5–8. haftalar birer hafta kaydı ve final demo 6 Aralık'a geldi (#63). İlk plan 29 Kasım'da bitiyordu.
 
+**Plan değişikliği (20 Kasım 2026):** 5. haftanın işleri 15 Kasım'a yetişmedi; hafta, kapısıyla birlikte 20 Kasım'da tamamlandı (#84). 6. hafta 21–22 Kasım'a sıkıştırıldı; kapsamı ölçüm (değerlendirme kümesi, Haiku–Sonnet kıyası) ve web onay kuyruğu. Push bildirimleri 7. haftaya alındı: önce outbox'ı okuyan worker'ın (pg-boss), cihaz token'larının ve EAS ayarının kurulması gerekiyor. Sohbetten geri alma (`chat-v3`) ve 5. hafta kapı denemesinin açık bulgusu (fire nedeninin nota yazılmaması) da 7. haftada. 7. ve 8. hafta ile final demo (6 Aralık) değişmedi.
+
 Her hafta bir GitHub milestone'u, her görev bir issue olarak açılır. Dört kapı vardır: 2., 4., 5. ve 8. hafta. Kapı geçilmeden sonraki faza geçilmez; geçilemezse kapsam daraltılır. Öncelik sırası: sohbet → öneri → onay → stok akışı, sonra irsaliye, sonra ses ve barkod. Son haftada yeni özellik eklenmez.
 
 | Hafta | Tarih | Odak | Kapı |
@@ -14,9 +16,9 @@ Her hafta bir GitHub milestone'u, her görev bir issue olarak açılır. Dört k
 | 2 | 12–22 Ekim | Veritabanı ve kimlik | İki şirket arasında veri sızıntısı yok (22 Ekim) |
 | 3 | 23–25 Ekim | Manuel stok | — |
 | 4 | 26 Ekim – 8 Kasım (2–6 Kasım sınav arası) | Asistan altyapısı | Telefonda canlı stok sorgusu (8 Kasım) |
-| 5 | 9–15 Kasım | Öneri ve onay | Onay stoğu tam bir kez değiştirir |
-| 6 | 16–22 Kasım | Ölçüm ve bildirim | — |
-| 7 | 23–29 Kasım | Belge, ses, barkod | — |
+| 5 | 9–20 Kasım | Öneri ve onay | Onay stoğu tam bir kez değiştirir (20 Kasım) |
+| 6 | 21–22 Kasım | Ölçüm ve onay kuyruğu | — |
+| 7 | 23–29 Kasım | Belge, ses, barkod; bildirim | — |
 | 8 | 30 Kasım – 6 Aralık | Test, rapor, demo | Final demo ve ölçülmüş sonuçlar |
 
 ## Hafta 1 — Araştırma ve iskelet (5–11 Ekim)
@@ -74,37 +76,42 @@ Planda olmayan, eklenen işler: bölgeler arası gecikme ölçümü ve onay sür
 
 ## Hafta 4 — Asistan altyapısı (26 Ekim – 8 Kasım)
 
-**Kapı:** Telefondan canlı stok sorgusu
+**Kapı:** Telefondan canlı stok sorgusu — **geçildi** (7 Kasım; telefonda 9 sorunun 9'u doğru; `docs/raporlar/hafta-04.md`)
 
-- [ ] Sohbet ve mesaj tabloları, ajan döngüsü, araç kayıt defteri
-- [ ] Okuma araçları: ürün arama (`pg_trgm`), stok sorgusu, son hareketler
-- [ ] SSE akışı; web ve mobilde sohbet ekranı
-- [ ] `ai_runs` kayıtları (token, süre, maliyet)
+- [x] Sohbet ve mesaj tabloları, ajan döngüsü, araç kayıt defteri
+- [x] Okuma araçları: ürün arama (`pg_trgm`), stok sorgusu, son hareketler
+- [x] SSE akışı; web ve mobilde sohbet ekranı
+- [x] `ai_runs` kayıtları (token, süre, maliyet)
 
 29 Ekim resmi tatili bu haftadadır; bir günlük tampon bırakılmıştır. 2–6 Kasım sınav haftasında iş yapılmaz; işlere 7 Kasım'da devam edilir.
 
-## Hafta 5 — Öneri ve onay (9–15 Kasım)
+## Hafta 5 — Öneri ve onay (9–20 Kasım)
 
-**Kapı:** Onay stoğu tam bir kez değiştirir
+**Kapı:** Onay stoğu tam bir kez değiştirir — **geçildi** (20 Kasım; gerçek veritabanında tekrar ve eşzamanlılık testleri, telefon denemesi; `docs/raporlar/hafta-05.md`)
 
-- [ ] Öneri araçları: giriş, çıkış, transfer, sayım, fire
-- [ ] İşlem kartı (mobil + web), durum makinesi, onay uç noktası
-- [ ] Idempotency, outbox, denetim kaydı; ters kayıtla geri alma (15 dk kendi işlemi, sonrası yönetici)
-- [ ] Tekrar ve eşzamanlılık testleri
+- [x] Öneri araçları: giriş, çıkış, transfer, sayım, fire
+- [x] İşlem kartı (mobil + web), durum makinesi, onay uç noktası
+- [x] Idempotency, outbox, denetim kaydı; ters kayıtla geri alma (15 dk kendi işlemi, sonrası yönetici)
+- [x] Tekrar ve eşzamanlılık testleri
 
-## Hafta 6 — Ölçüm ve bildirim (16–22 Kasım)
+Planda olmayan, eklenen işler: Claude API adresinin kodda sabitlenmesi (#72); sohbette ses uyarısının temizlenmesi ve kalın yazının gösterilmesi (#73); Next.js güvenlik güncellemesi (#91); kapı denemesinde bulunan iki hatanın düzeltmesi (#79: aynı önerinin tekrar açılması, modelin kartın onaylandığını bilmemesi).
+
+## Hafta 6 — Ölçüm ve onay kuyruğu (21–22 Kasım)
 
 **Kapı:** —
 
 - [ ] 100 etiketli mesaj (60 geliştirme, 40 test); `pnpm eval` betiği
 - [ ] Haiku–Sonnet kıyası, prompt iyileştirme, test kümesini dondurma
-- [ ] Push bildirimi: onay bekleyen işlem, kritik stok
 - [ ] Web onay kuyruğu ve dashboard
 
-## Hafta 7 — Belge, ses, barkod (23–29 Kasım)
+Push bildirimi 7. haftaya alındı (Plan değişikliği, 20 Kasım).
+
+## Hafta 7 — Belge, ses, barkod; bildirim (23–29 Kasım)
 
 **Kapı:** —
 
+- [ ] Push bildirimi: onay bekleyen işlem, kritik stok (6. haftadan; önce outbox worker'ı, cihaz token'ları ve EAS ayarı)
+- [ ] Sohbetten geri alma: `propose_reversal` ve son işlemleri listeleyen okuma aracı (`chat-v3`); fire nedeninin nota yazılmaması (5. hafta kapı denemesinin açık bulgusu)
 - [ ] Kamera ile irsaliye çekme, Sonnet ile kalem çıkarma, inceleme ekranı
 - [ ] Tesseract + Haiku ile kıyas deneyi (30–50 belge)
 - [ ] Cihazda ses tanıma ve sohbete bağlama
