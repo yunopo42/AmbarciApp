@@ -167,7 +167,7 @@ export interface ProposalCall {
  */
 export function fakeProposeServices(): { services: ProposeToolServices; calls: ProposalCall[] } {
   const calls: ProposalCall[] = [];
-  const opened = new Map<string, { input: CreateOperationInput; version: number }>();
+  const opened = new Map<string, { input: CreateOperationInput; version: number; sourceMessageId?: string }>();
 
   const check = (actor: OperationActor, input: CreateOperationInput): void => {
     const warehouses = input.items.flatMap((item) => [item.warehouseId, item.targetWarehouseId ?? MAIN]);
@@ -189,13 +189,27 @@ export function fakeProposeServices(): { services: ProposeToolServices; calls: P
   };
   const asOperation = (id: string): Operation => ({ id }) as Operation;
 
-  const operations: Pick<OperationsService, 'create' | 'revise' | 'preview'> = {
+  const operations: Pick<OperationsService, 'create' | 'proposeFromChat' | 'revise' | 'preview'> = {
     async create(_organizationId, actor, input, source, options) {
       check(actor, input);
       calls.push({ kind: 'create', actor, input, source, sourceMessageId: options?.sourceMessageId });
       const id = randomUUID();
       opened.set(id, { input, version: 1 });
       return asOperation(id);
+    },
+    // Gerçek servisin kuralı (#79), basitçe: aynı mesajda aynı istek zaten açıksa o döner.
+    async proposeFromChat(_organizationId, actor, input, sourceMessageId) {
+      check(actor, input);
+      calls.push({ kind: 'create', actor, input, source: 'CHAT', sourceMessageId });
+      const same = [...opened].find(
+        ([, entry]) => entry.sourceMessageId === sourceMessageId && JSON.stringify(entry.input) === JSON.stringify(input),
+      );
+      if (same) {
+        return { operation: asOperation(same[0]), reused: true };
+      }
+      const id = randomUUID();
+      opened.set(id, { input, version: 1, sourceMessageId });
+      return { operation: asOperation(id), reused: false };
     },
     async revise(_organizationId, actor, operationId, input) {
       check(actor, input);

@@ -316,6 +316,24 @@ describe('Öneri araçları (#74)', () => {
     ]);
   });
 
+  it('aynı mesajda aynı öneri ikinci kez istenirse yeni öneri açılmaz; model aynı kartı ve uyarıyı alır (#79)', async () => {
+    const tools = registry();
+    const input = { warehouse_id: MAIN, lines: [{ product_id: PRODUCT, quantity: '1' }] };
+
+    const first = await tools.registry.execute('propose_waste', input, messageContext);
+    const second = await tools.registry.execute('propose_waste', input, messageContext);
+
+    const [opened, repeated] = [first, second].map(
+      (outcome) => JSON.parse(outcome.content) as { operation_id: string; next_step: string },
+    );
+    expect(repeated?.operation_id).toBe(opened?.operation_id);
+    expect(second.operation).toEqual(first.operation);
+    expect(opened?.next_step).not.toContain('zaten');
+    expect(repeated?.next_step).toMatch(/^Bu mesajda aynı kalemlerle açılmış bir öneri zaten var; yeni öneri açılmadı/);
+    // Onay hatırlatması da kalır: kart hâlâ onay bekliyor.
+    expect(repeated?.next_step).toContain("Onayla'ya basmasını söyle");
+  });
+
   it('modele kartın bilgileri döner: Türkçe miktarlar, ana birim karşılığı, önce → sonra, onay bekliyor', async () => {
     const { result } = await propose('propose_stock_out', {
       warehouse_id: MAIN,

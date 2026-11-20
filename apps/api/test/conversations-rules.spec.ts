@@ -8,6 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StoredMessage } from '../src/modules/assistant/conversations.repository.js';
 import { answerTo, attachOperationCards, titleFrom, toChatMessages } from '../src/modules/assistant/conversations.service.js';
+import {
+  PROPOSAL_NOTE_HEADER,
+  PROPOSAL_NOTE_LIMIT,
+  proposalStatusNote,
+} from '../src/modules/assistant/proposal-status-note.js';
 import { SseStream } from '../src/modules/assistant/sse-stream.js';
 
 /** Express yanıtının SSE yazıcısının kullandığı kısmı. */
@@ -147,6 +152,16 @@ describe('Ekrandaki mesajlar ve kayıtlı cevap', () => {
     expect(toChatMessages(CONVERSATION).every((message) => message.operationIds.length === 0)).toBe(true);
   });
 
+  it('kullanıcı mesajına eklenen sunucu notu ekranda görünmez; yalnızca kullanıcının yazdığı (#79)', () => {
+    const withNote = [
+      stored(1, 'USER', [
+        { type: 'text', text: 'Merkezden 1 adet LED ampul çıkışı yap' },
+        { type: 'text', text: `${PROPOSAL_NOTE_HEADER} Bu sohbette açtığın önerilerin şu anki durumu…` },
+      ]),
+    ];
+    expect(toChatMessages(withNote).map(({ text }) => text)).toEqual(['Merkezden 1 adet LED ampul çıkışı yap']);
+  });
+
   it('kullanıcı mesajının kayıtlı cevabı, sıradaki kullanıcı mesajından önceki son asistan metnidir', () => {
     expect(answerTo(CONVERSATION, CONVERSATION[0] as StoredMessage)).toBe('1.400 metre var.');
     expect(answerTo(CONVERSATION, CONVERSATION[4] as StoredMessage)).toBe('');
@@ -163,5 +178,35 @@ describe('Ekrandaki mesajlar ve kayıtlı cevap', () => {
     expect(sendMessageSchema.safeParse({ clientMessageId: 'abc', text: 'priz' }).success).toBe(false);
     expect(sendMessageSchema.safeParse({ clientMessageId: randomUUID(), text: '   ' }).success).toBe(false);
     expect(sendMessageSchema.parse({ clientMessageId: randomUUID(), text: '  priz  ' }).text).toBe('priz');
+  });
+});
+
+describe('Önerilerin durum notu (#79)', () => {
+  it('sohbette öneri yoksa not yok', () => {
+    expect(proposalStatusNote([])).toBeNull();
+  });
+
+  it('her öneri kimliği, türü ve şu anki durumuyla; kullanıcının yazmadığı ve eski araç sonucunun geçersizliği söylenir', () => {
+    const [applied, pending, expired] = [randomUUID(), randomUUID(), randomUUID()];
+    const note = proposalStatusNote([
+      { id: applied, type: 'STOCK_OUT', status: 'APPLIED' },
+      { id: pending, type: 'WASTE', status: 'PENDING_CONFIRMATION' },
+      { id: expired, type: 'TRANSFER', status: 'EXPIRED' },
+    ]);
+    expect(note?.startsWith(PROPOSAL_NOTE_HEADER)).toBe(true);
+    expect(note).toContain(`- ${applied}: Çıkış, Uygulandı`);
+    expect(note).toContain(`- ${pending}: Fire, Onay bekliyor`);
+    expect(note).toContain(`- ${expired}: Transfer, Süresi doldu`);
+    expect(note).toContain('eskimiş olabilir');
+    expect(note).toContain('önceki öneri onay beklemiyorsa yeni öneri aç');
+  });
+
+  it(`en fazla ${PROPOSAL_NOTE_LIMIT} öneri, en yenileri`, () => {
+    const ids = Array.from({ length: PROPOSAL_NOTE_LIMIT + 2 }, () => randomUUID());
+    const note = proposalStatusNote(ids.map((id) => ({ id, type: 'STOCK_IN' as const, status: 'APPLIED' as const }))) ?? '';
+    expect(note).not.toContain(ids[0]);
+    expect(note).not.toContain(ids[1]);
+    expect(note).toContain(ids.at(-1));
+    expect(note).toContain(`(son ${PROPOSAL_NOTE_LIMIT})`);
   });
 });

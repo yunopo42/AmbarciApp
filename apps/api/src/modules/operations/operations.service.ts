@@ -62,6 +62,16 @@ export interface CreateOperationOptions {
   sourceMessageId?: string | null;
 }
 
+/** Katalogla doğrulanmış içerik: kayda girecek cari, not ve kalemler. */
+type OperationContent = { partyId: string | null; note: string | null; items: Omit<OperationItem, 'lineNo'>[] };
+
+/** Sohbetten yeni öneri isteğinin sonucu (#79). */
+export interface ChatProposal {
+  operation: Operation;
+  /** true: aynı mesajda aynı türde ve aynı kalemlerle onay bekleyen öneri vardı; yenisi açılmadı, o döndü. */
+  reused: boolean;
+}
+
 @Injectable()
 export class OperationsService {
   constructor(
@@ -120,9 +130,52 @@ export class OperationsService {
     options: CreateOperationOptions = {},
   ): Promise<Operation> {
     const content = await this.validateContent(executor, organizationId, input);
+    return this.insertValidated(executor, organizationId, actor, input.type, source, content, options);
+  }
+
+  /**
+   * Sohbetten yeni öneri (#74; tekrar koruması #79). Model aynı isteği birden fazla kez gönderebilir: telefondaki kapı
+   * denemesinde tek "fire yaz" mesajından dört ayrı fire önerisi açıldı ve dördü de onaylanabildi. Bu yüzden aynı
+   * mesajdan, aynı türde ve aynı kalemlerle (ürün, depo, hedef depo, miktar, birim, birim maliyet) onay bekleyen bir
+   * öneri varsa yenisi açılmaz, o döner. Kalemleri farklı öneriler (ör. aynı mesajda iki ayrı depoya giriş) ayrı ayrı
+   * açılır. Aynı mesajın öneri istekleri bir kilitle sıraya girer: modelin aynı turdaki paralel iki çağrısı da tek
+   * öneri açar.
+   */
+  async proposeFromChat(
+    organizationId: string,
+    actor: Extract<OperationActor, { kind: 'user' }>,
+    input: CreateOperationInput,
+    sourceMessageId: string,
+  ): Promise<ChatProposal> {
+    await this.assertCreateAccess(this.db, organizationId, actor, input.type, warehousesOf(linesOf(input.items)));
+    return this.db.transaction(async (tx) => {
+      await this.repository.lockChatProposals(tx, sourceMessageId);
+      const content = await this.validateContent(tx, organizationId, input);
+      const open = await this.repository.listOpenChatProposals(tx, organizationId, sourceMessageId, input.type);
+      const same = open.find((operation) => sameItems(operation.items, content.items));
+      if (same) {
+        return { operation: same, reused: true };
+      }
+      const operation = await this.insertValidated(tx, organizationId, actor, input.type, 'CHAT', content, {
+        sourceMessageId,
+      });
+      return { operation, reused: false };
+    });
+  }
+
+  /** Doğrulanmış içerikle işlemi ekler ve açılışın denetim kaydını yazar (create ve proposeFromChat ortak adımı). */
+  private async insertValidated(
+    executor: DbExecutor,
+    organizationId: string,
+    actor: OperationActor,
+    type: CreateOperationInput['type'],
+    source: ActionSource,
+    content: OperationContent,
+    options: CreateOperationOptions,
+  ): Promise<Operation> {
     const operation = await this.repository.insert(executor, {
       organizationId,
-      type: input.type,
+      type,
       source,
       createdBy: actorId(actor),
       sourceMessageId: options.sourceMessageId ?? null,
@@ -239,7 +292,7 @@ export class OperationsService {
     executor: DbExecutor,
     organizationId: string,
     input: CreateOperationInput,
-  ): Promise<{ partyId: string | null; note: string | null; items: Omit<OperationItem, 'lineNo'>[] }> {
+  ): Promise<OperationContent> {
     const lines = linesOf(input.items);
     const resolved = await this.resolveLines(executor, organizationId, input.type, lines);
     const warehouseErrors = await this.checkWarehouses(executor, organizationId, lines);
@@ -673,6 +726,43 @@ function linesOf(items: CreateOperationInput['items']): LineInput[] {
     unit: item.unit ?? null,
     unitCost: item.unitCost ?? null,
   }));
+}
+
+/**
+ * Kayıtlı kalemler istenenlerle sırasıyla aynı mı: ürün, depo, hedef depo, birim, miktar ve birim maliyet (#79).
+ * Ana birim adıyla verilen birim doğrulamada boşa çevrildiği için "adet" ile birimsiz istek aynı sayılır.
+ */
+function sameItems(saved: OperationItem[], requested: Omit<OperationItem, 'lineNo'>[]): boolean {
+  return (
+    saved.length === requested.length &&
+    saved.every((item, index) => {
+      const other = requested[index];
+      return (
+        other !== undefined &&
+        item.productId === other.productId &&
+        item.warehouseId === other.warehouseId &&
+        item.targetWarehouseId === other.targetWarehouseId &&
+        item.unit === other.unit &&
+        sameDecimal(item.quantity, other.quantity) &&
+        sameDecimal(item.unitCost, other.unitCost)
+      );
+    })
+  );
+}
+
+/**
+ * Veritabanı miktarı "1.000", istek "1" diye yazar; ikisi aynı miktardır. Sayıya çevrilmez (ADR-003): kesirdeki
+ * sondaki sıfırlar ve tam kısmın baştaki sıfırları atılıp metinler karşılaştırılır.
+ */
+function sameDecimal(a: string | null, b: string | null): boolean {
+  return a === null || b === null ? a === b : canonicalDecimal(a) === canonicalDecimal(b);
+}
+
+function canonicalDecimal(value: string): string {
+  const [whole = '', fraction = ''] = value.split('.');
+  const integer = whole.replace(/^0+(?=\d)/, '');
+  const digits = fraction.replace(/0+$/, '');
+  return digits ? `${integer}.${digits}` : integer;
 }
 
 function actorId(actor: OperationActor): string | null {

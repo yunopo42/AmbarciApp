@@ -20,6 +20,7 @@ import type { OrganizationContext } from '../organizations/organization-context.
 import { AgentLoop } from './agent-loop.js';
 import { ConversationsRepository } from './conversations.repository.js';
 import type { StoredMessage } from './conversations.repository.js';
+import { proposalStatusNote } from './proposal-status-note.js';
 
 /** Cevabın aktığı yer (SSE). open() çağrılana kadar istemciye hiçbir şey yazılmaz; hata JSON olarak dönebilir. */
 export interface ChatStreamSink {
@@ -45,13 +46,22 @@ function textOf(content: MessageContentBlock[]): string {
     .join('');
 }
 
-/** Ekranda gösterilen mesajlar: kullanıcının yazdıkları ve asistanın metinleri. Araç sonuçları ve düşünme gösterilmez. */
+/** Kullanıcının yazdığı: kullanıcı mesajının ilk metin bloğu. Varsa ikinci blok sunucunun durum notudur (#79). */
+function userTextOf(content: MessageContentBlock[]): string {
+  const first = content.find((block) => block.type === 'text' && typeof block.text === 'string');
+  return first ? (first.text as string) : '';
+}
+
+/**
+ * Ekranda gösterilen mesajlar: kullanıcının yazdıkları ve asistanın metinleri. Araç sonuçları, düşünme ve sunucunun
+ * kullanıcı mesajına eklediği durum notu gösterilmez.
+ */
 export function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
   return stored.flatMap((message): ChatMessage[] => {
     if (message.role === 'TOOL') {
       return [];
     }
-    const text = textOf(message.content);
+    const text = message.role === 'USER' ? userTextOf(message.content) : textOf(message.content);
     if (message.role === 'ASSISTANT' && text === '') {
       // Yalnızca araç çağrısı içeren model mesajı.
       return [];
@@ -249,12 +259,21 @@ export class ConversationsService {
           await this.repository.setTurnStatus(tx, { organizationId, conversationId, messageId: existing.id, status: 'IN_PROGRESS' });
           return { kind: 'started', message: { ...existing, status: 'IN_PROGRESS' } };
         }
+        // Sohbetteki önerilerin şu anki durumu mesaja not olarak eklenir (#79): model, kartın sohbet dışında
+        // onaylandığını ya da iptal edildiğini başka yoldan öğrenemez.
+        const note = proposalStatusNote(
+          await this.operations.listBySourceMessages(
+            organizationId,
+            await this.repository.listUserMessageIds(tx, organizationId, conversationId),
+          ),
+        );
         const message = await this.repository.insertUserMessage(tx, {
           organizationId,
           conversationId,
           userId,
           text: input.text,
           clientMessageId: input.clientMessageId,
+          note,
         });
         await this.repository.setTurnStatus(tx, {
           organizationId,
