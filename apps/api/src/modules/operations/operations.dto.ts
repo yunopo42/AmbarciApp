@@ -151,6 +151,9 @@ export class OperationDto implements Operation {
   })
   expiresAt!: string | null;
 
+  @ApiProperty({ format: 'uuid', nullable: true, type: String, description: 'Yalnızca ters kayıtta: geri aldığı işlem' })
+  reversedOperationId!: string | null;
+
   @ApiProperty({ type: [OperationItemDto] })
   items!: OperationItemDto[];
 }
@@ -250,6 +253,14 @@ export class OperationPreviewLineDto implements OperationPreviewLine {
   targetStock!: StockEffectDto | null;
 }
 
+export class ReversalRefDto {
+  @ApiProperty({ format: 'uuid' })
+  operationId!: string;
+
+  @ApiProperty({ enum: STATUSES })
+  status!: OperationStatus;
+}
+
 export class OperationPreviewDto implements OperationPreview {
   @ApiProperty({ format: 'uuid' })
   operationId!: string;
@@ -282,6 +293,29 @@ export class OperationPreviewDto implements OperationPreview {
     description: 'Sohbet önerisinin onaylanabileceği son an; süresi olmayan işlemde null',
   })
   expiresAt!: string | null;
+
+  @ApiProperty({ format: 'uuid', nullable: true, type: String, description: 'Yalnızca ters kayıtta: geri aldığı işlem' })
+  reversedOperationId!: string | null;
+
+  @ApiProperty({
+    type: ReversalRefDto,
+    nullable: true,
+    description: 'Bu işlemin onay bekleyen ya da uygulanmış ters kaydı; yoksa null',
+  })
+  reversal!: ReversalRefDto | null;
+
+  @ApiProperty({
+    description: 'Özeti isteyen kullanıcı bu işlemi şimdi geri alabilir mi (asıl kontrol istekte ve onayda, kilit altında)',
+  })
+  canReverse!: boolean;
+
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description: 'İşlemi açan çalışan için geri almanın son anı (uygulama + 15 dakika); yönetici ya da geri alınamıyorsa null',
+  })
+  reversibleUntil!: string | null;
 
   @ApiProperty({ type: [OperationPreviewLineDto] })
   lines!: OperationPreviewLineDto[];

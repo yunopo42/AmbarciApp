@@ -48,7 +48,12 @@ export interface OperationCardView {
   canConfirm: boolean;
   /** Onay bekliyor ve süresi dolmamış (yetmeyen stokta da iptal edilebilir, düzenlenebilir). */
   canCancel: boolean;
+  /** Sohbetle düzenleme: yalnızca onay bekleyen öneride; ters kayıt sohbetle düzenlenmez. */
   canEdit: boolean;
+  /** "Geri al" (#78): uygulanmış, ters kaydı olmayan ve kullanıcının geri alma yetkisi ve süresi olan işlemde. */
+  canReverse: boolean;
+  /** İşlemin onay bekleyen ya da uygulanmış ters kaydı: kart onu kendi altında, ayrı bir kart olarak gösterir. */
+  reversalId: string | null;
   /** Kartın altındaki not. */
   footnote: string | null;
   /** Onay bekleyen önerinin son onay anı (ISO); süresi olmayan işlemde null. */
@@ -113,9 +118,16 @@ export function operationCardView(preview: CardPreview, now: Date): OperationCar
   const lines = preview.lines.map((line) => lineOf(preview.type, line));
   const shortage = lines.some((line) => line.shortage !== null);
 
+  const reversal = preview.type === 'REVERSAL';
   let footnote: string | null = null;
-  if (pending) {
+  if (pending && reversal) {
+    footnote = shortage
+      ? 'Stok yetmediği için bu işlem geri alınamaz: geri alınacak mal depoda yok.'
+      : 'Onaylanınca işlemin stoğa etkisi tersine çevrilir. Onaylamadan stok değişmez.';
+  } else if (pending) {
     footnote = shortage ? 'Stok yetmediği için bu öneri onaylanamaz. Miktarı sohbette düzeltebilir ya da iptal edebilirsin.' : 'Onaylamadan stok değişmez.';
+  } else if (status === 'REVERSED') {
+    footnote = 'Bu işlem ters kayıtla geri alındı.';
   } else if (status === 'EXPIRED') {
     footnote = 'Önerinin süresi doldu; stok değişmedi. Gerekirse asistandan yeni bir öneri iste.';
   } else if (status === 'CANCELLED') {
@@ -130,7 +142,9 @@ export function operationCardView(preview: CardPreview, now: Date): OperationCar
     lines,
     canConfirm: pending && !shortage,
     canCancel: pending,
-    canEdit: pending,
+    canEdit: pending && !reversal,
+    canReverse: status === 'APPLIED' && preview.canReverse,
+    reversalId: preview.reversal?.operationId ?? null,
     footnote,
     expiresAt: pending ? preview.expiresAt : null,
   };
@@ -164,9 +178,15 @@ export function cardActionFailure(failure: ApiFailure): { message: string; refre
       return { message: 'Bu öneri başka bir cihazdan onaylanmış; stok bir kez değişti.', refresh: true };
     case 'NETWORK_ERROR':
       return { message: `${failure.message} Tekrar denersen stok iki kez değişmez.`, refresh: false };
+    // Durum ya da stok değişmiş; geri almada (#78) işlem bu arada geri alınmış, süre dolmuş ya da yetki değişmiş.
+    // Kart güncel hâlini okusun.
     case 'INSUFFICIENT_STOCK':
     case 'OPERATION_EXPIRED':
     case 'OPERATION_NOT_PENDING':
+    case 'OPERATION_ALREADY_REVERSED':
+    case 'OPERATION_NOT_REVERSIBLE':
+    case 'REVERSAL_WINDOW_PASSED':
+    case 'REVERSAL_FORBIDDEN':
       return { message: failure.message, refresh: true };
     default:
       return { message: failure.message, refresh: false };

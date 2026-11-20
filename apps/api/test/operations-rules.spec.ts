@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
 import { createOperationSchema, isZeroQuantity } from '@ambarci/shared';
+import type { OperationItem } from '@ambarci/shared';
 import { describe, expect, it } from 'vitest';
 
 import { stockKeysOf } from '../src/modules/inventory/apply-stock.service.js';
 import type { ApplyLine } from '../src/modules/inventory/apply-stock.service.js';
 import { canTransition } from '../src/modules/operations/operation-state.js';
+import { reversalDenial, reversalItemsOf, reversalStepsOf } from '../src/modules/operations/operations.service.js';
 
 // Veritabanı gerektirmeyen kurallar: durum makinesi, kilit sırası ve işlem şeması. Stok transaction'ının kendisi
 // gerçek veritabanında sınanır (test-db/operations.db.spec.ts).
@@ -130,5 +132,72 @@ describe('İşlem şeması', () => {
   it('ters kayıt bu uç noktadan açılamaz; en az bir kalem gerekir', () => {
     expect(issues({ type: 'REVERSAL', items: [item()] })).toEqual(['type']);
     expect(issues({ type: 'STOCK_IN', items: [] })).toEqual(['items']);
+  });
+});
+
+// Ters kayıt (#78): geri alma kuralı ve geri alınan hareketlerden ters kaydın kalemleri ve adımları.
+describe('Ters kayıt kuralları', () => {
+  const creator = randomUUID();
+  const applied = { type: 'STOCK_OUT' as const, status: 'APPLIED' as const, createdBy: creator, withinReversalWindow: true };
+  const employee = { kind: 'user' as const, userId: creator, role: 'EMPLOYEE' as const };
+  const admin = { kind: 'user' as const, userId: randomUUID(), role: 'ADMIN' as const };
+  const codeOf = (record: Parameters<typeof reversalDenial>[1], actor: Parameters<typeof reversalDenial>[0] = employee): string | null =>
+    reversalDenial(actor, record)?.code ?? null;
+
+  it('açan çalışan 15 dakika içinde geri alır; süre geçince ya da başkasının işleminde yalnızca yönetici', () => {
+    expect(codeOf(applied)).toBeNull();
+    expect(codeOf({ ...applied, withinReversalWindow: false })).toBe('REVERSAL_WINDOW_PASSED');
+    expect(codeOf({ ...applied, createdBy: randomUUID() })).toBe('REVERSAL_FORBIDDEN');
+    expect(codeOf({ ...applied, createdBy: null })).toBe('REVERSAL_FORBIDDEN');
+    expect(codeOf({ ...applied, withinReversalWindow: false, createdBy: randomUUID() }, admin)).toBeNull();
+  });
+
+  it('açılışı yalnızca yönetici; ters kayıt, geri alınmış ve uygulanmamış işlem kimse tarafından geri alınamaz', () => {
+    expect(codeOf({ ...applied, type: 'OPENING' })).toBe('REVERSAL_FORBIDDEN');
+    expect(codeOf({ ...applied, type: 'OPENING' }, admin)).toBeNull();
+    expect(codeOf({ ...applied, type: 'REVERSAL' }, admin)).toBe('OPERATION_NOT_REVERSIBLE');
+    expect(codeOf({ ...applied, status: 'REVERSED' }, admin)).toBe('OPERATION_ALREADY_REVERSED');
+    expect(codeOf({ ...applied, status: 'PENDING_CONFIRMATION' }, admin)).toBe('OPERATION_NOT_REVERSIBLE');
+    expect(codeOf({ ...applied, status: 'CANCELLED' }, admin)).toBe('OPERATION_NOT_REVERSIBLE');
+  });
+
+  const [product, main, branch] = [randomUUID(), randomUUID(), randomUUID()];
+  const line = (lineNo: number, extra: Partial<OperationItem> = {}): OperationItem => ({
+    lineNo,
+    productId: product,
+    warehouseId: main,
+    targetWarehouseId: null,
+    quantity: '12',
+    unit: 'koli',
+    unitCost: null,
+    ...extra,
+  });
+
+  it('ters kaydın kalemleri ana birimde ve hareketin büyüklüğü kadar; stok değiştirmeyen kalem atlanır', () => {
+    const items = [line(1), line(2), line(3, { targetWarehouseId: branch })];
+    const movements = [
+      { lineNo: 1, warehouseId: main, quantityChange: '-144.000' },
+      // 2. kalem: farkı çıkmayan sayım, hareketi yok.
+      { lineNo: 3, warehouseId: main, quantityChange: '-5.000' },
+      { lineNo: 3, warehouseId: branch, quantityChange: '5.000' },
+    ];
+    expect(reversalItemsOf(items, movements)).toEqual([
+      { lineNo: 1, productId: product, warehouseId: main, targetWarehouseId: null, quantity: '144.000', unit: null, unitCost: null },
+      { lineNo: 3, productId: product, warehouseId: main, targetWarehouseId: branch, quantity: '5.000', unit: null, unitCost: null },
+    ]);
+  });
+
+  it('adımlar hareketlerin tersten sırası; kaynak ve hedef taraf, işaret ve maliyet hareketten', () => {
+    const movements = [
+      { lineNo: 1, warehouseId: main, productId: product, quantityChange: '40.000', unitCost: '50.0000' },
+      { lineNo: 2, warehouseId: main, productId: product, quantityChange: '-5.000', unitCost: '8.0000' },
+      { lineNo: 2, warehouseId: branch, productId: product, quantityChange: '5.000', unitCost: '8.0000' },
+    ];
+    const items = [line(1), line(2, { targetWarehouseId: branch })];
+    expect(reversalStepsOf(movements, items)).toEqual([
+      { lineNo: 2, side: 'target', warehouseId: branch, productId: product, originalChange: '5.000', unitCost: '8.0000' },
+      { lineNo: 2, side: 'source', warehouseId: main, productId: product, originalChange: '-5.000', unitCost: '8.0000' },
+      { lineNo: 1, side: 'source', warehouseId: main, productId: product, originalChange: '40.000', unitCost: '50.0000' },
+    ]);
   });
 });

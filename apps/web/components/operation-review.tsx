@@ -1,8 +1,9 @@
 'use client';
 
 import type { ConfirmOperationResult, OperationPreview, OperationPreviewLine, OperationStatus, StockEffect } from '@ambarci/shared';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Undo2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { JSX } from 'react';
 
 import { OrganizationGate } from '@/components/organization-gate';
@@ -53,6 +54,7 @@ function ReviewBody({ operationId }: { operationId: string }): JSX.Element {
   // denemeleri aynı anahtarı taşır: çift tıklamada ya da ağ hatasından sonra tekrar denendiğinde API işlemi uygulanmış
   // ve anahtarı aynı bulur, ilk cevabı döner; stok ikinci kez değişmez.
   const actions = useOperationActions(operationId);
+  const router = useRouter();
   const { busy, result } = actions;
   const actionError = actions.failure?.message ?? null;
   const shortages = new Map<number, Shortage>(
@@ -77,6 +79,16 @@ function ReviewBody({ operationId }: { operationId: string }): JSX.Element {
   const hasShortage = preview.lines.some((line) => line.stock?.sufficient === false || line.targetStock?.sufficient === false);
   const showCost = preview.type === 'STOCK_IN' || preview.type === 'OPENING';
   const statusVariant = STATUS_BADGE[preview.status] ?? 'muted';
+  const isReversal = preview.type === 'REVERSAL';
+
+  // Geri al (#78): onay bekleyen bir ters kayıt açılır (ya da bekleyen bulunur) ve onun özetine geçilir; stok orada,
+  // ters kaydın onayıyla değişir.
+  async function startReversal(): Promise<void> {
+    const reversalId = await actions.reverse();
+    if (reversalId) {
+      router.push(`/operations/${reversalId}`);
+    }
+  }
 
   return (
     <>
@@ -92,6 +104,22 @@ function ReviewBody({ operationId }: { operationId: string }): JSX.Element {
         <Alert variant="applied">Bu işlem onaylandı.</Alert>
       ) : null}
       {preview.status === 'CANCELLED' ? <p className="text-text-muted">Bu işlem iptal edildi; stok değişmedi.</p> : null}
+      {isReversal && preview.reversedOperationId ? (
+        <p className="text-text-muted">
+          Bu ters kayıt bir işlemi geri alır.{' '}
+          <Link href={`/operations/${preview.reversedOperationId}`} className="text-primary-action underline">
+            Geri alınan işlemi aç
+          </Link>
+        </p>
+      ) : null}
+      {preview.reversal ? (
+        <p className="text-text-muted">
+          {preview.reversal.status === 'APPLIED' ? 'Bu işlem ters kayıtla geri alındı.' : 'Bu işlemin onay bekleyen bir ters kaydı var.'}{' '}
+          <Link href={`/operations/${preview.reversal.operationId}`} className="text-primary-action underline">
+            Ters kaydı aç
+          </Link>
+        </p>
+      ) : null}
       {actionError ? <Alert>{actionError}</Alert> : null}
 
       <Card>
@@ -164,8 +192,27 @@ function ReviewBody({ operationId }: { operationId: string }): JSX.Element {
           </div>
           <p className="text-text-muted">
             {hasShortage
-              ? 'Stoğu yetmeyen kalem var; bu hâliyle onaylanamaz. İşlemi iptal edip miktarı düzelterek yeniden açın.'
-              : 'Onaylamadan stok değişmez.'}
+              ? isReversal
+                ? 'Geri alınacak mal depoda yok; ters kayıt bu hâliyle onaylanamaz. İptal edebilirsiniz.'
+                : 'Stoğu yetmeyen kalem var; bu hâliyle onaylanamaz. İşlemi iptal edip miktarı düzelterek yeniden açın.'
+              : isReversal
+                ? 'Onaylanınca işlemin stoğa etkisi tersine çevrilir. Onaylamadan stok değişmez.'
+                : 'Onaylamadan stok değişmez.'}
+          </p>
+        </div>
+      ) : null}
+
+      {preview.canReverse ? (
+        <div className="flex flex-col gap-2">
+          <div>
+            <Button variant="secondary" onClick={() => void startReversal()} disabled={busy}>
+              <Undo2 aria-hidden />
+              {actions.reversing ? 'Ters kayıt açılıyor…' : 'Geri al'}
+            </Button>
+          </div>
+          <p className="text-text-muted">
+            Geri al, onay bekleyen bir ters kayıt açar; stok, ters kaydı onaylayınca eski hâline döner.
+            {preview.reversibleUntil ? ` İşlemi açan olarak ${formatDateTime(preview.reversibleUntil)} saatine kadar geri alabilirsiniz.` : ''}
           </p>
         </div>
       ) : null}

@@ -302,6 +302,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operations/{operationId}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Uygulanmış işlemi geri almak için ters kalemli, onay bekleyen bir ters kayıt (REVERSAL) açar; stok onayla değişir. Onay bekleyen ters kaydı varsa onu döner (200) */
+        post: operations["OperationsController_reverse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/operations/{operationId}/cancel": {
         parameters: {
             query?: never;
@@ -741,6 +758,11 @@ export interface components {
              * @description Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an (son değişiklik + 30 dakika)
              */
             expiresAt: string | null;
+            /**
+             * Format: uuid
+             * @description Yalnızca ters kayıtta: geri aldığı işlem
+             */
+            reversedOperationId: string | null;
             items: components["schemas"]["OperationItemDto"][];
         };
         WarehouseRefDto: {
@@ -770,6 +792,12 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        ReversalRefDto: {
+            /** Format: uuid */
+            operationId: string;
+            /** @enum {string} */
+            status: "RECEIVED" | "NEEDS_CLARIFICATION" | "PENDING_CONFIRMATION" | "APPLIED" | "REVERSED" | "CANCELLED" | "EXPIRED" | "FAILED";
         };
         StockEffectDto: {
             /**
@@ -844,6 +872,20 @@ export interface components {
              * @description Sohbet önerisinin onaylanabileceği son an; süresi olmayan işlemde null
              */
             expiresAt: string | null;
+            /**
+             * Format: uuid
+             * @description Yalnızca ters kayıtta: geri aldığı işlem
+             */
+            reversedOperationId: string | null;
+            /** @description Bu işlemin onay bekleyen ya da uygulanmış ters kaydı; yoksa null */
+            reversal: components["schemas"]["ReversalRefDto"] | null;
+            /** @description Özeti isteyen kullanıcı bu işlemi şimdi geri alabilir mi (asıl kontrol istekte ve onayda, kilit altında) */
+            canReverse: boolean;
+            /**
+             * Format: date-time
+             * @description İşlemi açan çalışan için geri almanın son anı (uygulama + 15 dakika); yönetici ya da geri alınamıyorsa null
+             */
+            reversibleUntil: string | null;
             lines: components["schemas"]["OperationPreviewLineDto"][];
         };
         ConfirmOperationDto: {
@@ -2229,6 +2271,76 @@ export interface operations {
             };
             /** @description Kalemlerde ürün, birim ya da depo artık geçersiz */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    OperationsController_reverse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description İşlemin onay bekleyen ters kaydı zaten vardı */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationDto"];
+                };
+            };
+            /** @description Yeni ters kayıt açıldı */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /**
+             * @description Geri alma yetkisi yok: işlemi açan kişi 15 dakika içinde, yönetici her zaman; açılışı yalnızca yönetici
+             *
+             *     Şirkete, role ya da depoya erişim yok
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description İşlem uygulanmamış, zaten geri alınmış, ters kayıt ya da stoğu değiştirmemiş */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

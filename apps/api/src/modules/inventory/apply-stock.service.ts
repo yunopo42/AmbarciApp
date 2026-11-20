@@ -26,6 +26,31 @@ export interface ApplyInput {
   lines: ApplyLine[];
 }
 
+/**
+ * Ters kaydın bir adımı (#78): geri alınan işlemin bir hareketinin tersi. Transfer kaleminin iki adımı vardır (çıkan
+ * ve giren depo); diğerlerinin bir. Miktar ve maliyet hareketten olduğu gibi gelir, hesap SQL'de yapılır.
+ */
+export interface ReversalStep {
+  /** Ters kaydın kalem numarası (geri alınan işleminkiyle aynı). */
+  lineNo: number;
+  /** Kalemin kaynak deposu mu, transferde hedef deposu mu (önizleme bu ikisini ayrı gösterir). */
+  side: 'source' | 'target';
+  warehouseId: string;
+  productId: string;
+  /** Geri alınan hareketin işaretli değişimi (ör. girişte "40.000", çıkışta "-5.000"); ters kayıt tersini yazar. */
+  originalChange: string;
+  /** Geri alınan hareketin birim maliyeti: ters kayıt stok değerini bu maliyetle geri çevirir. */
+  unitCost: string;
+}
+
+export interface ReverseInput {
+  organizationId: string;
+  /** Ters kaydın kimliği: hareketler ona yazılır. */
+  operationId: string;
+  /** Uygulama sırasıyla: geri alınan hareketlerin tersten sırası. */
+  steps: ReversalStep[];
+}
+
 /** Yetersiz stok hatasının kalem bazında ayrıntısı. */
 export interface StockShortage {
   lineNo: number;
@@ -145,17 +170,77 @@ export class ApplyStockService {
           break;
         }
         case 'REVERSAL':
-          throw new Error('Ters kayıt 5. haftada eklenecek.');
+          // Ters kaydın kalemleri hareket türünü taşımaz; reverse() geri alınan işlemin hareketlerinden çalışır.
+          throw new Error('Ters kayıt reverse() ile uygulanır.');
       }
     }
 
     if (shortages.length > 0) {
+      throw insufficientStock(shortages);
+    }
+    return movements;
+  }
+
+  /**
+   * Ters kaydı uygular (#78): geri alınan işlemin her hareketinin tersini, aynı birim maliyetle yazar. Stok değeri tam
+   * geri çevrilir:
+   *   - hareket stoğu azaltmıştı (çıkış, fire, transfer çıkışı, sayım noksanı) → mal o hareketin maliyetiyle geri
+   *     girer, ortalama ağırlıklı değişir (increase);
+   *   - hareket stoğu artırmıştı (giriş, transfer girişi, sayım fazlası) → mal o maliyetle çıkar ve değerden düşülür
+   *     (decreaseAtCost).
+   * Kilit sırası onaydakiyle aynıdır (ürün, sonra depo). Stoğu yetmeyen adım varsa hepsi tek hatada bildirilir ve
+   * transaction geri alınır: ters kayıt stoğu eksiye düşüremez.
+   */
+  async reverse(executor: DbExecutor, input: ReverseInput): Promise<Movement[]> {
+    const { organizationId, operationId } = input;
+    const keys = sortedKeys(input.steps.map(({ warehouseId, productId }) => ({ warehouseId, productId })));
+    await this.ledger.ensureRows(executor, organizationId, keys);
+    const rows = await this.ledger.lockRows(executor, organizationId, keys);
+    const inactive = [...new Set(rows.filter((row) => !row.warehouseActive).map((row) => row.warehouseId))];
+    if (inactive.length > 0) {
       throw new ApiException(
-        HttpStatus.CONFLICT,
-        'INSUFFICIENT_STOCK',
-        'Stok yetersiz; işlem uygulanmadı.',
-        shortages,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'WAREHOUSE_INACTIVE',
+        'Pasif bir depoda stok işlemi yapılamaz.',
+        { warehouseIds: inactive },
       );
+    }
+
+    const movements: Movement[] = [];
+    const shortages: StockShortage[] = [];
+    for (const step of input.steps) {
+      const target: MovementTarget = {
+        organizationId,
+        operationId,
+        lineNo: step.lineNo,
+        warehouseId: step.warehouseId,
+        productId: step.productId,
+        // Ters kaydın kalemleri ana birimdedir (miktar hareketlerden gelir).
+        unitFactor: '1',
+      };
+      // İşaret metinden okunur; miktar sayıya çevrilmez (ADR-003).
+      const wasDecrease = step.originalChange.startsWith('-');
+      const quantity = step.originalChange.replace(/^[-+]/, '');
+      if (wasDecrease) {
+        movements.push(await this.ledger.increase(executor, target, { type: 'REVERSAL', quantity, unitCost: step.unitCost }));
+        continue;
+      }
+      const out = await this.ledger.decreaseAtCost(executor, target, { type: 'REVERSAL', quantity, unitCost: step.unitCost });
+      if (out) {
+        movements.push(out);
+      } else {
+        shortages.push({
+          lineNo: step.lineNo,
+          productId: step.productId,
+          warehouseId: step.warehouseId,
+          requested: quantity,
+          available: await this.ledger.currentQuantity(executor, organizationId, step),
+        });
+      }
+    }
+
+    if (shortages.length > 0) {
+      throw insufficientStock(shortages);
     }
     return movements;
   }
@@ -183,16 +268,25 @@ export class ApplyStockService {
  * PostgreSQL'in uuid sıralamasıyla aynıdır.
  */
 export function stockKeysOf(type: OperationType, lines: ApplyLine[]): StockKey[] {
+  return sortedKeys(
+    lines.flatMap((line) =>
+      type === 'TRANSFER' && line.targetWarehouseId
+        ? [line, { warehouseId: line.targetWarehouseId, productId: line.productId }]
+        : [line],
+    ),
+  );
+}
+
+/** Stok satırları tekrarsız ve ürün, sonra depo kimliğine göre artan sırada (onay ve ters kayıt aynı sırayı kullanır). */
+export function sortedKeys(pairs: StockKey[]): StockKey[] {
   const keys = new Map<string, StockKey>();
-  const add = (warehouseId: string, productId: string): void => {
-    const key = { warehouseId: warehouseId.toLowerCase(), productId: productId.toLowerCase() };
+  for (const pair of pairs) {
+    const key = { warehouseId: pair.warehouseId.toLowerCase(), productId: pair.productId.toLowerCase() };
     keys.set(`${key.productId}:${key.warehouseId}`, key);
-  };
-  for (const line of lines) {
-    add(line.warehouseId, line.productId);
-    if (type === 'TRANSFER' && line.targetWarehouseId) {
-      add(line.targetWarehouseId, line.productId);
-    }
   }
   return [...keys.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, key]) => key);
+}
+
+function insufficientStock(shortages: StockShortage[]): ApiException {
+  return new ApiException(HttpStatus.CONFLICT, 'INSUFFICIENT_STOCK', 'Stok yetersiz; işlem uygulanmadı.', shortages);
 }

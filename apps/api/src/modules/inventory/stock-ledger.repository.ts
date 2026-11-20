@@ -155,6 +155,47 @@ export class StockLedgerRepository {
   }
 
   /**
+   * Ters kayıtta stoğu azaltır (#78): geri alınan hareket stoğu artırmıştı (giriş, transfer girişi, sayım fazlası).
+   * Mal, o hareketin birim maliyetiyle çıkar ve stok değerinden tam o kadar düşülür:
+   *   yeni ortalama = round((stok × ortalama − miktar × maliyet) ÷ (stok − miktar), 4).
+   * Arada başka hareket yoksa ortalama, geri alınan hareketten önceki değerine döner. Kalan stok sıfırsa ya da ara
+   * hareketler yüzünden kalan değer eksiye düşecekse ortalama değişmez. Stok yetmiyorsa null döner (decrease gibi).
+   */
+  async decreaseAtCost(
+    executor: DbExecutor,
+    target: MovementTarget,
+    input: { type: MovementType; quantity: string; unitCost: string },
+  ): Promise<Movement | null> {
+    const { quantity, unitCost } = input;
+    const [movement] = await executor.execute<Movement>(sql`
+      with changed as (
+        update ${inventory}
+        set average_cost = case
+              when quantity - ${quantity}::numeric > 0
+                   and quantity * average_cost - ${quantity}::numeric * ${unitCost}::numeric >= 0
+                then round((quantity * average_cost - ${quantity}::numeric * ${unitCost}::numeric)
+                           / (quantity - ${quantity}::numeric), 4)
+              else average_cost
+            end,
+            quantity = quantity - ${quantity}::numeric,
+            updated_at = now()
+        where organization_id = ${target.organizationId}
+          and warehouse_id = ${target.warehouseId} and product_id = ${target.productId}
+          and quantity >= ${quantity}::numeric
+        returning quantity, average_cost
+      )
+      insert into ${inventoryMovements}
+        (organization_id, operation_id, line_no, warehouse_id, product_id, type, quantity_change, unit_factor,
+         unit_cost, quantity_after, average_cost_after)
+      select ${target.organizationId}::uuid, ${target.operationId}::uuid, ${target.lineNo}::smallint, ${target.warehouseId}::uuid,
+             ${target.productId}::uuid, ${input.type}::movement_type, -(${quantity}::numeric), ${target.unitFactor}::numeric,
+             ${unitCost}::numeric, changed.quantity, changed.average_cost
+      from changed
+      returning ${MOVEMENT_RETURNING}`);
+    return movement ?? null;
+  }
+
+  /**
    * Sayım sonucunu yazar. Sistemdeki miktar aynı ifadede kilitli stok satırından okunur (öneri anındaki değer
    * değil). Farkı veritabanı hesaplar (stock_counts.difference); yönü ve büyüklüğü de buradan döner.
    */

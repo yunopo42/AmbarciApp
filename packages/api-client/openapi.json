@@ -1773,6 +1773,95 @@
         ]
       }
     },
+    "/v1/operations/{operationId}/reverse": {
+      "post": {
+        "operationId": "OperationsController_reverse",
+        "parameters": [
+          {
+            "name": "operationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "İşlemin onay bekleyen ters kaydı zaten vardı",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Yeni ters kayıt açıldı",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Geri alma yetkisi yok: işlemi açan kişi 15 dakika içinde, yönetici her zaman; açılışı yalnızca yönetici\n\nŞirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "İşlem uygulanmamış, zaten geri alınmış, ters kayıt ya da stoğu değiştirmemiş",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Uygulanmış işlemi geri almak için ters kalemli, onay bekleyen bir ters kayıt (REVERSAL) açar; stok onayla değişir. Onay bekleyen ters kaydı varsa onu döner (200)",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
     "/v1/operations/{operationId}/cancel": {
       "post": {
         "operationId": "OperationsController_cancel",
@@ -3250,6 +3339,12 @@
             "nullable": true,
             "description": "Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an (son değişiklik + 30 dakika)"
           },
+          "reversedOperationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Yalnızca ters kayıtta: geri aldığı işlem"
+          },
           "items": {
             "type": "array",
             "items": {
@@ -3270,6 +3365,7 @@
           "appliedAt",
           "createdAt",
           "expiresAt",
+          "reversedOperationId",
           "items"
         ]
       },
@@ -3382,6 +3478,32 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "ReversalRefDto": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "NEEDS_CLARIFICATION",
+              "PENDING_CONFIRMATION",
+              "APPLIED",
+              "REVERSED",
+              "CANCELLED",
+              "EXPIRED",
+              "FAILED"
+            ]
+          }
+        },
+        "required": [
+          "operationId",
+          "status"
         ]
       },
       "StockEffectDto": {
@@ -3562,6 +3684,32 @@
             "nullable": true,
             "description": "Sohbet önerisinin onaylanabileceği son an; süresi olmayan işlemde null"
           },
+          "reversedOperationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Yalnızca ters kayıtta: geri aldığı işlem"
+          },
+          "reversal": {
+            "nullable": true,
+            "description": "Bu işlemin onay bekleyen ya da uygulanmış ters kaydı; yoksa null",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReversalRefDto"
+              }
+            ]
+          },
+          "canReverse": {
+            "type": "boolean",
+            "description": "Özeti isteyen kullanıcı bu işlemi şimdi geri alabilir mi (asıl kontrol istekte ve onayda, kilit altında)"
+          },
+          "reversibleUntil": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "İşlemi açan çalışan için geri almanın son anı (uygulama + 15 dakika); yönetici ya da geri alınamıyorsa null"
+          },
           "lines": {
             "type": "array",
             "items": {
@@ -3579,6 +3727,10 @@
           "note",
           "createdAt",
           "expiresAt",
+          "reversedOperationId",
+          "reversal",
+          "canReverse",
+          "reversibleUntil",
           "lines"
         ]
       },
