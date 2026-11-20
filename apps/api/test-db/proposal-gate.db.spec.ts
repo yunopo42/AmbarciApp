@@ -346,6 +346,34 @@ describe('5. hafta kapısı: onay stoğu tam bir kez değiştirir (gerçek verit
     expect(items.filter((message) => message.role === 'user').map((message) => message.text)).toEqual([ask, ask]);
   });
 
+  // Telefon denemesi, 6. adımın tekrarı (20 Kasım 10.04, yeni kod yayındayken): model aynı turda iki paralel çağrı yaptı:
+  // aynı öneriyi operation_id olmadan yeniden açmak ve kendi önerisini operation_id ile düzenlemek. İki kart açıldı.
+  it('aynı turda aynı öneri hem yeniden açılır hem düzenlenirse (paralel): yine tek öneri', async () => {
+    const { operationId: first, messageId } = await proposeInChat('1');
+    const input = { warehouse_id: fx.main, lines: [{ product_id: cable, quantity: '1', unit: 'makara' }] };
+
+    // Yeniden açma mesajın kilidinde, düzenleme işlemin satır kilidinde bekler; ikisi birlikte bırakılır.
+    const outcomes = await raceWhileLocked(
+      fx.db,
+      [
+        sql`select pg_advisory_xact_lock(hashtextextended(${messageId}::text, 0))`,
+        sql`select 1 from operations where id = ${first} for update`,
+      ],
+      2,
+      () => [
+        tools.execute('propose_stock_out', input, { ...admin, messageId }),
+        tools.execute('propose_stock_out', { ...input, operation_id: first }, { ...admin, messageId }),
+      ],
+    );
+
+    expect(outcomes.map((outcome) => outcome.isError)).toEqual([false, false]);
+    const ids = outcomes.map((outcome) => (JSON.parse(outcome.content) as { operation_id: string }).operation_id);
+    expect(ids).toEqual([first, first]);
+    const rows = await fx.db.execute<{ id: string }>(sql`
+      select id from operations where organization_id = ${fx.org} and source_message_id = ${messageId}`);
+    expect(rows.map((row) => row.id)).toEqual([first]);
+  });
+
   it('aynı mesajdan aynı öneri aynı anda iki kez: biri açar, öteki onu alır; farklı kalemli öneri ayrı açılır', async () => {
     // Mesajın ilk önerisi: 1 makara. Ardından aynı mesajda 2 makaralık öneri iki kez, kilit altında aynı anda.
     const { operationId: first, messageId } = await proposeInChat('1');
