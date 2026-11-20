@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { authUsers } from 'drizzle-orm/supabase';
@@ -60,8 +61,12 @@ export const operations = pgTable(
     unique('operations_org_id_key').on(t.organizationId, t.id),
     // Aynı anahtar iki farklı işlemin onayında kullanılamaz.
     unique('operations_org_idempotency_key').on(t.organizationId, t.applyIdempotencyKey),
-    // Bir işlem en fazla bir kez geri alınır: ikinci ters kayıt burada reddedilir.
-    unique('operations_org_reversed_operation_key').on(t.organizationId, t.reversedOperationId),
+    // Bir işlemin en fazla bir etkin ters kaydı olur (onay bekleyen ya da uygulanmış): ikincisi burada reddedilir.
+    // İptal edilen, süresi dolan ya da başarısız ters kayıt sayılmaz; sonra işlem yeniden geri alınabilir (#78).
+    // Bu yüzden tam tekillik kısıtı değil, kısmi benzersiz indeks.
+    uniqueIndex('operations_org_reversed_operation_active_key')
+      .on(t.organizationId, t.reversedOperationId)
+      .where(sql`${t.status} not in ('CANCELLED', 'EXPIRED', 'FAILED')`),
     foreignKey({
       name: 'operations_party_fk',
       columns: [t.organizationId, t.partyId],

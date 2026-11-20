@@ -78,7 +78,7 @@ export function OperationCard({
   const view = operationCardView(preview, now);
   const message = actions.failure ? cardActionFailure(actions.failure).message : null;
 
-  return (
+  const card = (
     <section aria-label={`${view.title}, ${view.status.label}`} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-1">
       <header className="flex items-center gap-2 border-b border-divider pb-2">
         <span aria-hidden className={cn('size-2.5 shrink-0 rounded-full', DOT[view.status.tone])} />
@@ -113,6 +113,17 @@ export function OperationCard({
           ) : null}
         </div>
       ) : null}
+      {view.canReverse ? (
+        <Button
+          variant="secondary"
+          className="w-full"
+          disabled={actions.busy}
+          title="Onay bekleyen bir ters kayıt açar; stok, ters kaydı onaylayınca eski hâline döner"
+          onClick={() => void actions.reverse()}
+        >
+          {actions.reversing ? 'Ters kayıt açılıyor…' : 'Geri al'}
+        </Button>
+      ) : null}
 
       {message ? <Alert>{message}</Alert> : null}
       {view.footnote ? <p className="text-center text-label-md font-normal text-text-muted">{view.footnote}</p> : null}
@@ -120,6 +131,16 @@ export function OperationCard({
         İşlemin özetini aç
       </Link>
     </section>
+  );
+
+  // İşlemin ters kaydı kendi kartıyla, hemen altında (#78): onay ve iptal oradan yapılır; sohbetle düzenlenmez.
+  return view.reversalId ? (
+    <>
+      {card}
+      <OperationCard operationId={view.reversalId} onEdit={onEdit} />
+    </>
+  ) : (
+    card
   );
 }
 

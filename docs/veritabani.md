@@ -107,7 +107,9 @@ operations → APPLIED
 
 5. **Hareket, stok satırına bağlı.** `inventory_movements (organization_id, warehouse_id, product_id)` → `inventory`. Bu yabancı anahtar hem depo ile ürünün aynı şirketten olmasını hem de stok satırının önceden açılmış olmasını garanti eder. Zincir şöyle: hareket → kalem → işlem; hareket → stok satırı → depo ve ürün. Her halkada `organization_id` var, yani hiçbir hareket başka şirketin kaydına bağlanamaz.
 
-6. **Bir işlem bir kez geri alınır.** Ters kayıt, `reversed_operation_id` alanıyla asıl işleme bağlanan yeni bir `REVERSAL` işlemidir. Bu alan şirket içinde benzersiz olduğu için ikinci bir ters kayıt veritabanında reddedilir. CHECK kısıtları da tür ile bağlantıyı birlikte tutar: `REVERSAL` türünde bağlantı zorunlu, diğer türlerde yasak; işlem kendini geri alamaz.
+6. **Bir işlem bir kez geri alınır.** Ters kayıt, `reversed_operation_id` alanıyla asıl işleme bağlanan yeni bir `REVERSAL` işlemidir. CHECK kısıtları tür ile bağlantıyı birlikte tutar: `REVERSAL` türünde bağlantı zorunlu, diğer türlerde yasak; işlem kendini geri alamaz.
+   - 3. haftada alan şirket içinde tam benzersizdi. Bu, iptal edilen ya da süresi dolan ters kaydı da sayıyordu; işlem bir daha geri alınamazdı.
+   - #78'de (migration 0008) kısıt kısmi benzersiz indekse çevrildi: `operations_org_reversed_operation_active_key`, koşulu `status not in ('CANCELLED', 'EXPIRED', 'FAILED')`. Bir işlemin en fazla bir etkin (onay bekleyen ya da uygulanmış) ters kaydı olur; ikincisi veritabanında reddedilir. Kurallar ve maliyet: [stok-islemleri.md](stok-islemleri.md#ters-kayıt-geri-alma-78).
 
 7. **Sayım farkını veritabanı hesaplar.** `stock_counts.difference`, `counted_quantity - system_quantity` olarak tanımlanmış, saklanan bir hesaplanmış kolondur (`GENERATED ALWAYS AS … STORED`). Elle yazılamaz; bu yüzden iki miktarla her zaman tutarlıdır. Sistemdeki miktar öneri anında değil, onay anında kilitli stok satırından okunur: arada başka bir çıkış olduysa fark doğru hesaplanır. Fark sıfırsa hareket yazılmaz, ama "sayıldı, tuttu" bilgisi bu tabloda kalır.
 
@@ -238,6 +240,7 @@ Asistanın ürün arama aracı (`search_products`, #56) için. Sahada ürün ad�
 | `0005_trigram_search.sql` | `pg_trgm` ve `btree_gin` eklentileri, `private.fold_search` fonksiyonu | Elle (`drizzle-kit generate --custom`) |
 | `0006_conversations_and_ai_runs.sql` | 3 enum, asistanın 3 tablosu, kısıtlar, indeksler, 3 okuma politikası; ürün adı ve alternatif ad trigram indeksleri | `drizzle-kit generate` (bir yabancı anahtar elle düzeltildi, aşağıda) |
 | `0007_operation_source_message.sql` | `operations.source_message_id`, mesaja bileşik yabancı anahtar, indeks, CHECK (#74) | `drizzle-kit generate` (yabancı anahtar elle düzeltildi, aşağıda) |
+| `0008_reversal_partial_unique.sql` | Ters kaydın tekillik kısıtı kısmi benzersiz indekse çevrildi: iptal edilen ya da süresi dolan ters kayıttan sonra işlem yeniden geri alınabilir (#78; Stok defteri tabloları, karar 6) | `drizzle-kit generate` |
 
 Sıra önemlidir: politikalar fonksiyonları, fonksiyonlar da tabloları kullanır. RLS ilk migration'da açılır; politikalar gelene kadar tablolar herkese kapalıdır, açık kalmaz.
 

@@ -41,12 +41,15 @@ export function OperationCard({
   const query = $api.useQuery('get', PREVIEW_PATH, init);
   const confirm = $api.useMutation('post', '/v1/operations/{operationId}/confirm');
   const cancel = $api.useMutation('post', '/v1/operations/{operationId}/cancel');
+  // Geri al (#78): stoğu değiştirmez, onay bekleyen bir ters kayıt açar; ters kayıt bu kartın altında kendi kartıyla
+  // onaylanır ya da iptal edilir.
+  const reverse = $api.useMutation('post', '/v1/operations/{operationId}/reverse');
   // Onay anahtarı: bu sürümün ilk onay denemesinde üretilir, aynı sürümün sonraki denemeleri (çift dokunma, ağ
   // hatasından sonra tekrar) aynı anahtarı kullanır; sürüm değişince yenisi. Ref: aynı anda iki dokunuşta da aynı anahtar.
   const confirmKey = useRef<CardConfirmKey | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
-  const busy = confirm.isPending || cancel.isPending;
+  const busy = confirm.isPending || cancel.isPending || reverse.isPending;
   const previewKey = useMemo(() => $api.queryOptions('get', PREVIEW_PATH, init).queryKey, [$api, init]);
 
   // Öneri sohbette düzenlendi (akışta yeni sürüm geldi): kart güncel hâli okur.
@@ -69,7 +72,8 @@ export function OperationCard({
 
   async function refresh(): Promise<void> {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: previewKey }),
+      // Bütün kartların önizlemesi: ters kayıt onaylanınca altında durduğu işlemin kartı da "Geri alındı" olur.
+      queryClient.invalidateQueries({ queryKey: ['get', PREVIEW_PATH] }),
       // Stok listesi, ürün detayı ve hareketler bir sonraki açılışta sunucudan yeniden okunur.
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/warehouses/{warehouseId}/stock'] }),
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/stock'] }),
@@ -115,7 +119,7 @@ export function OperationCard({
   const view = operationCardView(preview, now);
   const badge = BADGE[view.status.tone];
 
-  return (
+  const card = (
     <Card style={styles.card} accessibilityLabel={`${view.title}, ${view.status.label}`}>
       <View style={styles.header}>
         <View style={[styles.dot, { backgroundColor: badge.dot }]} />
@@ -174,6 +178,15 @@ export function OperationCard({
           ) : null}
         </View>
       ) : null}
+      {view.canReverse ? (
+        <Button
+          label={reverse.isPending ? 'Ters kayıt açılıyor…' : 'Geri al'}
+          variant="secondary"
+          disabled={busy}
+          accessibilityHint="Onay bekleyen bir ters kayıt açar; stok, ters kaydı onaylayınca eski hâline döner"
+          onPress={() => void act(() => reverse.mutateAsync({ params: { path: { operationId } } }))}
+        />
+      ) : null}
 
       {actionError ? (
         <AppText tone="critical" accessibilityRole="alert">
@@ -186,6 +199,16 @@ export function OperationCard({
         </AppText>
       ) : null}
     </Card>
+  );
+
+  // İşlemin ters kaydı kendi kartıyla, hemen altında: onay ve iptal oradan yapılır; sohbetle düzenlenmez.
+  return view.reversalId ? (
+    <>
+      {card}
+      <OperationCard operationId={view.reversalId} onEdit={onEdit} />
+    </>
+  ) : (
+    card
   );
 }
 

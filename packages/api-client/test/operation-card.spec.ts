@@ -20,6 +20,10 @@ function preview(overrides: Partial<CardPreview> = {}, line: Partial<CardPreview
     note: null,
     createdAt: '2026-11-19T09:50:00.000Z',
     expiresAt: '2026-11-19T10:20:00.000Z',
+    reversedOperationId: null,
+    reversal: null,
+    canReverse: false,
+    reversibleUntil: null,
     lines: [
       {
         lineNo: 1,
@@ -65,6 +69,8 @@ describe('operationCardView', () => {
       canConfirm: true,
       canCancel: true,
       canEdit: true,
+      canReverse: false,
+      reversalId: null,
       footnote: 'Onaylamadan stok değişmez.',
       expiresAt: '2026-11-19T10:20:00.000Z',
     });
@@ -123,6 +129,42 @@ describe('operationCardView', () => {
     expect(operationCardView(preview({ status: 'EXPIRED' }), NOW).status).toEqual({ label: 'Süresi doldu', tone: 'muted' });
     expect(operationCardView(preview({ expiresAt: null }), new Date('2030-01-01T00:00:00.000Z')).canConfirm).toBe(true);
   });
+
+  it('geri alma (#78): "Geri al" yalnızca uygulanmış ve sunucunun izin verdiği işlemde; ters kayıt kartın altında', () => {
+    const applied = preview({ status: 'APPLIED', expiresAt: null, canReverse: true }, { stock: null });
+    expect(operationCardView(applied, NOW)).toMatchObject({ canReverse: true, reversalId: null });
+    // Sunucu izin vermiyorsa (süre geçti, başkasının işlemi) düğme yok; onay bekleyen işlem geri alınmaz.
+    expect(operationCardView({ ...applied, canReverse: false }, NOW).canReverse).toBe(false);
+    expect(operationCardView(preview({ canReverse: true }), NOW).canReverse).toBe(false);
+
+    const reversalId = '6a3f2c10-4b1e-4c8a-9d2e-0a0b0c0d0e98';
+    const reversed = operationCardView(
+      preview({ status: 'REVERSED', expiresAt: null, reversal: { operationId: reversalId, status: 'APPLIED' } }, { stock: null }),
+      NOW,
+    );
+    expect(reversed).toMatchObject({
+      status: { label: 'Geri alındı', tone: 'muted' },
+      canReverse: false,
+      reversalId,
+      footnote: 'Bu işlem ters kayıtla geri alındı.',
+    });
+  });
+
+  it('onay bekleyen ters kayıt: onaylanır ya da iptal edilir, sohbetle düzenlenmez; stok yetmiyorsa açıklama', () => {
+    const reversal = preview({ type: 'REVERSAL', expiresAt: null, partyName: null }, { unit: null, quantity: '40.000' });
+    expect(operationCardView(reversal, NOW)).toMatchObject({
+      title: 'Ters kayıt önerisi',
+      canConfirm: true,
+      canCancel: true,
+      canEdit: false,
+      footnote: 'Onaylanınca işlemin stoğa etkisi tersine çevrilir. Onaylamadan stok değişmez.',
+    });
+    const short = operationCardView(
+      preview({ type: 'REVERSAL', expiresAt: null }, { unit: null, stock: { before: '10.000', after: '-30.000', sufficient: false } }),
+      NOW,
+    );
+    expect(short).toMatchObject({ canConfirm: false, footnote: 'Stok yetmediği için bu işlem geri alınamaz: geri alınacak mal depoda yok.' });
+  });
 });
 
 describe('confirmKeyFor', () => {
@@ -144,7 +186,14 @@ describe('cardActionFailure', () => {
       refresh: true,
     });
     expect(cardActionFailure({ code: 'OPERATION_ALREADY_APPLIED', message: 'x' }).refresh).toBe(true);
-    for (const code of ['INSUFFICIENT_STOCK', 'OPERATION_EXPIRED', 'OPERATION_NOT_PENDING']) {
+    for (const code of [
+      'INSUFFICIENT_STOCK',
+      'OPERATION_EXPIRED',
+      'OPERATION_NOT_PENDING',
+      'OPERATION_ALREADY_REVERSED',
+      'REVERSAL_WINDOW_PASSED',
+      'REVERSAL_FORBIDDEN',
+    ]) {
       expect(cardActionFailure({ code, message: 'API mesajı' })).toEqual({ message: 'API mesajı', refresh: true });
     }
     expect(cardActionFailure({ code: 'NETWORK_ERROR', message: "API'ye ulaşılamadı." })).toEqual({

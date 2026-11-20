@@ -56,7 +56,27 @@ export function stockEffectsOf(type: OperationType, lines: PreviewLine[]): Stock
           { ...base, seq: base.seq + 1, side: 'target', warehouseId: line.targetWarehouseId, kind: 'change', direction: 1 },
         ];
       case 'REVERSAL':
-        throw new Error('Ters kayıt 5. haftada eklenecek.');
+        // Ters kaydın etkisi kalemden değil, geri alınan hareketlerden çıkar: reversalEffectsOf.
+        throw new Error('Ters kaydın önizlemesi reversalEffectsOf ile hesaplanır.');
     }
   });
+}
+
+/**
+ * Ters kaydın stok etkileri (#78), onayın uygulayacağı sırayla: her adım geri alınan hareketin tersidir. Hareket
+ * stoğu azaltmışsa ters kayıt artırır (+1), artırmışsa azaltır (−1). İşaret metinden okunur (ADR-003).
+ */
+export function reversalEffectsOf(
+  steps: { lineNo: number; side: 'source' | 'target'; warehouseId: string; productId: string; originalChange: string }[],
+): StockEffectInput[] {
+  return steps.map((step, index) => ({
+    seq: index,
+    lineNo: step.lineNo,
+    side: step.side,
+    warehouseId: step.warehouseId,
+    productId: step.productId,
+    kind: 'change',
+    direction: step.originalChange.startsWith('-') ? 1 : -1,
+    quantity: step.originalChange.replace(/^[-+]/, ''),
+  }));
 }

@@ -60,6 +60,17 @@ export const operationPreviewSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
   /** Sohbet önerisinin onaylanabileceği son an (Operation.expiresAt ile aynı); süresi olmayan işlemde null. */
   expiresAt: z.iso.datetime({ offset: true }).nullable(),
+  /** Yalnızca ters kayıtta: geri aldığı işlem. */
+  reversedOperationId: z.uuid().nullable(),
+  /** Bu işlemin onay bekleyen ya da uygulanmış ters kaydı (#78); yoksa null. Kart ters kaydı bunun altında gösterir. */
+  reversal: z.object({ operationId: z.uuid(), status: operationStatusSchema }).nullable(),
+  /**
+   * Özeti isteyen kullanıcı bu işlemi şimdi geri alabilir mi (uygulanmış, ters kayıt değil, ters kaydı yok, yetkisi
+   * ve süresi var). Ekran "Geri al" düğmesini buna göre gösterir; asıl kontrol istekte ve onayda, kilit altında.
+   */
+  canReverse: z.boolean(),
+  /** İşlemi açan çalışan için geri almanın son anı (uygulama + 15 dakika); yönetici ya da geri alınamıyorsa null. */
+  reversibleUntil: z.iso.datetime({ offset: true }).nullable(),
   lines: z.array(operationPreviewLineSchema),
 });
 export type OperationPreview = z.infer<typeof operationPreviewSchema>;

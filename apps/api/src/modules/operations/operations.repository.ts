@@ -1,6 +1,6 @@
 import { operationItems, operations } from '@ambarci/db';
 import type { DbExecutor } from '@ambarci/db';
-import { CHAT_PROPOSAL_TTL_MINUTES } from '@ambarci/shared';
+import { CHAT_PROPOSAL_TTL_MINUTES, REVERSAL_WINDOW_MINUTES } from '@ambarci/shared';
 import type {
   ActionSource,
   CreatableOperationType,
@@ -32,6 +32,10 @@ export interface OperationRecord {
   updatedAt: Date;
   /** Sohbetten açılmış, onay bekleyen ve son değişikliğinden bu yana 30 dakika geçmiş mi (veritabanının saatiyle). */
   expired: boolean;
+  /** Yalnızca ters kayıtta: geri aldığı işlem (#78). */
+  reversedOperationId: string | null;
+  /** Uygulanalı 15 dakika olmadı mı (veritabanının saatiyle): işlemi açan kullanıcı bu süre içinde geri alabilir. */
+  withinReversalWindow: boolean;
 }
 
 /**
@@ -46,6 +50,22 @@ const EXPIRED = sql<boolean>`(${operations.source} = 'CHAT' and ${operations.sta
 const EXPIRED_IN_LIST = sql`(o.source = 'CHAT' and o.status = 'PENDING_CONFIRMATION' and o.updated_at < now() - ${TTL})`;
 /** Ekranda görünen durum: süresi dolmuş öneri, kalıcı olarak yazılmadan önce de EXPIRED görünür. */
 const EFFECTIVE_STATUS_IN_LIST = sql`(case when ${EXPIRED_IN_LIST} then 'EXPIRED' else o.status::text end)`;
+
+/**
+ * Ters kayıt süresinin tek tanımı (#78): uygulanma anından bu yana REVERSAL_WINDOW_MINUTES geçmedi. Saat
+ * veritabanınındır; istekte ve onayda işlem satırı kilitliyken aynı ifadeyle okunur.
+ */
+const REVERSAL_WINDOW = sql.raw(`interval '${REVERSAL_WINDOW_MINUTES} minutes'`);
+const WITHIN_REVERSAL_WINDOW = sql<boolean>`coalesce(${operations.appliedAt} > now() - ${REVERSAL_WINDOW}, false)`;
+
+/** Ters kaydın kalemi: geri alınan işlemin kalem numarasıyla (ters kaydın 2. kalemi, işlemin 2. kalemini geri alır). */
+export interface NewReversal {
+  organizationId: string;
+  source: ActionSource;
+  createdBy: string;
+  reversedOperationId: string;
+  items: OperationItem[];
+}
 
 export interface NewOperation {
   organizationId: string;
@@ -83,6 +103,8 @@ const OPERATION_COLUMNS = {
   createdAt: operations.createdAt,
   updatedAt: operations.updatedAt,
   expired: EXPIRED,
+  reversedOperationId: operations.reversedOperationId,
+  withinReversalWindow: WITHIN_REVERSAL_WINDOW,
 };
 
 const ITEM_COLUMNS = {
@@ -121,6 +143,7 @@ export function toOperation(record: OperationRecord, items: OperationItem[]): Op
     appliedAt: record.appliedAt?.toISOString() ?? null,
     createdAt: record.createdAt.toISOString(),
     expiresAt: expiresAtOf(record)?.toISOString() ?? null,
+    reversedOperationId: record.reversedOperationId,
     items,
   };
 }
@@ -277,6 +300,83 @@ export class OperationsRepository {
       .insert(operationItems)
       .values(items.map((item, index) => ({ ...item, organizationId, operationId, lineNo: index + 1 })))
       .returning(ITEM_COLUMNS);
+  }
+
+  /**
+   * Onay bekleyen ters kaydı (REVERSAL) ve kalemlerini ekler (#78). Kalem numaraları geri alınan işleminkilerdir;
+   * stok değiştirmeyen kalem (ör. farkı çıkmayan sayım) atlandığı için numaralar ardışık olmayabilir. İşlemin etkin
+   * bir ters kaydı varsa kısmi benzersiz indeks eklemeyi reddeder (23505).
+   */
+  async insertReversal(executor: DbExecutor, input: NewReversal): Promise<Operation> {
+    const [record] = await executor
+      .insert(operations)
+      .values({
+        organizationId: input.organizationId,
+        type: 'REVERSAL',
+        source: input.source,
+        createdBy: input.createdBy,
+        reversedOperationId: input.reversedOperationId,
+      })
+      .returning(OPERATION_COLUMNS);
+    if (!record) {
+      throw new Error('Ters kayıt eklenemedi.');
+    }
+    const items = await executor
+      .insert(operationItems)
+      .values(
+        input.items.map(({ lineNo, ...item }) => ({ ...item, lineNo, organizationId: input.organizationId, operationId: record.id })),
+      )
+      .returning(ITEM_COLUMNS);
+    return toOperation(record, items);
+  }
+
+  /**
+   * İşlemin etkin ters kaydı (#78): onay bekleyen ya da uygulanmış; iptal edilmiş, süresi dolmuş ya da başarısız olan
+   * sayılmaz. Kısmi benzersiz indeks yüzünden en fazla bir tane vardır. Süresi dolmuş sohbet önerisi kalıcı olarak
+   * EXPIRED yazılana kadar burada görünür (expired alanıyla); çağıran onu önce EXPIRED yapar.
+   */
+  async findActiveReversal(
+    executor: DbExecutor,
+    organizationId: string,
+    reversedOperationId: string,
+  ): Promise<OperationRecord | null> {
+    const [record] = await executor
+      .select(OPERATION_COLUMNS)
+      .from(operations)
+      .where(
+        and(
+          eq(operations.organizationId, organizationId),
+          eq(operations.reversedOperationId, reversedOperationId),
+          sql`${operations.status} not in ('CANCELLED', 'EXPIRED', 'FAILED')`,
+        ),
+      )
+      .limit(1);
+    return record ?? null;
+  }
+
+  /**
+   * Uygulanmış işlemi geri alındı (REVERSED) olarak işaretler; ters kaydın onay transaction'ında, işlem kilitliyken.
+   * Durum koşulu ikinci bir güvencedir: yalnızca uygulanmış işlem geri alınır, uygulanma zamanı korunur.
+   */
+  async markReversed(executor: DbExecutor, organizationId: string, operationId: string): Promise<OperationRecord | null> {
+    const [record] = await executor
+      .update(operations)
+      .set({ status: 'REVERSED' })
+      .where(
+        and(eq(operations.organizationId, organizationId), eq(operations.id, operationId), eq(operations.status, 'APPLIED')),
+      )
+      .returning(OPERATION_COLUMNS);
+    return record ?? null;
+  }
+
+  /** İşlem satırı kilitlemeden (önizleme ve ters kaydın kilit sırasını belirlemek için). */
+  async findRecord(executor: DbExecutor, organizationId: string, operationId: string): Promise<OperationRecord | null> {
+    const [record] = await executor
+      .select(OPERATION_COLUMNS)
+      .from(operations)
+      .where(and(eq(operations.organizationId, organizationId), eq(operations.id, operationId)))
+      .limit(1);
+    return record ?? null;
   }
 
   async findById(executor: DbExecutor, organizationId: string, operationId: string): Promise<Operation | null> {

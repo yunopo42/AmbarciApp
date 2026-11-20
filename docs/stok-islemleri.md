@@ -14,11 +14,12 @@ Ekrandan, asistandan (5. hafta) ya da içe aktarmadan (#39) gelen her işlem ön
 | `GET /v1/operations/{id}/preview` | Onay ekranının özeti: ürün ve depo adları, ana birim karşılığı ve onay bekleyen işlemde stoğun önce → sonra hâli. Stok değişmez (aşağıda: Önizleme) |
 | `POST /v1/operations/{id}/confirm` | Onay. Gövde: `{ "version": 1 }`; başlık: `Idempotency-Key`. Stok, hareketler ve maliyet tek transaction'da yazılır. |
 | `POST /v1/operations/{id}/cancel` | Onay bekleyen işlemi iptal eder (açan kişi ya da yönetici) |
+| `POST /v1/operations/{id}/reverse` | Uygulanmış işlemi geri almak için ters kalemli, onay bekleyen bir ters kayıt (`REVERSAL`) açar; stok değişmez. İşlemin onay bekleyen ters kaydı varsa onu döner (201 yeni, 200 bekleyen). Aşağıda: Ters kayıt |
 | `GET /v1/warehouses/{id}/stock` | Depodaki stok: aktif ürünler, miktar, ortalama maliyet, kritik eşik altında mı. Arama ve sayfalama ürün listesindekiyle aynı; depoda hareketi olmayan ürün 0 görünür |
 | `GET /v1/products/{id}/movements` | Ürünün hareketleri, en yeni önce; depo süzgeci ve sayfalama |
 | `GET /v1/products/{id}/stock` | Ürünün depolara göre stoğu ve toplamı (mobil ürün detayı; 4. haftada asistanın stok sorgusu). Çalışan yalnızca yetkili depoları görür, toplam da onların toplamıdır |
 
-İşlem türleri: giriş (`STOCK_IN`), çıkış (`STOCK_OUT`), transfer (`TRANSFER`), sayım (`COUNT`), fire (`WASTE`), açılış (`OPENING`, yalnızca yönetici). Ters kayıt (`REVERSAL`) 5. haftada gelir.
+İşlem türleri: giriş (`STOCK_IN`), çıkış (`STOCK_OUT`), transfer (`TRANSFER`), sayım (`COUNT`), fire (`WASTE`), açılış (`OPENING`, yalnızca yönetici). Ters kayıt (`REVERSAL`, #78) bu uçtan açılmaz; kendi ucu var (aşağıda: Ters kayıt).
 
 ## Onay transaction'ı adım adım
 
@@ -107,6 +108,8 @@ Kullanıcı eski hâli onaylamaya çalışırsa (ör. kart başka bir cihazda es
 | 409 | `OPERATION_ALREADY_APPLIED`, `OPERATION_NOT_PENDING`, `OPERATION_VERSION_MISMATCH`, `IDEMPOTENCY_KEY_REUSED` | Yukarıdaki bölümler |
 | 409 | `OPERATION_EXPIRED` | Sohbet önerisinin süresi doldu (aşağıda: Süre aşımı) |
 | 409 | `OPERATION_TYPE_MISMATCH`, `OPERATION_FORBIDDEN` (düzenlemede) | Sohbette düzenlemede tür değişiyor ya da öneri başkasının (Sürüm) |
+| 409 | `OPERATION_ALREADY_REVERSED`, `OPERATION_NOT_REVERSIBLE`, `NOTHING_TO_REVERSE` | Geri almada: işlem zaten geri alınmış; uygulanmamış ya da kendisi bir ters kayıt; stoğu hiç değiştirmemiş (Ters kayıt) |
+| 403 | `REVERSAL_FORBIDDEN`, `REVERSAL_WINDOW_PASSED` | Geri almada: işlemi başkası açmış ya da açılış (yalnızca yönetici); işlemi açan çalışan için 15 dakika geçmiş (Ters kayıt) |
 | 422 | `OPERATION_LINES_INVALID` | Ürün, birim ya da depo yok/pasif; miktar ana birime çevrilince sıfır (`details`: kalem no, alan, kod) |
 | 422 | `PARTY_NOT_FOUND`, `WAREHOUSE_INACTIVE` | Cari yok ya da pasif; onay anında pasif depo |
 
@@ -118,6 +121,50 @@ Asistanın sohbette açtığı öneri (kaynak `CHAT`), son değişikliğinden (a
 - **Yazma:** Onay, düzenleme ve iptal işlem satırını `FOR UPDATE` ile kilitler ve süreyi kilit altında, veritabanının saatiyle denetler. Süre dolmuşsa işlem kalıcı olarak `EXPIRED` yazılır, denetim kaydına `operation.expired` eklenir (kişi boş) ve `409 OPERATION_EXPIRED` döner. Stok değişmez.
 - **Sıra:** Uygulanmış işlemin aynı anahtarla tekrar gelen onayı süreden önce tanınır ve ilk cevabı alır. Süre aşımı yalnızca onay bekleyen öneriyi etkiler.
 - **Neden zamanlanmış iş yok:** Outbox'ı okuyan worker 7. haftada geliyor. O zamana kadar süre okumada hesaplanıyor, kalıcı geçiş ilk yazma isteğinde yapılıyor. Kural tek bir SQL ifadesinde (`operations.repository.ts`).
+
+## Ters kayıt (geri alma, #78)
+
+Onaylanmış işlem silinmez ve değiştirilmez (mimari değişmez 7). Geri alma, geri alınan işleme `reversed_operation_id` ile bağlı yeni bir `REVERSAL` işlemidir. Ters kayıt da onaydan geçer:
+
+1. `POST /v1/operations/{id}/reverse` stoğa dokunmaz. Geri alınacak işlemin hareketlerinden ters kalemli, onay bekleyen bir ters kayıt açar ve onu döner.
+2. Ters kayıt, diğer işlemler gibi `GET …/preview` ile incelenir (önce → sonra) ve `POST …/confirm` ile onaylanır. Böylece `Idempotency-Key`, kilit sırası, önizleme ve yetersiz stok kontrolü aynı koddan gelir.
+3. Onay transaction'ında ters hareketler, stok, ortalama maliyet, geri alınan işlemin `APPLIED → REVERSED` geçişi, denetim kayıtları (`operation.applied` ters kayıt için, `operation.reversed` geri alınan işlem için) ve outbox olayı birlikte yazılır.
+
+**Kim, ne zaman geri alabilir**
+
+- Yalnızca uygulanmış (`APPLIED`) işlem. Ters kayıt geri alınamaz; bir işlem bir kez geri alınır (`409 OPERATION_ALREADY_REVERSED`).
+- İşlemi açan kullanıcı, işlem uygulandıktan sonraki **15 dakika** içinde (`REVERSAL_WINDOW_MINUTES`); yönetici her zaman. Açılış stoğunu yalnızca yönetici geri alır.
+- Kural istekte ve onayda, geri alınan işlem kilitliyken, veritabanının saatiyle denetlenir. Çalışan ters kaydı 14. dakikada açıp 16. dakikada onaylamaya çalışırsa onay `403 REVERSAL_WINDOW_PASSED` alır; ters kaydı yönetici onaylayabilir.
+- Depo yetkisi diğer işlemlerdeki gibi: kullanıcı ters kaydın bütün depolarında yetkili olmalı.
+
+**Kalemler.** Ters kaydın her kalemi, geri alınan işlemin aynı numaralı kalemidir: ana birimde ve o kalemin hareketi kadar. Sayımda bu, sayılan miktar değil sayım farkıdır. Farkı çıkmayan sayım kalemi stoğu değiştirmediği için atlanır. Hiç hareketi olmayan işlem geri alınamaz (`409 NOTHING_TO_REVERSE`).
+
+**Uygulama.** Onay, geri alınan işlemin hareketlerini **tersten** (son yazılan önce) uygular: transferde önce hedef depodan çıkar, sonra kaynağa girer. Stok satırları onaydaki sırayla (ürün, sonra depo kimliği) kilitlenir. Ters kayıt stoğu eksiye düşürecekse (ör. girişin bir kısmı bu arada çıkmışsa) `409 INSUFFICIENT_STOCK` döner ve hiçbir şey yazılmaz.
+
+**Ortalama maliyet: değer tam geri çevrilir (karar, 20 Kasım).** Ters kayıt, geri alınan hareketin stok değerine etkisini aynı birim maliyetle tersine çevirir:
+
+| Geri alınan hareket | Ters kayıt | Ortalama |
+| --- | --- | --- |
+| Stoğu azaltmıştı (çıkış, fire, transfer çıkışı, sayım noksanı) | Mal, o hareketin maliyetiyle (çıktığı andaki ortalama) geri girer | Ağırlıklı ortalama: (stok × ort + miktar × maliyet) ÷ (stok + miktar) |
+| Stoğu artırmıştı (giriş, transfer girişi, sayım fazlası) | Mal, o hareketin maliyetiyle çıkar; stok değerinden tam o kadar düşülür | (stok × ort − miktar × maliyet) ÷ (stok − miktar) |
+
+- Arada başka hareket yoksa ortalama, geri alınan hareketten önceki değerine döner.
+- Kalan stok sıfırsa ya da ara hareketler yüzünden kalan değer eksiye düşecekse ortalama değişmez.
+- Hesap SQL'de yapılır (`stock-ledger.repository.ts`, `increase` ve `decreaseAtCost`; ADR-003). Ters hareketin `unit_cost` alanına geri alınan hareketin maliyeti yazılır.
+
+Örnek (`test-db/reversal.db.spec.ts` aynı adımları izler):
+
+- Merkez'e 10 adet 5 TL'den, sonra yanlışlıkla 10 adet 50 TL'den giriş yapılır; ortalama (10 × 5 + 10 × 50) ÷ 20 = 27,5.
+- İkinci giriş geri alınınca 10 adet 50 TL'den çıkar: (20 × 27,5 − 10 × 50) ÷ 10 = 5. Ortalama yine 5 TL.
+- Çıkışın geri alınmasında mal, çıktığı andaki ortalamayla geri girer. 4 adet 5 TL'den çıkmış, sonra stok 12 adet ve 7,5 TL olmuşsa: (12 × 7,5 + 4 × 5) ÷ 16 = 6,875.
+
+Seçenek olarak "normal giriş/çıkış gibi" kuralı vardı: geri giden mal ortalamayı değiştirmezdi. Daha basitti, ama yanlış maliyetle girilmiş bir alış geri alındığında o yanlış maliyet ortalamada kalırdı (yukarıdaki örnekte 27,5). Geri almanın en sık nedeni yanlış giriş olduğu için değeri tam geri çeviren kural seçildi.
+
+**Bir işlemin tek etkin ters kaydı.** Kısmi benzersiz indeks (`operations_org_reversed_operation_active_key`, migration 0008) bir işlemin onay bekleyen ya da uygulanmış en fazla bir ters kaydına izin verir. İptal edilen, süresi dolan ya da başarısız ters kayıt sayılmaz; işlem sonra yeniden geri alınabilir. Aynı işlem için aynı anda gelen iki istek işlem satırının kilidinde sıraya girer; ikincisi birincinin açtığı ters kaydı bulur.
+
+**Kilit sırası.** İstek geri alınacak işlemi kilitler; ters kaydı yalnızca süresi dolmuşsa (EXPIRED yazmak için) kilitler. Onay önce ters kaydı, sonra geri alınan işlemi kilitler; ama süresi dolmuş ters kaydın onayı ikinci kilide gelmeden döner. Böylece istek ile onay birbirinin tuttuğu kilidi beklemez.
+
+**Ekranda.** Web özet sayfasında ve sohbetteki uygulanmış kartta (mobil, web) "Geri al" düğmesi, yalnızca önizleme izin verdiğinde (`canReverse`) görünür. Düğme ters kaydı açar. Web'de ters kaydın özetine geçilir; sohbette ters kayıt, işlemin kartının hemen altında kendi kartıyla görünür. Ters kayıt onaylanınca işlemin kartı "Geri alındı" olur. Sohbetten geri alma (asistanın `propose_reversal` aracı, `chat-v3`) ayrı bir işte gelecek.
 
 ## Önizleme (onaydan önce "önce → sonra")
 
@@ -160,6 +207,8 @@ Kod: `operations.service.ts` (`preview`), `inventory/stock-preview.ts` ve `stock
 | `apps/api/test/stock-preview.spec.ts` | CI | Önizlemenin etkileri onayın uygulama sırasıyla üretmesi (transferde kaynak sonra hedef) |
 | `apps/api/test-db/stock.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Önizleme: aynı üründen iki çıkış kalemi, transfer, sayım, yetersiz kalem, onaylanmış işlem; depo bazında stok ve kritik eşik; hareket geçmişi, depo süzgeci ve sayfalama; çalışanın depo yetkisi; başka şirketin ürünü |
 | `apps/api/test-db/concurrency.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Eşzamanlı çıkış, deadlock tehlikesi ve kilit sırası, aynı anda gelen çift onay, çok kalemli rollback (aşağıda) |
+| `apps/api/test/operations-rules.spec.ts` (Ters kayıt kuralları) | CI | Geri alma kuralı (15 dakika, başkasının işlemi, açılış, ters kayıt, geri alınmış ve uygulanmamış işlem); ters kaydın kalemleri (ana birim, sayım farkı, hareketsiz kalem atlanır) ve adımları (tersten sıra, kaynak ve hedef) |
+| `apps/api/test-db/reversal.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Girişin, çıkışın, transferin ve sayım farkının geri alınması (stok ve ortalama maliyet); istek stoğu değiştirmez; önizleme; eksiye düşüren ters kayıt (hiçbir şey yazılmaz); bir kez geri alma, bekleyen ters kaydın tekrar dönmesi, iptalden sonra yeniden geri alma; aynı ters kayda aynı anda iki onay; aynı işleme aynı anda iki istek; 15 dakika kuralı (istekte ve onayda), başkasının işlemi, açılış; denetim ve outbox sayıları; stok = hareketlerin toplamı |
 | `apps/api/test-db/latency.measure.ts` | Gerçek veritabanı, ölçüm (`measure:latency`) | Onay süresi ve transaction başına sorgu sayısı ([veritabani.md](veritabani.md#bölgeler-arası-gecikme-ve-onay-süresi)) |
 
 ## Eşzamanlılık ve geri alma (testlerle)
@@ -190,4 +239,8 @@ Yarışı rastlantıya bırakmamak için testler aynı yöntemi kullanır (`test
 - **"Ağ koptu, kullanıcı Onayla'ya tekrar bastı; stok iki kez düşer mi?"** Hayır. İstemci aynı `Idempotency-Key`'i gönderir; API işlemi `APPLIED` ve anahtarı aynı bulur, ilk cevabı tekrar döner.
 - **"Ortalama maliyeti neden JavaScript'te hesaplamadınız?"** Kayan nokta ondalık sayıyı tam tutamaz. Hesap, değerin zaten kilitli olduğu satırda, kolonla aynı `NUMERIC` tipinde ve tek yuvarlama kuralıyla SQL'de yapılır (ADR-003).
 - **"Sayımda sistemdeki miktar ne zaman okunuyor?"** Onay anında, kilitli satırdan. Sayım açıldıktan sonra çıkış olduysa fark ona göre hesaplanır; testte 115 → 112 örneği var.
+- **"Yanlış girilen bir işlemi nasıl düzeltiyorsunuz?"** İşlem silinmez ve değiştirilmez; geri alma, ona bağlı yeni bir ters kayıttır. "Geri al" önce onay bekleyen ters kaydı açar, kullanıcı stoğun nasıl değişeceğini görür ve onaylar. Hareket geçmişinde hem yanlış giriş hem ters kaydı kalır; denetimde iz kaybolmaz.
+- **"Geri alma ortalama maliyeti nasıl etkiliyor?"** Ters kayıt, geri alınan hareketin maliyetini kullanır ve stok değerini tam o kadar geri çevirir. Arada başka hareket yoksa ortalama, yanlış girişten önceki değerine döner; testte 27,5'ten 5'e döndü.
+- **"Bir işlem iki kez geri alınabilir mi?"** Hayır. Bir işlemin en fazla bir etkin ters kaydı olabilir; bunu kısmi benzersiz indeks sağlar. İkinci istek bekleyen ters kaydı alır; ters kayıt uygulandıysa `409 OPERATION_ALREADY_REVERSED`. Aynı ters kayda aynı anda iki onay gelirse biri uygulanır, öteki 409 alır; testte stok bir kez değişti.
+- **"Geri alma stoğu eksiye düşürebilir mi?"** Hayır. Girişin bir kısmı bu arada çıkmışsa ters kayıt `409 INSUFFICIENT_STOCK` alır ve hiçbir şey yazılmaz; düşmeye çalışsa `CHECK (quantity >= 0)` da reddeder.
 - **"Bildirim neden stok koduyla birlikte gönderilmiyor?"** Bildirim transaction'ın içinden gönderilse ve transaction sonra geri alınsa, gerçekleşmemiş bir işlem için bildirim gitmiş olurdu. Olay `outbox_events`'e aynı transaction'da yazılır; worker (5–6. hafta) yalnızca kalıcı olmuş olayları işler.

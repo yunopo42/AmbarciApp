@@ -1,10 +1,11 @@
 import type { Database, DbExecutor } from '@ambarci/db';
-import { CHAT_PROPOSAL_TTL_MINUTES, isZeroQuantity } from '@ambarci/shared';
+import { CHAT_PROPOSAL_TTL_MINUTES, isZeroQuantity, REVERSAL_WINDOW_MINUTES } from '@ambarci/shared';
 import type {
   ActionSource,
   ConfirmOperationInput,
   ConfirmOperationResult,
   CreateOperationInput,
+  Movement,
   Operation,
   OperationItem,
   OperationList,
@@ -12,6 +13,7 @@ import type {
   OperationPreview,
   OperationType,
   OrganizationRole,
+  StockEffect,
 } from '@ambarci/shared';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 
@@ -22,7 +24,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { OutboxService } from '../events/outbox.service.js';
 import { ApplyStockService } from '../inventory/apply-stock.service.js';
-import type { ApplyLine } from '../inventory/apply-stock.service.js';
+import type { ApplyLine, ReversalStep } from '../inventory/apply-stock.service.js';
 import { InventoryService } from '../inventory/inventory.service.js';
 import type { OrganizationContext } from '../organizations/organization-context.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
@@ -265,6 +267,83 @@ export class OperationsService {
   }
 
   /**
+   * Geri alma isteği (#78, mimari değişmez 7): uygulanmış işlem için ters kalemli, onay bekleyen bir REVERSAL açar.
+   * Stok burada değişmez; ters kayıt da onay ucundan geçer (Idempotency-Key, kilit sırası, önizleme, yetersiz stok
+   * aynı koddan gelir). İşlemin onay bekleyen ters kaydı varsa yenisi açılmaz, o döner.
+   *
+   * Kurallar: yalnızca uygulanmış işlem; ters kayıt geri alınmaz; işlemi açan kullanıcı uygulandıktan sonraki 15 dakika
+   * içinde, yönetici her zaman; açılışı yalnızca yönetici. Kurallar burada ve onayda, işlem kilitliyken denetlenir.
+   *
+   * Kilitler: istek geri alınacak işlemi kilitler; ters kaydı yalnızca süresi dolmuşsa (EXPIRED yazmak için). Onay
+   * ters kaydı, sonra geri alınan işlemi kilitler; ama süresi dolmuş ters kaydın onayı ikinci kilide gelmeden döner.
+   * Böylece ikisi birbirinin tuttuğu kilidi beklemez.
+   */
+  async requestReversal(
+    organizationId: string,
+    actor: Extract<OperationActor, { kind: 'user' }>,
+    operationId: string,
+  ): Promise<{ operation: Operation; created: boolean }> {
+    return this.db.transaction(async (tx) => {
+      // Aynı işlem için aynı anda gelen iki istek burada sıraya girer; ikincisi birincinin açtığı ters kaydı bulur.
+      const original = await this.repository.lockForUpdate(tx, organizationId, operationId);
+      if (!original) {
+        throw operationNotFound();
+      }
+      const items = await this.repository.listItems(tx, organizationId, operationId);
+      // Açılacak işlem bir ters kayıttır: depo yetkisi onun depolarında aranır. Açılışın "yalnızca yönetici" kuralını
+      // geri alma kuralı ayrıca ve kendi mesajıyla uygular (reversalDenial).
+      await this.assertAccess(tx, organizationId, actor.userId, 'REVERSAL', items);
+      const denial = reversalDenial(actor, original);
+      if (denial) {
+        throw denial;
+      }
+
+      let active = await this.repository.findActiveReversal(tx, organizationId, operationId);
+      if (active?.expired) {
+        // Süresi dolmuş (sohbetten açılmış) ters kayıt: kalıcı olarak EXPIRED olur, yerine yenisi açılır.
+        const locked = await this.repository.lockForUpdate(tx, organizationId, active.id);
+        if (locked?.expired) {
+          await this.expire(tx, organizationId, locked);
+        }
+        active = await this.repository.findActiveReversal(tx, organizationId, operationId);
+      }
+      if (active?.status === 'PENDING_CONFIRMATION') {
+        return { operation: toOperation(active, await this.repository.listItems(tx, organizationId, active.id)), created: false };
+      }
+      if (active) {
+        // Uygulanmış ters kaydı olan işlem REVERSED olurdu (yukarıda reddedilirdi); buraya gelinirse veri tutarsızdır.
+        throw alreadyReversed();
+      }
+
+      const reversalLines = reversalItemsOf(items, await this.inventory.listMovements(tx, organizationId, operationId));
+      if (reversalLines.length === 0) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'NOTHING_TO_REVERSE',
+          'Bu işlem stoğu değiştirmediği için geri alınacak bir şey yok.',
+        );
+      }
+      const operation = await this.repository.insertReversal(tx, {
+        organizationId,
+        source: 'SCREEN',
+        createdBy: actor.userId,
+        reversedOperationId: operationId,
+        items: reversalLines,
+      });
+      await this.audit.record(tx, {
+        organizationId,
+        actorId: actor.userId,
+        action: 'operation.created',
+        entityType: 'operation',
+        entityId: operation.id,
+        source: 'SCREEN',
+        details: { type: 'REVERSAL', reversedOperationId: operationId, lineCount: operation.items.length },
+      });
+      return { operation, created: true };
+    });
+  }
+
+  /**
    * Süresi dolmuş sohbet önerisini kalıcı olarak EXPIRED yapar ve denetim kaydını yazar (çağıran işlemi kilitlemiştir).
    * Süre aşımını kimse "yapmaz": kayıttaki kişi boştur, sistemin kararıdır.
    */
@@ -365,7 +444,11 @@ export class OperationsService {
    * onaylayabilecek kullanıcıya gösterilir: depo yetkisi işlem açılırken ve onaydakiyle aynı kuralla denetlenir.
    */
   async preview(organizationId: string, actor: OperationActor, operationId: string): Promise<OperationPreview> {
-    const operation = await this.get(organizationId, operationId);
+    const record = await this.repository.findRecord(this.db, organizationId, operationId);
+    if (!record) {
+      throw operationNotFound();
+    }
+    const operation = toOperation(record, await this.repository.listItems(this.db, organizationId, operationId));
     if (actor.kind === 'user') {
       await this.assertAccess(this.db, organizationId, actor.userId, operation.type, operation.items);
     }
@@ -391,21 +474,41 @@ export class OperationsService {
       return { item, conversion, sku: conversion.sku, productName: conversion.productName };
     });
     // Onaylanmış ya da iptal edilmiş işlemde "önce → sonra" anlamsızdır: stok o işlemden sonra da değişmiştir. Süresi
-    // dolmuş öneri de (durumu EXPIRED görünür) onaylanamayacağı için hesaplanmaz.
-    const effects =
-      operation.status === 'PENDING_CONFIRMATION'
-        ? await this.inventory.previewStock(
-            this.db,
-            organizationId,
-            operation.type,
-            lines.map(({ item, conversion }) => ({
-              lineNo: item.lineNo,
-              productId: item.productId,
-              warehouseId: item.warehouseId,
-              targetWarehouseId: item.targetWarehouseId,
-              baseQuantity: conversion.baseQuantity,
-            })),
-          )
+    // dolmuş öneri de (durumu EXPIRED görünür) onaylanamayacağı için hesaplanmaz. Ters kaydın etkisi kalemlerinden
+    // değil, geri aldığı işlemin hareketlerinden hesaplanır (onaydaki gibi).
+    let effects: Map<string, StockEffect> | null = null;
+    if (operation.status === 'PENDING_CONFIRMATION') {
+      effects =
+        operation.type === 'REVERSAL' && operation.reversedOperationId
+          ? await this.inventory.previewReversal(
+              this.db,
+              organizationId,
+              reversalStepsOf(
+                await this.inventory.listMovements(this.db, organizationId, operation.reversedOperationId),
+                operation.items,
+              ),
+            )
+          : await this.inventory.previewStock(
+              this.db,
+              organizationId,
+              operation.type,
+              lines.map(({ item, conversion }) => ({
+                lineNo: item.lineNo,
+                productId: item.productId,
+                warehouseId: item.warehouseId,
+                targetWarehouseId: item.targetWarehouseId,
+                baseQuantity: conversion.baseQuantity,
+              })),
+            );
+    }
+
+    // Geri alma (#78): işlemin etkin ters kaydı ve isteyen kullanıcının şimdi geri alıp alamayacağı.
+    const active = operation.type === 'REVERSAL' ? null : await this.repository.findActiveReversal(this.db, organizationId, operationId);
+    const reversal = active && !active.expired ? { operationId: active.id, status: active.status } : null;
+    const canReverse = actor.kind === 'user' && reversal === null && reversalDenial(actor, record) === null;
+    const reversibleUntil =
+      canReverse && actor.kind === 'user' && actor.role !== 'ADMIN' && record.appliedAt
+        ? new Date(record.appliedAt.getTime() + REVERSAL_WINDOW_MINUTES * 60_000).toISOString()
         : null;
 
     return {
@@ -418,6 +521,10 @@ export class OperationsService {
       note: operation.note,
       createdAt: operation.createdAt,
       expiresAt: operation.expiresAt,
+      reversedOperationId: operation.reversedOperationId,
+      reversal,
+      canReverse,
+      reversibleUntil,
       lines: lines.map(({ item, conversion, sku, productName }) => ({
         lineNo: item.lineNo,
         productId: item.productId,
@@ -491,18 +598,12 @@ export class OperationsService {
       if (actor.kind === 'user') {
         await this.assertAccess(tx, organizationId, actor.userId, record.type, items);
       }
-      const resolved = await this.resolveLines(tx, organizationId, record.type, items);
-      if (resolved.errors.length > 0) {
-        throw linesInvalid(resolved.errors);
-      }
 
-      // 4. Stok: kilitler, yeterlilik, hareketler, maliyet.
-      const movements = await this.applyStock.apply(tx, {
-        organizationId,
-        operationId,
-        type: record.type,
-        lines: resolved.lines,
-      });
+      // 4. Stok: kilitler, yeterlilik, hareketler, maliyet. Ters kayıt geri aldığı işlemin hareketlerinden çalışır.
+      const movements =
+        record.type === 'REVERSAL'
+          ? await this.applyReversal(tx, organizationId, actor, record, items)
+          : await this.applyLines(tx, organizationId, record, items);
 
       // 5. Durum, denetim ve outbox.
       const applied = await this.markApplied(tx, organizationId, operationId, actorId(actor), idempotencyKey);
@@ -591,6 +692,65 @@ export class OperationsService {
   /** Bu Idempotency-Key ile uygulanmış işlem (açılış betiği tekrar çalıştırıldığında ikinci kez açmamak için). */
   findIdByIdempotencyKey(organizationId: string, key: string): Promise<string | null> {
     return this.repository.findIdByIdempotencyKey(this.db, organizationId, key);
+  }
+
+  /** Onayın stok adımı (ters kayıt dışındaki türler): kalemler ana birime çevrilir ve sırayla uygulanır. */
+  private async applyLines(
+    tx: DbExecutor,
+    organizationId: string,
+    record: OperationRecord,
+    items: OperationItem[],
+  ): Promise<Movement[]> {
+    const resolved = await this.resolveLines(tx, organizationId, record.type, items);
+    if (resolved.errors.length > 0) {
+      throw linesInvalid(resolved.errors);
+    }
+    return this.applyStock.apply(tx, { organizationId, operationId: record.id, type: record.type, lines: resolved.lines });
+  }
+
+  /**
+   * Ters kaydın onayındaki stok adımı (#78), onay transaction'ının içinde:
+   *   1. geri alınan işlemi kilitle (ters kayıt zaten kilitli);
+   *   2. işlem hâlâ uygulanmış mı, onaylayan geri alabilir mi (15 dakika, açılış): kilit altında yeniden;
+   *   3. işlemin hareketlerini tersten, aynı birim maliyetle uygula (stok satırı kilitleri onaydaki sırayla);
+   *   4. işlemi APPLIED → REVERSED yap ve denetim kaydını yaz.
+   * Ters kaydın kendi APPLIED geçişi, denetim ve outbox kaydı onayın ortak adımlarındadır.
+   */
+  private async applyReversal(
+    tx: DbExecutor,
+    organizationId: string,
+    actor: OperationActor,
+    record: OperationRecord,
+    items: OperationItem[],
+  ): Promise<Movement[]> {
+    if (!record.reversedOperationId) {
+      throw new Error('Ters kaydın geri aldığı işlem yok.');
+    }
+    const original = await this.repository.lockForUpdate(tx, organizationId, record.reversedOperationId);
+    if (!original) {
+      throw operationNotFound();
+    }
+    const denial = reversalDenial(actor, original);
+    if (denial) {
+      throw denial;
+    }
+    const steps = reversalStepsOf(await this.inventory.listMovements(tx, organizationId, original.id), items);
+    const movements = await this.applyStock.reverse(tx, { organizationId, operationId: record.id, steps });
+
+    const reversed = await this.repository.markReversed(tx, organizationId, original.id);
+    if (!reversed) {
+      throw new Error('Kilitli işlem geri alındı olarak işaretlenemedi.');
+    }
+    await this.audit.record(tx, {
+      organizationId,
+      actorId: actorId(actor),
+      action: 'operation.reversed',
+      entityType: 'operation',
+      entityId: original.id,
+      source: record.source,
+      details: { type: original.type, reversalOperationId: record.id },
+    });
+    return movements;
   }
 
   private async replay(tx: DbExecutor, organizationId: string, operationId: string): Promise<ConfirmOperationResult> {
@@ -763,6 +923,108 @@ function canonicalDecimal(value: string): string {
   const integer = whole.replace(/^0+(?=\d)/, '');
   const digits = fraction.replace(/0+$/, '');
   return digits ? `${integer}.${digits}` : integer;
+}
+
+/**
+ * Geri alma kuralı (#78); geri alınabiliyorsa null, yoksa nedenini anlatan hata. İstekte, onayda (kilit altında) ve
+ * önizlemede ("Geri al" düğmesi) aynı fonksiyon kullanılır. Süre veritabanının saatiyle okunmuş alandan gelir.
+ */
+export function reversalDenial(
+  actor: OperationActor,
+  record: Pick<OperationRecord, 'type' | 'status' | 'createdBy' | 'withinReversalWindow'>,
+): ApiException | null {
+  if (record.type === 'REVERSAL') {
+    return new ApiException(HttpStatus.CONFLICT, 'OPERATION_NOT_REVERSIBLE', 'Ters kayıt geri alınamaz.');
+  }
+  if (record.status === 'REVERSED') {
+    return alreadyReversed();
+  }
+  if (record.status !== 'APPLIED') {
+    return new ApiException(HttpStatus.CONFLICT, 'OPERATION_NOT_REVERSIBLE', 'Yalnızca uygulanmış işlem geri alınabilir.', {
+      status: record.status,
+    });
+  }
+  if (actor.kind === 'system' || actor.role === 'ADMIN') {
+    return null;
+  }
+  if (record.type === 'OPENING') {
+    return new ApiException(HttpStatus.FORBIDDEN, 'REVERSAL_FORBIDDEN', 'Açılış stoğunu yalnızca yönetici geri alabilir.');
+  }
+  if (record.createdBy !== actor.userId) {
+    return new ApiException(
+      HttpStatus.FORBIDDEN,
+      'REVERSAL_FORBIDDEN',
+      'İşlemi yalnızca açan kişi geri alabilir; yönetici her işlemi geri alabilir.',
+    );
+  }
+  if (!record.withinReversalWindow) {
+    return new ApiException(
+      HttpStatus.FORBIDDEN,
+      'REVERSAL_WINDOW_PASSED',
+      `İşlem uygulanalı ${REVERSAL_WINDOW_MINUTES} dakikadan fazla oldu; artık yalnızca yönetici geri alabilir.`,
+    );
+  }
+  return null;
+}
+
+function alreadyReversed(): ApiException {
+  return new ApiException(HttpStatus.CONFLICT, 'OPERATION_ALREADY_REVERSED', 'Bu işlem zaten geri alınmış.');
+}
+
+/** Hareket miktarının işaretsiz hâli ("-5.000" → "5.000"); sayıya çevrilmez (ADR-003). */
+function magnitude(quantityChange: string): string {
+  return quantityChange.replace(/^[-+]/, '');
+}
+
+/**
+ * Ters kaydın kalemleri (#78): geri alınan işlemin stok değiştiren her kalemi için, aynı kalem numarasıyla ve ana
+ * birimde, o kalemin kaynak deposundaki hareketin büyüklüğü. Sayımda bu, sayılan miktar değil sayım farkıdır; farkı
+ * çıkmayan sayım kalemi stoğu değiştirmediği için atlanır.
+ */
+export function reversalItemsOf(items: OperationItem[], movements: Pick<Movement, 'lineNo' | 'warehouseId' | 'quantityChange'>[]): OperationItem[] {
+  return items.flatMap((item): OperationItem[] => {
+    const own = movements.filter((movement) => movement.lineNo === item.lineNo);
+    const source = own.find((movement) => movement.warehouseId === item.warehouseId) ?? own[0];
+    if (!source) {
+      return [];
+    }
+    return [
+      {
+        lineNo: item.lineNo,
+        productId: item.productId,
+        warehouseId: item.warehouseId,
+        targetWarehouseId: item.targetWarehouseId,
+        quantity: magnitude(source.quantityChange),
+        unit: null,
+        unitCost: null,
+      },
+    ];
+  });
+}
+
+/**
+ * Ters kaydın uygulama adımları: geri alınan hareketler tersten (son yazılan önce geri alınır). Aynı stok satırına
+ * birden çok hareket düştüyse ortalama maliyet, hareketler sırayla geri sarılır gibi eski değerine döner. Her adım,
+ * ters kaydın aynı numaralı kalemine ve kaynak ya da hedef tarafına bağlanır.
+ */
+export function reversalStepsOf(
+  movements: Pick<Movement, 'lineNo' | 'warehouseId' | 'productId' | 'quantityChange' | 'unitCost'>[],
+  reversalItems: Pick<OperationItem, 'lineNo' | 'warehouseId'>[],
+): ReversalStep[] {
+  return [...movements].reverse().map((movement) => {
+    const item = reversalItems.find((candidate) => candidate.lineNo === movement.lineNo);
+    if (!item) {
+      throw new Error(`Ters kayıtta ${movement.lineNo}. kalem yok.`);
+    }
+    return {
+      lineNo: movement.lineNo,
+      side: movement.warehouseId === item.warehouseId ? 'source' : 'target',
+      warehouseId: movement.warehouseId,
+      productId: movement.productId,
+      originalChange: movement.quantityChange,
+      unitCost: movement.unitCost,
+    };
+  });
 }
 
 function actorId(actor: OperationActor): string | null {

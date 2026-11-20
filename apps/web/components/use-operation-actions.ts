@@ -21,6 +21,7 @@ export interface OperationActions {
   fetching: boolean;
   confirming: boolean;
   cancelling: boolean;
+  reversing: boolean;
   busy: boolean;
   /** Son onay ya da iptal hatası (API'nin kodu ve mesajı); yeni denemede temizlenir. */
   failure: ApiFailure | null;
@@ -28,6 +29,11 @@ export interface OperationActions {
   result: ConfirmOperationResult | null;
   confirm: (version: number) => Promise<void>;
   cancel: () => Promise<void>;
+  /**
+   * Geri al (#78): stoğu değiştirmez, onay bekleyen bir ters kayıt açar (ya da bekleyeni bulur). Ters kaydın kimliğini
+   * döner; hata olursa null (hata `failure`'da).
+   */
+  reverse: () => Promise<string | null>;
   refresh: () => Promise<void>;
 }
 
@@ -44,6 +50,7 @@ export function useOperationActions(operationId: string): OperationActions {
   const query = $api.useQuery('get', PREVIEW_PATH, init);
   const confirmMutation = $api.useMutation('post', '/v1/operations/{operationId}/confirm');
   const cancelMutation = $api.useMutation('post', '/v1/operations/{operationId}/cancel');
+  const reverseMutation = $api.useMutation('post', '/v1/operations/{operationId}/reverse');
   const confirmKey = useRef<CardConfirmKey | null>(null);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [result, setResult] = useState<ConfirmOperationResult | null>(null);
@@ -51,14 +58,15 @@ export function useOperationActions(operationId: string): OperationActions {
   // Sabit kimlik: kartın "yeni sürüm geldi" effect'i her çizimde yeniden tetiklenmesin.
   const refresh = useCallback(async (): Promise<void> => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: $api.queryOptions('get', PREVIEW_PATH, init).queryKey }),
+      // Bütün önizlemeler: ters kayıt onaylanınca geri aldığı işlemin kartı ve özeti de "Geri alındı" olur (#78).
+      queryClient.invalidateQueries({ queryKey: ['get', PREVIEW_PATH] }),
       // Stok listesi, hareket geçmişi ve onay bekleyen işlemler bir sonraki açılışta sunucudan yeniden okunur.
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/operations'] }),
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/warehouses/{warehouseId}/stock'] }),
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/movements'] }),
       queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/stock'] }),
     ]);
-  }, [queryClient, $api, init]);
+  }, [queryClient]);
 
   async function act(run: () => Promise<void>): Promise<void> {
     setFailure(null);
@@ -81,7 +89,8 @@ export function useOperationActions(operationId: string): OperationActions {
     fetching: query.isFetching,
     confirming: confirmMutation.isPending,
     cancelling: cancelMutation.isPending,
-    busy: confirmMutation.isPending || cancelMutation.isPending,
+    reversing: reverseMutation.isPending,
+    busy: confirmMutation.isPending || cancelMutation.isPending || reverseMutation.isPending,
     failure,
     result,
     confirm: (version) => {
@@ -100,6 +109,13 @@ export function useOperationActions(operationId: string): OperationActions {
       act(async () => {
         await cancelMutation.mutateAsync({ params: { path: { operationId } } });
       }),
+    reverse: async () => {
+      let reversalId: string | null = null;
+      await act(async () => {
+        reversalId = (await reverseMutation.mutateAsync({ params: { path: { operationId } } })).id;
+      });
+      return reversalId;
+    },
     refresh,
   };
 }

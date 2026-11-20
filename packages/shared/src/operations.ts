@@ -153,6 +153,8 @@ export const operationSchema = z.object({
    * Bu andan sonra durum EXPIRED görünür ve onay 409 OPERATION_EXPIRED alır. Diğer işlemlerde null.
    */
   expiresAt: z.iso.datetime({ offset: true }).nullable(),
+  /** Yalnızca ters kayıtta (REVERSAL): geri aldığı işlem (#78). Diğer işlemlerde null. */
+  reversedOperationId: z.uuid().nullable(),
   items: z.array(operationItemSchema),
 });
 export type Operation = z.infer<typeof operationSchema>;
@@ -162,6 +164,12 @@ export type Operation = z.infer<typeof operationSchema>;
  * değişikliğinden (açılış ya da sohbette düzenleme) sayılır. Ekrandan açılan işlemlerin süresi yoktur.
  */
 export const CHAT_PROPOSAL_TTL_MINUTES = 30;
+
+/**
+ * Ters kayıt (#78): işlemi açan kullanıcı, işlem uygulandıktan sonra bu kadar dakika içinde geri alabilir; yönetici
+ * her zaman. Süre veritabanının saatiyle, istekte ve onayda kilit altında denetlenir.
+ */
+export const REVERSAL_WINDOW_MINUTES = 15;
 
 /** Onayla yazılan stok hareketi; miktar ana birimde ve işaretli (giriş +, çıkış −). */
 export const movementSchema = z.object({

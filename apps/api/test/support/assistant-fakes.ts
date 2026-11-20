@@ -238,6 +238,10 @@ export function fakeProposeServices(): { services: ProposeToolServices; calls: P
         note: input.note ?? null,
         createdAt: '2026-11-09T09:00:00.000Z',
         expiresAt: '2026-11-09T09:30:00.000Z',
+        reversedOperationId: null,
+        reversal: null,
+        canReverse: false,
+        reversibleUntil: null,
         lines: input.items.map((item, index) => {
           const base = item.unit === 'koli' ? `${item.quantity}00.000` : `${item.quantity}`;
           const out = input.type !== 'STOCK_IN';

@@ -12,6 +12,7 @@ import {
   ApiBody,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiHeader,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -150,6 +151,35 @@ export class OperationsController {
     });
   }
 
+  @Post(':operationId/reverse')
+  @OrganizationScoped()
+  @ApiOperation({
+    summary:
+      'Uygulanmış işlemi geri almak için ters kalemli, onay bekleyen bir ters kayıt (REVERSAL) açar; stok onayla değişir. ' +
+      'Onay bekleyen ters kaydı varsa onu döner (200)',
+  })
+  @ApiCreatedResponse({ type: OperationDto, description: 'Yeni ters kayıt açıldı' })
+  @ApiOkResponse({ type: OperationDto, description: 'İşlemin onay bekleyen ters kaydı zaten vardı' })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @ApiForbiddenResponse({
+    type: ApiErrorDto,
+    description: 'Geri alma yetkisi yok: işlemi açan kişi 15 dakika içinde, yönetici her zaman; açılışı yalnızca yönetici',
+  })
+  @ApiConflictResponse({
+    type: ApiErrorDto,
+    description: 'İşlem uygulanmamış, zaten geri alınmış, ters kayıt ya da stoğu değiştirmemiş',
+  })
+  async reverse(
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organization: OrganizationContext,
+    @Param('operationId', ParseUUIDPipe) operationId: string,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<OperationDto> {
+    const { operation, created } = await this.operations.requestReversal(organization.id, actorOf(user, organization), operationId);
+    response.status(created ? HttpStatus.CREATED : HttpStatus.OK);
+    return operation;
+  }
+
   @Post(':operationId/cancel')
   @OrganizationScoped()
   @HttpCode(HttpStatus.OK)
@@ -166,7 +196,7 @@ export class OperationsController {
   }
 }
 
-function actorOf(user: AuthUser, organization: OrganizationContext): OperationActor {
+function actorOf(user: AuthUser, organization: OrganizationContext): Extract<OperationActor, { kind: 'user' }> {
   return { kind: 'user', userId: user.id, role: organization.role };
 }
 

@@ -1,13 +1,14 @@
 import type { Database, DbExecutor } from '@ambarci/db';
-import type { OperationType, ProductMovement, StockEffect, Warehouse, WarehouseInput } from '@ambarci/shared';
+import type { Movement, OperationType, ProductMovement, StockEffect, Warehouse, WarehouseInput } from '@ambarci/shared';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 
 import { ApiException } from '../../common/api-exception.js';
 import { postgresErrorOf } from '../../common/postgres-error.js';
 import { DATABASE } from '../../database/database.module.js';
+import type { ReversalStep } from './apply-stock.service.js';
 import { StockLedgerRepository } from './stock-ledger.repository.js';
-import type { ProductWarehouseStockRow, StockLevelRow } from './stock-ledger.repository.js';
-import { stockEffectsOf } from './stock-preview.js';
+import type { PreviewedEffect, ProductWarehouseStockRow, StockLevelRow } from './stock-ledger.repository.js';
+import { reversalEffectsOf, stockEffectsOf } from './stock-preview.js';
 import type { PreviewLine } from './stock-preview.js';
 import { WarehousesRepository } from './warehouses.repository.js';
 import type { WarehouseStatus } from './warehouses.repository.js';
@@ -52,8 +53,17 @@ export class InventoryService {
     type: OperationType,
     lines: PreviewLine[],
   ): Promise<Map<string, StockEffect>> {
-    const rows = await this.ledger.previewEffects(executor, organizationId, stockEffectsOf(type, lines));
-    return new Map(rows.map((row) => [`${row.lineNo}:${row.side}`, { before: row.before, after: row.after, sufficient: row.sufficient }]));
+    return effectMap(await this.ledger.previewEffects(executor, organizationId, stockEffectsOf(type, lines)));
+  }
+
+  /** Ters kayıt onaylanırsa stoğun nasıl değişeceği (#78); anahtarlar previewStock'takiyle aynı. */
+  async previewReversal(executor: DbExecutor, organizationId: string, steps: ReversalStep[]): Promise<Map<string, StockEffect>> {
+    return effectMap(await this.ledger.previewEffects(executor, organizationId, reversalEffectsOf(steps)));
+  }
+
+  /** İşlemin yazılmış hareketleri, kalem ve yazılma sırasıyla (ters kaydın kaynağı, #78). */
+  listMovements(executor: DbExecutor, organizationId: string, operationId: string): Promise<Movement[]> {
+    return this.ledger.listByOperation(executor, organizationId, operationId);
   }
 
   stockLevels(
@@ -107,4 +117,9 @@ async function withNameConflict<T>(write: () => Promise<T>): Promise<T> {
     }
     throw error;
   }
+}
+
+/** Önizlenen etkiler, kalem ve taraf anahtarıyla ("lineNo:source", "lineNo:target"). */
+function effectMap(rows: PreviewedEffect[]): Map<string, StockEffect> {
+  return new Map(rows.map((row) => [`${row.lineNo}:${row.side}`, { before: row.before, after: row.after, sufficient: row.sufficient }]));
 }
