@@ -21,7 +21,8 @@
     "db:test": "pnpm -r --workspace-concurrency=1 test:db",
     "measure:latency": "pnpm build:packages && pnpm --filter @ambarci/api measure:latency",
     "measure:remote": "pnpm build:packages && pnpm --filter @ambarci/api measure:remote",
-    "measure:chat": "pnpm build:packages && pnpm --filter @ambarci/api measure:chat"
+    "measure:chat": "pnpm build:packages && pnpm --filter @ambarci/api measure:chat",
+    "eval": "pnpm build:packages && pnpm --filter @ambarci/api quality"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

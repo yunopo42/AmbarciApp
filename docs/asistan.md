@@ -303,7 +303,7 @@ Denemede bulunan ortam sorunu: geliştirici bilgisayarında Windows kullanıcı 
 
 ## Kapı denemesi ve ilk ölçüm (#60)
 
-7 Kasım 2026'da iki ölçüm yapıldı. İkisi de Render'daki API'ye karşı, gerçek model çağrısıyla (Claude Haiku 5.5, effort `low`, prompt `chat-v1`). Asıl değerlendirme 6. haftada 100 etiketli mesajla (`pnpm eval`); buradaki sayılar küçük bir örneklemden çıkan göstergelerdir.
+7 Kasım 2026'da iki ölçüm yapıldı. İkisi de Render'daki API'ye karşı, gerçek model çağrısıyla (Claude Haiku 5.5, effort `low`, prompt `chat-v1`). Asıl değerlendirme 6. haftada 100 etiketli mesajla (`pnpm eval`, [degerlendirme.md](degerlendirme.md)); buradaki sayılar küçük bir örneklemden çıkan göstergelerdir.
 
 1. **Ölçüm betiği** (`pnpm measure:chat`, `apps/api/src/scripts/measure-chat-remote.ts`). API üzerinden geçici bir şirket kurulur: 2 depo, 6 ürün, onaylanmış giriş ve çıkış işlemleri. 9 sabit soru, her biri ayrı bir sohbette sorulur. Her akış olayının bu bilgisayara geliş zamanı ve aynı soruların `ai_runs` kayıtları okunur; sonunda geçici şirket bütün kayıtlarıyla silinir. Sonuç dosyası: `eval/sohbet/render-2026-11-07.json`.
 2. **Telefon denemesi** ([eval/kapi-denemesi.md](../eval/kapi-denemesi.md)). Android development build, ABC Elektrik; 4 soru yazarak, 5 soru sesle, tek sohbette.
