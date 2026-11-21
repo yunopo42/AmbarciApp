@@ -1,5 +1,10 @@
-import { productMovementQuerySchema, stockListQuerySchema } from '@ambarci/shared';
-import type { ProductMovementQuery, StockListQuery } from '@ambarci/shared';
+import {
+  criticalStockQuerySchema,
+  movementListQuerySchema,
+  productMovementQuerySchema,
+  stockListQuerySchema,
+} from '@ambarci/shared';
+import type { CriticalStockQuery, MovementListQuery, ProductMovementQuery, StockListQuery } from '@ambarci/shared';
 import { Controller, Get, Inject, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
@@ -7,7 +12,13 @@ import { ApiErrorDto } from '../../common/api-error.dto.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import type { OrganizationContext } from '../organizations/organization-context.js';
 import { CurrentOrganization, OrganizationScoped } from '../organizations/organization.decorators.js';
-import { ProductMovementListDto, ProductStockDto, WarehouseStockDto } from './stock.dto.js';
+import {
+  CriticalStockListDto,
+  ProductMovementListDto,
+  ProductStockDto,
+  RecentMovementListDto,
+  WarehouseStockDto,
+} from './stock.dto.js';
 import { StockService } from './stock.service.js';
 
 /** Stoğu okuyan uçlar. Stok yalnızca işlem onayıyla değişir (POST /v1/operations/{id}/confirm). */
@@ -65,5 +76,38 @@ export class StockController {
     @Query(new ZodValidationPipe(productMovementQuerySchema)) query: ProductMovementQuery,
   ): Promise<ProductMovementListDto> {
     return this.stock.productMovements(organization, productId, query);
+  }
+
+  @Get('stock/critical')
+  @OrganizationScoped()
+  @ApiOperation({
+    summary:
+      'Kritik stoktaki ürünler, depo bazında: eşiği tanımlı aktif ürünlerin aktif depolarda eşiğin altına düşen stoğu; çalışan yalnızca yetkili olduğu depoları görür',
+  })
+  @ApiQuery({ name: 'warehouseId', required: false, type: String, format: 'uuid' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'En fazla 100' })
+  @ApiOkResponse({ type: CriticalStockListDto })
+  criticalStock(
+    @CurrentOrganization() organization: OrganizationContext,
+    @Query(new ZodValidationPipe(criticalStockQuerySchema)) query: CriticalStockQuery,
+  ): Promise<CriticalStockListDto> {
+    return this.stock.criticalStock(organization, query);
+  }
+
+  @Get('movements')
+  @OrganizationScoped()
+  @ApiOperation({
+    summary: 'Şirketin son stok hareketleri, en yeni önce; çalışan yalnızca yetkili olduğu depoların hareketlerini görür',
+  })
+  @ApiQuery({ name: 'warehouseId', required: false, type: String, format: 'uuid' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'En fazla 100' })
+  @ApiOkResponse({ type: RecentMovementListDto })
+  recentMovements(
+    @CurrentOrganization() organization: OrganizationContext,
+    @Query(new ZodValidationPipe(movementListQuerySchema)) query: MovementListQuery,
+  ): Promise<RecentMovementListDto> {
+    return this.stock.recentMovements(organization, query);
   }
 }

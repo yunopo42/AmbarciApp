@@ -1,9 +1,9 @@
 import type { DbExecutor } from '@ambarci/db';
-import type { Party, PartyType, Product, ProductInput, ProductList, ProductListQuery } from '@ambarci/shared';
+import type { Party, PartyType, Product, ProductInput, ProductList, ProductListQuery, ProductRef } from '@ambarci/shared';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { CatalogRepository } from './catalog.repository.js';
-import type { ProductSummary, UnitConversion, UnitConversionInput } from './catalog.repository.js';
+import type { ProductSummary, ProductWithMinStock, UnitConversion, UnitConversionInput } from './catalog.repository.js';
 import { PartiesRepository } from './parties.repository.js';
 import { ProductsRepository } from './products.repository.js';
 import type { SimilarProduct } from './products.repository.js';
@@ -56,6 +56,16 @@ export class CatalogService {
   /** Ürünün ana birimi ve kritik eşiği; ürün bu şirkette yoksa (başka şirketinki de) null. */
   findProductSummary(executor: DbExecutor, organizationId: string, productId: string): Promise<ProductSummary | null> {
     return this.repository.findProductSummary(executor, organizationId, productId);
+  }
+
+  /** Kritik stok eşiği tanımlı aktif ürünler (gösterge panelinin kritik stok listesi). */
+  listProductsWithMinStock(executor: DbExecutor, organizationId: string): Promise<ProductWithMinStock[]> {
+    return this.repository.listProductsWithMinStock(executor, organizationId);
+  }
+
+  /** Ürünlerin kodu, adı ve ana birimi (son hareketler listesi); bu şirkette olmayan kimlik dönmez. */
+  findProductRefs(executor: DbExecutor, organizationId: string, productIds: string[]): Promise<ProductRef[]> {
+    return this.repository.findProductRefs(executor, organizationId, [...new Set(productIds)]);
   }
 
   /** İçe aktarmada dosyadaki SKU ve barkodlardan bu şirkette zaten kullanılanlar. */

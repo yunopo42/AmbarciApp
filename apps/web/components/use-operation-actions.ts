@@ -4,6 +4,7 @@ import { cardActionFailure, confirmKeyFor, describeApiError, randomUuid } from '
 import type { ApiFailure, CardConfirmKey, CardPreview } from '@ambarci/api-client';
 import type { ConfirmOperationResult } from '@ambarci/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useApi } from '@/components/api-provider';
@@ -12,6 +13,25 @@ import { useApi } from '@/components/api-provider';
 // işlem kartı (#77) aynı istekleri ve aynı kuralları kullanır. Stok yalnızca onay ucunda değişir (mimari değişmez 2).
 
 const PREVIEW_PATH = '/v1/operations/{operationId}/preview';
+
+/**
+ * Bir işlemin durumu ya da stok değişince eskiyen sorgular: önizlemeler, işlem listesi (onay kuyruğu ve menüdeki
+ * sayı), stok, hareketler ve gösterge panelinin kritik stok listesi. Tekli onay (özet sayfası, sohbet kartı) ve onay
+ * kuyruğundaki toplu onay aynı listeyi yeniler.
+ */
+export async function refreshOperationQueries(queryClient: QueryClient): Promise<void> {
+  await Promise.all([
+    // Bütün önizlemeler: ters kayıt onaylanınca geri aldığı işlemin kartı ve özeti de "Geri alındı" olur (#78).
+    queryClient.invalidateQueries({ queryKey: ['get', PREVIEW_PATH] }),
+    // Stok listesi, hareket geçmişi ve onay bekleyen işlemler bir sonraki açılışta sunucudan yeniden okunur.
+    queryClient.invalidateQueries({ queryKey: ['get', '/v1/operations'] }),
+    queryClient.invalidateQueries({ queryKey: ['get', '/v1/warehouses/{warehouseId}/stock'] }),
+    queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/movements'] }),
+    queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/stock'] }),
+    queryClient.invalidateQueries({ queryKey: ['get', '/v1/stock/critical'] }),
+    queryClient.invalidateQueries({ queryKey: ['get', '/v1/movements'] }),
+  ]);
+}
 
 export interface OperationActions {
   preview: CardPreview | undefined;
@@ -56,17 +76,7 @@ export function useOperationActions(operationId: string): OperationActions {
   const [result, setResult] = useState<ConfirmOperationResult | null>(null);
 
   // Sabit kimlik: kartın "yeni sürüm geldi" effect'i her çizimde yeniden tetiklenmesin.
-  const refresh = useCallback(async (): Promise<void> => {
-    await Promise.all([
-      // Bütün önizlemeler: ters kayıt onaylanınca geri aldığı işlemin kartı ve özeti de "Geri alındı" olur (#78).
-      queryClient.invalidateQueries({ queryKey: ['get', PREVIEW_PATH] }),
-      // Stok listesi, hareket geçmişi ve onay bekleyen işlemler bir sonraki açılışta sunucudan yeniden okunur.
-      queryClient.invalidateQueries({ queryKey: ['get', '/v1/operations'] }),
-      queryClient.invalidateQueries({ queryKey: ['get', '/v1/warehouses/{warehouseId}/stock'] }),
-      queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/movements'] }),
-      queryClient.invalidateQueries({ queryKey: ['get', '/v1/products/{productId}/stock'] }),
-    ]);
-  }, [queryClient]);
+  const refresh = useCallback((): Promise<void> => refreshOperationQueries(queryClient), [queryClient]);
 
   async function act(run: () => Promise<void>): Promise<void> {
     setFailure(null);

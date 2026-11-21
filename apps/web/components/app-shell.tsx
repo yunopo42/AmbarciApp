@@ -1,6 +1,6 @@
 'use client';
 
-import { Boxes, Contact, LayoutDashboard, MessageSquareText, Package, Users, Warehouse } from 'lucide-react';
+import { Boxes, ClipboardCheck, Contact, LayoutDashboard, MessageSquareText, Package, Users, Warehouse } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -11,8 +11,10 @@ import { CHAT_PANEL_ID, ChatPanel } from '@/components/chat/chat-panel';
 import { useChatPanelOpen } from '@/components/chat/use-chat-panel-open';
 import { useOrganizations } from '@/components/organization-provider';
 import { SignOutButton } from '@/components/sign-out-button';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/input';
+import { usePendingCount } from '@/components/use-pending-count';
 import { ROLE_LABELS } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 
@@ -24,10 +26,13 @@ interface NavItem {
   adminOnly?: boolean;
   /** Bu bölüme ait sayılan diğer adresler (ör. stok işlemi sayfaları Stok altında). */
   also?: string[];
+  /** Yanında onay bekleyen işlem sayısı gösterilir. */
+  pendingBadge?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Gösterge paneli', icon: LayoutDashboard },
+  { href: '/approvals', label: 'Onay kuyruğu', icon: ClipboardCheck, pendingBadge: true },
   { href: '/stock', label: 'Stok', icon: Boxes, also: ['/operations'] },
   { href: '/products', label: 'Ürünler', icon: Package },
   { href: '/warehouses', label: 'Depolar', icon: Warehouse },
@@ -92,6 +97,7 @@ export function AppShell({ email, children }: { email: string | null; children: 
                     >
                       <Icon aria-hidden className="size-5 shrink-0" />
                       {item.label}
+                      {item.pendingBadge ? <PendingBadge /> : null}
                     </Link>
                   </li>
                 );
@@ -126,5 +132,22 @@ export function AppShell({ email, children }: { email: string | null; children: 
       {/* Panel şirket katmanının içinde: sohbetleri aktif şirketin istemcisiyle çeker. */}
       {active ? <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} /> : null}
     </div>
+  );
+}
+
+/**
+ * Menüdeki onay bekleyen işlem sayısı. Şirket katmanının içinde çizilir (menü yalnızca aktif şirket varken görünür);
+ * gösterge panelindeki kutuyla aynı sorguyu paylaşır. Bekleyen yoksa ya da sayı okunamadıysa görünmez.
+ */
+function PendingBadge(): JSX.Element | null {
+  const { count } = usePendingCount();
+  if (!count) {
+    return null;
+  }
+  return (
+    <Badge variant="pending" className="ml-auto tabular-nums">
+      {count}
+      <span className="sr-only"> işlem onay bekliyor</span>
+    </Badge>
   );
 }

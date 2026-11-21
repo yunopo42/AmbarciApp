@@ -1,7 +1,12 @@
 import type {
+  CriticalStockItem,
+  CriticalStockList,
   MovementType,
   ProductMovement,
   ProductMovementList,
+  ProductRef,
+  RecentMovement,
+  RecentMovementList,
   ProductStock,
   ProductWarehouseStock,
   StockLevel,
@@ -132,4 +137,65 @@ export class ProductStockDto implements ProductStock {
 
   @ApiProperty({ type: [ProductWarehouseStockDto] })
   warehouses!: ProductWarehouseStockDto[];
+}
+
+export class ProductRefDto implements ProductRef {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ example: 'PRZ-TOP-B' })
+  sku!: string;
+
+  @ApiProperty({ example: 'Topraklı priz, beyaz' })
+  name!: string;
+
+  @ApiProperty({ example: 'adet' })
+  baseUnit!: string;
+}
+
+export class CriticalStockItemDto implements CriticalStockItem {
+  @ApiProperty({ type: ProductRefDto })
+  product!: ProductRefDto;
+
+  @ApiProperty({ type: WarehouseRefDto })
+  warehouse!: WarehouseRefDto;
+
+  @ApiProperty({ example: '4.000', description: 'Ana birimde' })
+  quantity!: string;
+
+  @ApiProperty({ example: '10.000', description: 'Ürünün kritik stok eşiği, ana birimde' })
+  minStock!: string;
+}
+
+export class CriticalStockListDto implements CriticalStockList {
+  @ApiProperty({ type: [CriticalStockItemDto] })
+  items!: CriticalStockItemDto[];
+
+  @ApiProperty({ description: 'Kritik eşiğin altındaki (ürün, depo) satırlarının sayısı' })
+  total!: number;
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
+}
+
+export class RecentMovementDto extends ProductMovementDto implements RecentMovement {
+  @ApiProperty({ type: ProductRefDto })
+  product!: ProductRefDto;
+}
+
+export class RecentMovementListDto implements RecentMovementList {
+  @ApiProperty({ type: [RecentMovementDto] })
+  items!: RecentMovementDto[];
+
+  @ApiProperty()
+  total!: number;
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
 }

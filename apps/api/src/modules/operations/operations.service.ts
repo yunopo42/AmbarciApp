@@ -402,17 +402,29 @@ export class OperationsService {
    * açılış işlemi). Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür; açılış stoğunu yalnızca
    * yönetici girdiği için açılış işlemlerini de görmez. Böylece listedeki her işlemin özeti açılabilir.
    */
+  /**
+   * İşlem listesi ve onay kuyruğu (#87). Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür ve açılış
+   * işlemlerini görmez (onaylayamayacağı işlem kuyruğunda durmasın). Depo adları inventory, açan kişinin e-postası
+   * organizations modülünün servisinden okunur (modül sınırı).
+   */
   async list(organization: OrganizationContext, query: OperationListQuery): Promise<OperationList> {
     const warehouseIds = await this.organizations.visibleWarehouseIds(organization);
     const { items, total } = await this.repository.listSummaries(this.db, organization.id, {
       status: query.status,
       warehouseIds,
       excludeTypes: organization.role === 'ADMIN' ? [] : ['OPENING'],
+      type: query.type,
+      source: query.source,
+      warehouseId: query.warehouseId?.toLowerCase(),
       page: query.page,
       pageSize: query.pageSize,
     });
     const ids = [...new Set(items.flatMap((item) => item.warehouseIds))];
-    const statuses = ids.length > 0 ? await this.inventory.findWarehouseStatuses(this.db, organization.id, ids) : [];
+    const creatorIds = items.flatMap((item) => (item.createdBy ? [item.createdBy] : []));
+    const [statuses, emailOf] = await Promise.all([
+      ids.length > 0 ? this.inventory.findWarehouseStatuses(this.db, organization.id, ids) : Promise.resolve([]),
+      this.organizations.memberEmails(organization.id, creatorIds),
+    ]);
     const nameOf = new Map(statuses.map((warehouse) => [warehouse.id, warehouse.name]));
     return {
       items: items.map((item) => ({
@@ -420,7 +432,10 @@ export class OperationsService {
         type: item.type,
         status: item.status,
         source: item.source,
+        version: item.version,
+        createdBy: item.createdBy ? { userId: item.createdBy, email: emailOf.get(item.createdBy) ?? null } : null,
         createdAt: item.createdAt,
+        expiresAt: item.expiresAt,
         lineCount: item.lineCount,
         warehouses: item.warehouseIds.map((id) => ({ id, name: nameOf.get(id) ?? '' })),
       })),

@@ -164,40 +164,77 @@ export type OperationSummaryRow = {
   type: OperationType;
   status: OperationStatus;
   source: ActionSource;
+  version: number;
+  createdBy: string | null;
   /** ISO 8601 (to_json); ham sorguda sürücü zaman damgasını metin döndürür. */
   createdAt: string;
+  /** Sohbet önerisinin son onay anı (ISO 8601); expiresAtOf ile aynı kural, SQL'de. Diğer işlemlerde null. */
+  expiresAt: string | null;
   lineCount: number;
   warehouseIds: string[];
 };
+
+/** İşlem listesinin süzgeci. */
+export interface OperationListFilter {
+  status: OperationStatus;
+  /** Verilirse yalnızca bütün depoları bu listede olan işlemler (çalışanın yetkili depoları). */
+  warehouseIds: string[] | null;
+  /** Listelenmeyecek türler (çalışan açılış işlemini görmez). */
+  excludeTypes: OperationType[];
+  /** Ekranın süzgeçleri: tür, kaynak ve işlemin dokunduğu depolardan biri. */
+  type?: OperationType | undefined;
+  source?: ActionSource | undefined;
+  warehouseId?: string | undefined;
+  page: number;
+  pageSize: number;
+}
 
 /** İşlem sorguları; her sorgu şirket kimliğiyle sınırlanır. */
 @Injectable()
 export class OperationsRepository {
   /**
    * İşlem özetleri, en yeni önce. `warehouseIds` verilirse yalnızca bütün depoları o listede olan işlemler (çalışan,
-   * özetini açıp onaylayabileceği işlemleri görür); `excludeTypes` listelenmeyecek türler.
+   * özetini açıp onaylayabileceği işlemleri görür); `excludeTypes` listelenmeyecek türler. Tür ve kaynak süzgeci
+   * işlem satırında, depo süzgeci kalemlerden toplanan depo listesinde uygulanır.
    */
   async listSummaries(
     executor: DbExecutor,
     organizationId: string,
-    filter: { status: OperationStatus; warehouseIds: string[] | null; excludeTypes: OperationType[]; page: number; pageSize: number },
+    filter: OperationListFilter,
   ): Promise<{ items: OperationSummaryRow[]; total: number }> {
     if (filter.warehouseIds?.length === 0) {
       return { items: [], total: 0 };
     }
-    const excluded: SQL =
-      filter.excludeTypes.length > 0
-        ? sql`and o.type not in (${sql.join(
-            filter.excludeTypes.map((type) => sql`${type}`),
-            sql`, `,
-          )})`
-        : sql``;
-    const visible: SQL = filter.warehouseIds
-      ? sql`where s.warehouse_ids <@ array[${sql.join(
+    const operationFilters: SQL[] = [];
+    if (filter.excludeTypes.length > 0) {
+      operationFilters.push(
+        sql`and o.type not in (${sql.join(
+          filter.excludeTypes.map((type) => sql`${type}`),
+          sql`, `,
+        )})`,
+      );
+    }
+    if (filter.type) {
+      operationFilters.push(sql`and o.type = ${filter.type}`);
+    }
+    if (filter.source) {
+      operationFilters.push(sql`and o.source = ${filter.source}`);
+    }
+    // Depo koşulları kalemler toplandıktan sonra, depo listesi üzerinde: görünürlük (bütün depolar yetkili depolarda)
+    // ve ekranın depo süzgeci (depolardan biri seçilen depo).
+    const listFilters: SQL[] = [];
+    if (filter.warehouseIds) {
+      listFilters.push(
+        sql`s.warehouse_ids <@ array[${sql.join(
           filter.warehouseIds.map((id) => sql`${id}::uuid`),
           sql`, `,
-        )}]`
-      : sql``;
+        )}]`,
+      );
+    }
+    if (filter.warehouseId) {
+      listFilters.push(sql`${filter.warehouseId}::uuid = any(s.warehouse_ids)`);
+    }
+    const visible: SQL = listFilters.length > 0 ? sql`where ${sql.join(listFilters, sql` and `)}` : sql``;
     // Süresi dolmuş sohbet önerisi, kalıcı olarak yazılmadan önce de "onay bekleyen" listesinde görünmez, EXPIRED
     // listesinde görünür (#75). Kayıtlı durumla önce daraltılır: (şirket, durum, tarih) indeksi kullanılsın.
     const stored: OperationStatus[] = filter.status === 'EXPIRED' ? ['EXPIRED', 'PENDING_CONFIRMATION'] : [filter.status];
@@ -205,10 +242,13 @@ export class OperationsRepository {
       stored.map((status) => sql`${status}`),
       sql`, `,
     );
-    // Kalemler işlemle birleştirilir: kalem sayısı ve çıkış/hedef depoların tekrarsız listesi.
+    // Kalemler işlemle birleştirilir: kalem sayısı ve çıkış/hedef depoların tekrarsız listesi. Son onay anı
+    // expiresAtOf'taki kuralla: sohbetten açılmış ve kayıtlı durumu onay bekleyen işlemde son değişiklik + 30 dakika.
     const summaries = sql`
       with s as (
-        select o.id, o.type, ${EFFECTIVE_STATUS_IN_LIST} as status, o.source, o.created_at, count(*)::int as line_count,
+        select o.id, o.type, ${EFFECTIVE_STATUS_IN_LIST} as status, o.source, o.version, o.created_by, o.created_at,
+               case when o.source = 'CHAT' and o.status = 'PENDING_CONFIRMATION' then o.updated_at + ${TTL} end as expires_at,
+               count(*)::int as line_count,
                array(
                  select distinct w
                  from unnest(array_agg(i.warehouse_id) || array_agg(i.target_warehouse_id)) as w
@@ -217,13 +257,13 @@ export class OperationsRepository {
         from ${operations} o
         join ${operationItems} i on i.organization_id = o.organization_id and i.operation_id = o.id
         where o.organization_id = ${organizationId} and o.status in (${storedIn})
-          and ${EFFECTIVE_STATUS_IN_LIST} = ${filter.status} ${excluded}
+          and ${EFFECTIVE_STATUS_IN_LIST} = ${filter.status} ${sql.join(operationFilters, sql` `)}
         group by o.id
       )`;
     const [totalRow] = await executor.execute<{ total: number }>(sql`${summaries} select count(*)::int as total from s ${visible}`);
     const items = await executor.execute<OperationSummaryRow>(sql`${summaries}
-      select id, type, status, source, to_json(created_at) #>> '{}' as "createdAt", line_count as "lineCount",
-             warehouse_ids as "warehouseIds"
+      select id, type, status, source, version, created_by as "createdBy", to_json(created_at) #>> '{}' as "createdAt",
+             to_json(expires_at) #>> '{}' as "expiresAt", line_count as "lineCount", warehouse_ids as "warehouseIds"
       from s ${visible}
       order by created_at desc, id
       limit ${filter.pageSize} offset ${(filter.page - 1) * filter.pageSize}`);

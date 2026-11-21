@@ -1454,6 +1454,48 @@
             }
           },
           {
+            "name": "warehouseId",
+            "required": false,
+            "in": "query",
+            "description": "İşlemin dokunduğu depolardan biri (transferde hedef dahil)",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "SCREEN",
+                "CHAT",
+                "DOCUMENT",
+                "IMPORT",
+                "SYSTEM"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "STOCK_IN",
+                "STOCK_OUT",
+                "TRANSFER",
+                "COUNT",
+                "WASTE",
+                "OPENING",
+                "REVERSAL"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -2195,6 +2237,160 @@
           }
         ],
         "summary": "Ürünün hareket geçmişi, en yeni önce; çalışan yalnızca yetkili olduğu depoların hareketlerini görür",
+        "tags": [
+          "stock"
+        ]
+      }
+    },
+    "/v1/stock/critical": {
+      "get": {
+        "operationId": "StockController_criticalStock",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "En fazla 100",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "warehouseId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CriticalStockListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Kritik stoktaki ürünler, depo bazında: eşiği tanımlı aktif ürünlerin aktif depolarda eşiğin altına düşen stoğu; çalışan yalnızca yetkili olduğu depoları görür",
+        "tags": [
+          "stock"
+        ]
+      }
+    },
+    "/v1/movements": {
+      "get": {
+        "operationId": "StockController_recentMovements",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "En fazla 100",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "warehouseId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentMovementListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Şirket seçilmemiş ya da kimlik geçersiz",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Şirkete, role ya da depoya erişim yok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "organization": []
+          }
+        ],
+        "summary": "Şirketin son stok hareketleri, en yeni önce; çalışan yalnızca yetkili olduğu depoların hareketlerini görür",
         "tags": [
           "stock"
         ]
@@ -3369,6 +3565,24 @@
           "items"
         ]
       },
+      "OperationCreatorDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "description": "Şirketten ayrılmış ya da hesabı silinmiş kullanıcıda null"
+          }
+        },
+        "required": [
+          "userId",
+          "email"
+        ]
+      },
       "WarehouseRefDto": {
         "type": "object",
         "properties": {
@@ -3428,9 +3642,30 @@
               "SYSTEM"
             ]
           },
+          "version": {
+            "type": "number",
+            "example": 1,
+            "description": "Onay isteği bu sürümü gönderir"
+          },
+          "createdBy": {
+            "nullable": true,
+            "description": "İşlemi açan; sistemin açtığı işlemde null",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OperationCreatorDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an"
           },
           "lineCount": {
             "type": "number",
@@ -3449,7 +3684,10 @@
           "type",
           "status",
           "source",
+          "version",
+          "createdBy",
           "createdAt",
+          "expiresAt",
           "lineCount",
           "warehouses"
         ]
@@ -4042,6 +4280,183 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ProductMovementDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "ProductRefDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sku": {
+            "type": "string",
+            "example": "PRZ-TOP-B"
+          },
+          "name": {
+            "type": "string",
+            "example": "Topraklı priz, beyaz"
+          },
+          "baseUnit": {
+            "type": "string",
+            "example": "adet"
+          }
+        },
+        "required": [
+          "id",
+          "sku",
+          "name",
+          "baseUnit"
+        ]
+      },
+      "CriticalStockItemDto": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "$ref": "#/components/schemas/ProductRefDto"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/WarehouseRefDto"
+          },
+          "quantity": {
+            "type": "string",
+            "example": "4.000",
+            "description": "Ana birimde"
+          },
+          "minStock": {
+            "type": "string",
+            "example": "10.000",
+            "description": "Ürünün kritik stok eşiği, ana birimde"
+          }
+        },
+        "required": [
+          "product",
+          "warehouse",
+          "quantity",
+          "minStock"
+        ]
+      },
+      "CriticalStockListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CriticalStockItemDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Kritik eşiğin altındaki (ürün, depo) satırlarının sayısı"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "RecentMovementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lineNo": {
+            "type": "number",
+            "example": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/WarehouseRefDto"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "IN",
+              "OUT",
+              "TRANSFER_OUT",
+              "TRANSFER_IN",
+              "COUNT_SURPLUS",
+              "COUNT_SHORTAGE",
+              "WASTE",
+              "REVERSAL"
+            ]
+          },
+          "quantityChange": {
+            "type": "string",
+            "example": "-36.000",
+            "description": "Ana birimde, işaretli: giriş +, çıkış −"
+          },
+          "unitCost": {
+            "type": "string",
+            "example": "10.0000"
+          },
+          "quantityAfter": {
+            "type": "string",
+            "example": "84.000"
+          },
+          "averageCostAfter": {
+            "type": "string",
+            "example": "10.0000"
+          },
+          "product": {
+            "$ref": "#/components/schemas/ProductRefDto"
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "lineNo",
+          "createdAt",
+          "warehouse",
+          "type",
+          "quantityChange",
+          "unitCost",
+          "quantityAfter",
+          "averageCostAfter",
+          "product"
+        ]
+      },
+      "RecentMovementListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecentMovementDto"
             }
           },
           "total": {

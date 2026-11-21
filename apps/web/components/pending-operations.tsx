@@ -14,9 +14,9 @@ import { ACTION_SOURCE_LABELS, formatDateTime, OPERATION_TYPE_LABELS } from '@/l
 const SHOWN = 20;
 
 /**
- * Onay bekleyen işlemler: ekrandan açılıp bırakılan fiş ya da içe aktarmanın açılış işlemi buradan özetine döner.
- * Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür (API). Bekleyen işlem yoksa hiç görünmez.
- * 5–6. haftadaki onay kuyruğu bunun üzerine kurulacak.
+ * Stok sayfasındaki kısa liste: ekrandan açılıp bırakılan fiş ya da içe aktarmanın açılış işlemi buradan özetine döner.
+ * Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür (API). Bekleyen işlem yoksa hiç görünmez. Süzgeç
+ * ve toplu onay onay kuyruğundadır (/approvals, #87).
  */
 export function PendingOperations(): JSX.Element | null {
   const { $api } = useApi();
@@ -60,9 +60,12 @@ export function PendingOperations(): JSX.Element | null {
           </li>
         ))}
       </ul>
-      {total > items.length ? (
-        <p className="text-text-muted">En yeni {items.length} işlem gösteriliyor; toplam {total}.</p>
-      ) : null}
+      <p className="text-text-muted">
+        {total > items.length ? `En yeni ${items.length} işlem gösteriliyor; toplam ${total}. ` : ''}
+        <Link href="/approvals" className="text-primary-action underline">
+          Onay kuyruğunda süz ve toplu onayla
+        </Link>
+      </p>
     </Card>
   );
 }

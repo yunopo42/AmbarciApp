@@ -142,6 +142,7 @@ operations → APPLIED
 | `operations (organization_id, source_message_id)` | Sohbet geçmişinde mesajların işlem kartları (#75); mesaj silinince bağın boşaltılması |
 | `inventory_movements (organization_id, warehouse_id, product_id, created_at)` | Stok kartı: bir depodaki ürünün hareketleri |
 | `inventory_movements (organization_id, product_id, created_at)` | Ürünün bütün depolardaki son hareketleri (mobil ürün detayı, asistanın `list_recent_movements` aracı) |
+| — | Gösterge panelinin şirket geneli son hareketleri (`GET /v1/movements`, #87) şimdilik indekssiz: sorgu şirket kimliğiyle süzülür ve ilk sayfayı okur, MVP veri hacminde yeterli. Hareket sayısı büyürse `(organization_id, created_at)` indeksi eklenir |
 | `audit_logs (organization_id, created_at)`, `(organization_id, entity_type, entity_id)` | Denetim listesi ve bir kaydın geçmişi |
 | `outbox_events (created_at) WHERE processed_at IS NULL` | Worker'ın bekleyen olayları okuması |
 | Diğerleri | Yabancı anahtarlar (Supabase performans denetimi indekssiz anahtar bırakmaz) |

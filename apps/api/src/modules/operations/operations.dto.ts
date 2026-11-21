@@ -8,6 +8,7 @@ import type {
   Operation,
   OperationItem,
   OperationItemInput,
+  OperationCreator,
   OperationList,
   OperationPreview,
   OperationPreviewLine,
@@ -21,7 +22,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 // Swagger için sınıf karşılıkları; alanlar packages/shared/src/operations.ts içindeki şemalarla aynı kalmak
 // zorunda. Gövde doğrulaması ZodValidationPipe ile ortak şemadan yapılır.
 
-const OPERATION_TYPES: OperationType[] = ['STOCK_IN', 'STOCK_OUT', 'TRANSFER', 'COUNT', 'WASTE', 'OPENING', 'REVERSAL'];
+export const OPERATION_TYPES: OperationType[] = ['STOCK_IN', 'STOCK_OUT', 'TRANSFER', 'COUNT', 'WASTE', 'OPENING', 'REVERSAL'];
 const CREATABLE_TYPES: CreatableOperationType[] = ['STOCK_IN', 'STOCK_OUT', 'TRANSFER', 'COUNT', 'WASTE', 'OPENING'];
 export const STATUSES: OperationStatus[] = [
   'RECEIVED',
@@ -321,6 +322,14 @@ export class OperationPreviewDto implements OperationPreview {
   lines!: OperationPreviewLineDto[];
 }
 
+export class OperationCreatorDto implements OperationCreator {
+  @ApiProperty({ format: 'uuid' })
+  userId!: string;
+
+  @ApiProperty({ nullable: true, type: String, description: 'Şirketten ayrılmış ya da hesabı silinmiş kullanıcıda null' })
+  email!: string | null;
+}
+
 export class OperationSummaryDto implements OperationSummary {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -334,8 +343,22 @@ export class OperationSummaryDto implements OperationSummary {
   @ApiProperty({ enum: SOURCES })
   source!: ActionSource;
 
+  @ApiProperty({ example: 1, description: 'Onay isteği bu sürümü gönderir' })
+  version!: number;
+
+  @ApiProperty({ type: OperationCreatorDto, nullable: true, description: 'İşlemi açan; sistemin açtığı işlemde null' })
+  createdBy!: OperationCreatorDto | null;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
+
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description: 'Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an',
+  })
+  expiresAt!: string | null;
 
   @ApiProperty({ example: 2 })
   lineCount!: number;
