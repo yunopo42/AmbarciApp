@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { formatDecimal } from '@ambarci/shared';
 
-import { CATEGORY_LABELS, describeExpectation, repoRoot } from './cases.js';
+import { CATEGORY_LABELS, describeExpectation, FROZEN_TEST_SET, repoRoot } from './cases.js';
 import type { CaseCategory, QualityCase, SetSelection } from './cases.js';
 import { CHECK_LABELS } from './scoring.js';
 import type { CaseScore, Check, CheckName, ObservedOperation, ObservedTurn } from './scoring.js';
@@ -324,8 +324,14 @@ export function reportMarkdown(report: QualityReport): string {
   const out: string[] = [];
   out.push(`# Değerlendirme: ${reportTitle(report)}`, '');
   out.push(`- Tarih: ${report.measuredAt}`);
+  const frozen =
+    report.set === 'test' && report.only.length === 0
+      ? report.casesHash === FROZEN_TEST_SET.hash
+        ? ` (${FROZEN_TEST_SET.frozenAt} tarihinde dondurulan kümeyle aynı)`
+        : ' (UYARI: dondurulan test kümesinden farklı; sonuç karşılaştırılamaz)'
+      : '';
   out.push(
-    `- Küme: ${report.set}, ${summary.cases} mesaj${report.only.length > 0 ? ` (yalnızca ${report.only.join(', ')})` : ''}; özet ${report.casesHash}`,
+    `- Küme: ${report.set}, ${summary.cases} mesaj${report.only.length > 0 ? ` (yalnızca ${report.only.join(', ')})` : ''}; özet ${report.casesHash}${frozen}`,
   );
   out.push(`- Prompt: ${report.promptVersion ?? '—'}`);
   out.push(`- Sonuç: **${summary.passed}/${summary.cases} geçti (${percentText({ total: summary.cases, passed: summary.passed })})**`);
@@ -455,6 +461,8 @@ export function writeReport(report: QualityReport): { json: string; markdown: st
     report.set,
     report.model.replace(/^claude-/, ''),
     report.effort,
+    // Prompt sürümü dosya adında: aynı gün chat-v2 ve chat-v3 koşuları birbirinin üstüne yazılmasın.
+    ...(report.promptVersion ? [report.promptVersion.replace(/[^a-z0-9-]+/g, '+')] : []),
     ...(report.only.length > 0 ? ['secili'] : []),
     ...(report.label ? [report.label] : []),
   ].join('-');

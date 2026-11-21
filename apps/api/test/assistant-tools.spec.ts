@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 
 import { ALL_CHAT_PROMPTS } from '../src/modules/ai/prompts/index.js';
+import { modelNumber } from '../src/modules/assistant/tools/model-number.js';
 import { defineTool, ToolRegistry } from '../src/modules/assistant/tools/registry.js';
 import type { ToolContext } from '../src/modules/assistant/tools/registry.js';
 import { adminContext, BRANCH, employeeContext, fullRegistry, MAIN, PARTY, PRODUCT } from './support/assistant-fakes.js';
@@ -36,6 +37,23 @@ function unsupportedKeys(node: unknown, found: string[] = []): string[] {
   }
   return found;
 }
+
+describe('Modele giden sayılar (#86)', () => {
+  it('binlik ayırıcı yok, ondalık ayırıcı nokta; sondaki sıfırlar atılır, işaret korunur', () => {
+    expect(['2000.000', '1412.500', '120.000', '0.500', '0.000', '5.0000'].map((value) => modelNumber(value))).toEqual([
+      '2000',
+      '1412.5',
+      '120',
+      '0.5',
+      '0',
+      '5',
+    ]);
+    expect(modelNumber('-12.500')).toBe('−12.5');
+    expect(modelNumber('50.000', { signed: true })).toBe('+50');
+    expect(modelNumber('0.000', { signed: true })).toBe('0');
+    expect(modelNumber('yok')).toBe('yok');
+  });
+});
 
 describe('Araç kayıt defteri: tanımlar', () => {
   it('sabit sıra: önce okuma, sonra öneri araçları; strict şemalar desteklenmeyen kural içermez', () => {
@@ -100,6 +118,39 @@ describe('Araç kayıt defteri: tanımlar', () => {
       const schema = byName[name] as { properties: Record<string, unknown> };
       expect(Object.keys(schema.properties).filter((key) => /organization|user/.test(key)), name).toEqual([]);
     }
+  });
+
+  it('chat-v3: şemalarda zorunlu alanlar önce, isteğe bağlılar sonra; kurallar ve iç içe nesneler aynı (#86)', () => {
+    const tools = registry().registry;
+    const keysOf = (schema: Record<string, unknown>): string[] => Object.keys(schema.properties as Record<string, unknown>);
+    const declared = Object.fromEntries(tools.definitions().map((tool) => [tool.name, tool.inputSchema]));
+    const requiredFirst = Object.fromEntries(tools.definitions(undefined, { requiredFirst: true }).map((tool) => [tool.name, tool.inputSchema]));
+
+    // chat-v2'nin sırası: isteğe bağlı note ve party_id zorunlu lines'tan önce. Strict modda model kalemleri yazınca
+    // nesne kapanıyor, bu alanlar gönderilemiyordu.
+    expect(keysOf(declared.propose_waste as Record<string, unknown>)).toEqual(['operation_id', 'warehouse_id', 'note', 'lines']);
+    expect(keysOf(requiredFirst.propose_waste as Record<string, unknown>)).toEqual(['warehouse_id', 'lines', 'operation_id', 'note']);
+    expect(keysOf(requiredFirst.propose_stock_in as Record<string, unknown>)).toEqual(['warehouse_id', 'lines', 'operation_id', 'party_id', 'note']);
+    expect(keysOf(requiredFirst.propose_transfer as Record<string, unknown>)).toEqual([
+      'source_warehouse_id',
+      'target_warehouse_id',
+      'lines',
+      'operation_id',
+      'note',
+    ]);
+    // Kalemlerde isteğe bağlı birim ve maliyet zaten sondaydı; değişmez.
+    const lineKeys = (schema: unknown): string[] =>
+      Object.keys(((schema as { properties: { lines: { items: { properties: object } } } }).properties.lines.items.properties));
+    expect(lineKeys(requiredFirst.propose_stock_in)).toEqual(['product_id', 'quantity', 'unit', 'unit_cost']);
+    // Sıra dışında her şey aynı: aynı alanlar, aynı required listesi, aynı kurallar.
+    for (const name of Object.keys(declared)) {
+      expect(requiredFirst[name], name).toEqual(declared[name]);
+    }
+  });
+
+  it('sürüm bayrağı: chat-v3 zorunlu-önce sırayı ister; chat-v1 ve chat-v2 tanımları değişmez (süren sohbetler, ADR-001)', () => {
+    const flags = Object.fromEntries(ALL_CHAT_PROMPTS.map((prompt) => [prompt.version, prompt.requiredFieldsFirst === true]));
+    expect(flags).toEqual({ 'chat-v1': false, 'chat-v2': false, 'chat-v3': true });
   });
 
   it('onaylayan ya da stok yazan araç kayıt defterine eklenemez (mimari değişmez 2)', () => {
@@ -201,9 +252,9 @@ describe('Okuma araçlarının çıktısı', () => {
       product_id: PRODUCT,
       base_unit: 'metre',
       min_stock: '50',
-      total: '1.452,5',
+      total: '1452.5',
       warehouses: [
-        { warehouse_id: MAIN, name: 'Merkez Depo', type: 'Depo', quantity: '1.412,5', below_min_stock: false },
+        { warehouse_id: MAIN, name: 'Merkez Depo', type: 'Depo', quantity: '1412.5', below_min_stock: false },
         { warehouse_id: BRANCH, name: 'Araç 1', type: 'Araç', quantity: '40', below_min_stock: true },
       ],
     });
@@ -215,7 +266,7 @@ describe('Okuma araçlarının çıktısı', () => {
       total: string;
       warehouses: unknown[];
     };
-    expect(own.total).toBe('1.412,5');
+    expect(own.total).toBe('1412.5');
     expect(own.warehouses).toHaveLength(1);
 
     const before = calls.productStock;
@@ -240,7 +291,7 @@ describe('Okuma araçlarının çıktısı', () => {
     expect(JSON.parse(result.content)).toEqual({
       product_id: PRODUCT,
       total: 1,
-      movements: [{ date: '05.11.2026 14:32', warehouse: 'Merkez Depo', type: 'Çıkış', quantity_change: '−12,5', quantity_after: '1.412,5' }],
+      movements: [{ date: '05.11.2026 14:32', warehouse: 'Merkez Depo', type: 'Çıkış', quantity_change: '−12.5', quantity_after: '1412.5' }],
     });
   });
 
@@ -334,6 +385,16 @@ describe('Öneri araçları (#74)', () => {
     expect(repeated?.next_step).toContain("Onayla'ya basmasını söyle");
   });
 
+  it('fire önerisinin notu işleme yazılır', async () => {
+    const { outcome, proposals } = await propose('propose_waste', {
+      warehouse_id: MAIN,
+      note: 'kırık geldi',
+      lines: [{ product_id: PRODUCT, quantity: '1' }],
+    });
+    expect(outcome.isError, outcome.content).toBe(false);
+    expect(proposals[0]?.input).toMatchObject({ type: 'WASTE', note: 'kırık geldi' });
+  });
+
   it('modele kartın bilgileri döner: Türkçe miktarlar, ana birim karşılığı, önce → sonra, onay bekliyor', async () => {
     const { result } = await propose('propose_stock_out', {
       warehouse_id: MAIN,
@@ -353,7 +414,7 @@ describe('Öneri araçları (#74)', () => {
           quantity: '2 koli',
           base_quantity: '200 metre',
           warehouse: 'Merkez Depo',
-          stock_change: '1.412,5 metre → 1.212,5 metre',
+          stock_change: '1412.5 metre → 1212.5 metre',
           sufficient: true,
         },
       ],
@@ -376,7 +437,7 @@ describe('Öneri araçları (#74)', () => {
       lines: [{ product_id: PRODUCT, quantity: '3', unit: 'koli', unit_cost: '1200' }],
     });
     expect(stockIn.proposals[0]?.input.items[0]).toMatchObject({ unit: 'koli', unitCost: '1200' });
-    expect(stockIn.result?.lines).toEqual([expect.objectContaining({ unit_cost: '1.200 TL / koli' })]);
+    expect(stockIn.result?.lines).toEqual([expect.objectContaining({ unit_cost: '1200 TL / koli' })]);
 
     const count = await propose('propose_count', { warehouse_id: MAIN, lines: [{ product_id: PRODUCT, counted_quantity: '0' }] });
     expect(count.outcome.isError, count.outcome.content).toBe(false);
@@ -460,9 +521,9 @@ describe('Öneri araçları (#74)', () => {
       lines: [
         {
           sufficient: false,
-          available: '1.412,5 metre',
-          required: '5.000 metre',
-          problem: 'Stok yetmiyor (Merkez Depo): 1.412,5 metre var, 5.000 metre gerekiyor. Bu kalem bu hâliyle onaylanamaz.',
+          available: '1412.5 metre',
+          required: '5000 metre',
+          problem: 'Stok yetmiyor (Merkez Depo): 1412.5 metre var, 5000 metre gerekiyor. Bu kalem bu hâliyle onaylanamaz.',
         },
       ],
     });

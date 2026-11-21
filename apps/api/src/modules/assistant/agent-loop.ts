@@ -73,7 +73,7 @@ export class AgentLoop {
 
     // Sohbet başladığı sürümün metni ve araçlarıyla sürer: chat-v1 sohbetine öneri aracı verilmez (#74).
     const prompt = chatPrompt(input.promptVersion);
-    const tools = this.tools.definitions(prompt.tools);
+    const tools = this.tools.definitions(prompt.tools, { requiredFirst: prompt.requiredFieldsFirst === true });
     const conversation: AiMessage[] = input.history.map(toAiMessage);
     const added: AgentMessage[] = [];
 

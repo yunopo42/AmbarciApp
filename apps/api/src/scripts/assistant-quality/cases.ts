@@ -161,6 +161,13 @@ export function casesHash(cases: QualityCase[]): string {
   return createHash('sha256').update(JSON.stringify(cases)).digest('hex').slice(0, 16);
 }
 
+/**
+ * Dondurulmuş test kümesi (#86). Prompt ve model yalnızca geliştirme kümesinde seçilir; test kümesi bu tarihten sonra
+ * değişmez ve seçilen yapılandırmayla bir kez ölçülür. Birim testi özeti denetler: test mesajlarından biri değişirse
+ * CI kırılır.
+ */
+export const FROZEN_TEST_SET = { hash: 'c0269f6e9e160719', frozenAt: '2026-11-21', cases: 40 } as const;
+
 /** Beklentinin tek satırlık özeti: gözden geçirme tablosu ve rapor için. */
 export function describeExpectation(expected: Expectation): string {
   switch (expected.kind) {

@@ -65,7 +65,7 @@ describe('Asistan değerlendirmesi', () => {
   let env: QualityEnvironment | undefined;
 
   beforeAll(async () => {
-    env = await createQualityEnvironment({ model: options.model, effort: options.effort });
+    env = await createQualityEnvironment({ model: options.model, effort: options.effort, prompt: options.prompt });
     console.log(`Geçici şirket kuruldu. Model ${env.model} (${env.effort}), ${cases.length} mesaj, aynı anda ${options.concurrency}.`);
   });
 

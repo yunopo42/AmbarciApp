@@ -4,9 +4,11 @@
 //   pnpm eval --set test                       test kümesi (40 mesaj; yalnızca son ölçümde)
 //   pnpm eval --model claude-sonnet-5-5        başka model (fiyatı pricing.ts'de olmalı)
 //   pnpm eval --effort medium
+//   pnpm eval --prompt chat-v3                 başka prompt sürümü (yeni sohbetler bu sürümle başlar)
 //   pnpm eval --only D09,D41                   yalnızca bu mesajlar
 //   pnpm eval --label prompt-v3                sonuç dosyasının adına eklenir
 //   pnpm eval --list                           mesajları ve beklentileri yazdırır; model çağrılmaz, ücretsiz
+//   pnpm eval --rescore <rapor.json>           kayıtlı koşuyu güncel puanlamayla yeniden puanlar; model çağrılmaz
 //
 // GERÇEK model çağrısı yapar ve ücretlidir. API bu bilgisayarda, test uygulaması olarak açılır; veritabanı .env'deki
 // Supabase'tir. Koşu geçici bir şirket kurar ve bitince bütün kayıtlarıyla siler. Asıl iş vitest altında çalışır
@@ -18,6 +20,8 @@ import { parseArgs } from 'node:util';
 
 import { describeExpectation, loadCases, selectCases } from './cases.js';
 import { parseRunOptions, runOptionsToEnv } from './options.js';
+import { printReport, writeReport } from './report.js';
+import { readReport, rescoreReport } from './rescore.js';
 
 /** apps/api klasörü (dosya dist/scripts/assistant-quality altında çalışır). */
 const apiRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -31,13 +35,26 @@ function main(): void {
       set: { type: 'string' },
       model: { type: 'string' },
       effort: { type: 'string' },
+      prompt: { type: 'string' },
       only: { type: 'string' },
       concurrency: { type: 'string' },
       label: { type: 'string' },
       list: { type: 'boolean', default: false },
+      rescore: { type: 'string' },
     },
     strict: true,
   });
+
+  if (values.rescore) {
+    // pnpm betiği paket klasöründe çalıştırır; yol, komutun yazıldığı klasöre göre çözülür (INIT_CWD).
+    const file = path.resolve(process.env.INIT_CWD ?? process.cwd(), values.rescore);
+    const report = rescoreReport(readReport(file), loadCases(), 'yeniden-puanlama');
+    printReport(report);
+    const files = writeReport(report);
+    console.log(`Model çağrılmadı. Kaydedildi:\n  ${files.markdown}\n  ${files.json}`);
+    return;
+  }
+
   const options = parseRunOptions(values);
   const cases = selectCases(loadCases(), options.set, options.only);
 
