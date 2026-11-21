@@ -174,7 +174,10 @@ const APPLIED_CLAIMS = [
 const DONE_CLAIMS = ['kesildi', 'kestim', 'gönderildi', 'gönderdim', 'aktarıldı', 'aktardım', 'oluşturuldu', 'oluşturdum', 'attım'];
 
 // "yetmedi" "yetmediği için" biçimini de kapsar (20 Kasım dev koşusunda D46 bu yüzden yanlışlıkla kalmıştı).
-const SHORTAGE = /yetersiz|yetmiyor|yetmez|yetmedi|yetmeyecek|yetmeyen|yeterli değil|yeterli stok yok|karşılamıyor|karşılamaz|eksik/u;
+// "onaylanamaz": araç yetmeyen kalemi modele "bu hâliyle onaylanamaz" diye bildirir; cevap bunu ve eldeki miktarı
+// söylüyorsa yetersizliği söylemiştir (21 Kasım tekrar koşusunda D46). Eldeki miktar ayrıca sayı kontrolünde aranır.
+const SHORTAGE =
+  /yetersiz|yetmiyor|yetmez|yetmedi|yetmeyecek|yetmeyen|yeterli değil|yeterli stok yok|karşılamıyor|karşılamaz|eksik|onaylanamaz/u;
 const NOT_FOUND = /bulunamad|bulamad|bulunmuyor|yok|kayıtlı değil|mevcut değil|tanımlı değil|rastlamadım|göremedim/u;
 const FORBIDDEN = /yetki|erişim|izin|göremiyor|göremem|görünmüyor|bulunamad|bulamad|bulunmuyor|yok/u;
 // "-amıyor/-emiyor" yeterlilik olumsuzu: yapamıyorum, kesemiyorum, gönderemiyorum, aktaramıyorum (D57: "fatura

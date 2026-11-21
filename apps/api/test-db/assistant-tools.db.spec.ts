@@ -123,20 +123,20 @@ describe('Asistanın okuma araçları (gerçek veritabanı)', () => {
   });
 
   describe('get_stock', () => {
-    it('yönetici bütün depoları ve SQL\'de hesaplanan toplamı Türkçe yazımla görür', async () => {
+    it('yönetici bütün depoları ve SQL\'de hesaplanan toplamı binlik ayırıcısız görür (#86)', async () => {
       const stock = await run<{ total: string; warehouses: { name: string; quantity: string }[] }>('get_stock', {
         product_id: product.nym25,
       });
-      expect(stock.total).toBe('1.440');
+      expect(stock.total).toBe('1440');
       expect(stock.warehouses.map((row) => [row.name, row.quantity])).toEqual([
-        ['Merkez', '1.400'],
+        ['Merkez', '1400'],
         ['Ostim', '40'],
       ]);
     });
 
     it('çalışan yalnızca yetkili olduğu depoyu ve onun toplamını görür; yetkisiz depoyu soramaz', async () => {
       const stock = await run<{ total: string; warehouses: { name: string }[] }>('get_stock', { product_id: product.nym25 }, employee);
-      expect(stock.total).toBe('1.400');
+      expect(stock.total).toBe('1400');
       expect(stock.warehouses.map((row) => row.name)).toEqual(['Merkez']);
       expect(await tools.execute('get_stock', { product_id: product.nym25, warehouse_id: fx.branch }, employee)).toEqual({
         isError: true,
@@ -160,7 +160,7 @@ describe('Asistanın okuma araçları (gerçek veritabanı)', () => {
         { product_id: product.nym25 },
       );
       expect(forAdmin.total).toBe(3);
-      expect(forAdmin.movements[0]).toMatchObject({ warehouse: 'Merkez', type: 'Çıkış', quantity_change: '−12,5', quantity_after: '1.400' });
+      expect(forAdmin.movements[0]).toMatchObject({ warehouse: 'Merkez', type: 'Çıkış', quantity_change: '−12.5', quantity_after: '1400' });
       expect(forAdmin.movements.map((movement) => movement.type)).toEqual(['Çıkış', 'Giriş', 'Giriş']);
 
       const forEmployee = await run<{ total: number; movements: { warehouse: string }[] }>(

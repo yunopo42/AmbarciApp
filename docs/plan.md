@@ -111,7 +111,7 @@ Push bildirimi 7. haftaya alındı (Plan değişikliği, 20 Kasım).
 **Kapı:** —
 
 - [ ] Push bildirimi: onay bekleyen işlem, kritik stok (6. haftadan; önce outbox worker'ı, cihaz token'ları ve EAS ayarı)
-- [ ] Sohbetten geri alma: `propose_reversal` ve son işlemleri listeleyen okuma aracı (`chat-v3`); fire nedeninin nota yazılmaması (5. hafta kapı denemesinin açık bulgusu)
+- [ ] Sohbetten geri alma: `propose_reversal` ve son işlemleri listeleyen okuma aracı (`chat-v4`; `chat-v3` 6. haftada değerlendirme bulgularıyla açıldı). Fire nedeninin nota yazılmaması 6. haftada, değerlendirmeyle birlikte ele alındı (#86).
 - [ ] Kamera ile irsaliye çekme, Sonnet ile kalem çıkarma, inceleme ekranı
 - [ ] Tesseract + Haiku ile kıyas deneyi (30–50 belge)
 - [ ] Cihazda ses tanıma ve sohbete bağlama

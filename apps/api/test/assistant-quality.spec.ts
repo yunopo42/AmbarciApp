@@ -4,11 +4,12 @@
 import { abcElektrik, abcElektrikOpeningStock } from '@ambarci/db/demo';
 import { describe, expect, it } from 'vitest';
 
-import { CATEGORY_LABELS, caseSchema, casesHash, loadCases, selectCases } from '../src/scripts/assistant-quality/cases.js';
+import { CATEGORY_LABELS, caseSchema, casesHash, FROZEN_TEST_SET, loadCases, selectCases } from '../src/scripts/assistant-quality/cases.js';
 import type { QualityCase } from '../src/scripts/assistant-quality/cases.js';
 import { EMPLOYEE_WAREHOUSES, INJECTED_PARTY } from '../src/scripts/assistant-quality/fixture.js';
 import { parseRunOptions } from '../src/scripts/assistant-quality/options.js';
 import { buildReport, reportMarkdown, toCaseResult } from '../src/scripts/assistant-quality/report.js';
+import { rescoreReport } from '../src/scripts/assistant-quality/rescore.js';
 import { canonicalDecimal, numbersIn, scoreCase } from '../src/scripts/assistant-quality/scoring.js';
 import type { Observation, ObservedOperation, ObservedTurn } from '../src/scripts/assistant-quality/scoring.js';
 
@@ -109,6 +110,12 @@ describe('değerlendirme kümesi (eval/assistant/cases.json)', () => {
     }
   });
 
+  it('test kümesi dondurulmuş: 40 mesajın özeti kayıtlı değerle aynı (#86)', () => {
+    const test = selectCases(cases, 'test');
+    expect(test).toHaveLength(FROZEN_TEST_SET.cases);
+    expect(casesHash(test), 'Test kümesi dondurulduktan sonra değişti; docs/degerlendirme.md').toBe(FROZEN_TEST_SET.hash);
+  });
+
   it('özet aynı mesajlarda aynı, bir mesaj değişince farklı', () => {
     const test = selectCases(cases, 'test');
     expect(casesHash(test)).toBe(casesHash(selectCases(loadCases(), 'test')));
@@ -124,7 +131,7 @@ describe('değerlendirme kümesi (eval/assistant/cases.json)', () => {
 
 describe('pnpm eval seçenekleri', () => {
   it('varsayılanlar: geliştirme kümesi, aynı anda 3 mesaj, model ve effort .env’den', () => {
-    expect(parseRunOptions({})).toEqual({ set: 'dev', only: [], model: null, effort: null, concurrency: 3, label: null });
+    expect(parseRunOptions({})).toEqual({ set: 'dev', only: [], model: null, effort: null, prompt: null, concurrency: 3, label: null });
   });
 
   it('kimlikler virgülle ayrılır ve büyük harfe çevrilir', () => {
@@ -135,6 +142,8 @@ describe('pnpm eval seçenekleri', () => {
     expect(() => parseRunOptions({ set: 'prod' })).toThrow(/--set/);
     expect(() => parseRunOptions({ model: 'gpt-5' })).toThrow(/--model/);
     expect(() => parseRunOptions({ effort: 'turbo' })).toThrow(/--effort/);
+    expect(() => parseRunOptions({ prompt: 'chat-v9' })).toThrow(/--prompt/);
+    expect(parseRunOptions({ prompt: 'chat-v3' }).prompt).toBe('chat-v3');
     expect(parseRunOptions({ model: 'claude-sonnet-5-5', effort: 'medium' })).toMatchObject({ model: 'claude-sonnet-5-5', effort: 'medium' });
   });
 });
@@ -315,6 +324,11 @@ describe('puanlama: öneriler', () => {
       "Merkez Depo'da bu üründen yalnızca 4 adet var, 10 adet çıkış yapamam. Kaçak akım rölesi 2 kutup 40 A 30 mA (KAR-40-30) " +
       'için çıkış önerisi hazırlandı ama stok yetmediği için onaylanamaz durumda. Stok henüz değişmedi.';
     expect(scoreCase(shortage, observe([d46], [operation([line])])).passed).toBe(true);
+    // 21 Kasım tekrar koşusundaki D46: aracın "bu hâliyle onaylanamaz" ifadesi ve eldeki miktar.
+    const d46again =
+      "Merkez Depo'da kaçak akım rölesi 2 kutup 40 A 30 mA (KAR-40-30) için 10 adet çıkış önerisi hazırladım, ama depoda " +
+      'yalnızca 4 adet var. Bu hâliyle onaylanamaz, stok da henüz değişmedi.';
+    expect(scoreCase(shortage, observe([d46again], [operation([line])])).passed).toBe(true);
   });
 
   it('firede nedenin nota yazılması yumuşak kontroldür: not yoksa mesaj yine geçer ama ayrıca sayılır', () => {
@@ -410,6 +424,68 @@ describe('puanlama: soru, bulunamadı, yetki, kapsam dışı', () => {
     // "kesemiyorum" yapamama olarak tanınır; ama olmayan "fatura ekranı" anıldığı için mesaj kalır.
     expect(scoreCase(invoice, observe([d57])).failed).toEqual(['mustNotMention']);
     expect(scoreCase(invoice, observe(['Fatura kesemiyorum; Ambarcı yalnızca stok tutar.'])).passed).toBe(true);
+  });
+});
+
+describe('yeniden puanlama (model çağrılmaz)', () => {
+  const d46 = cases.find((testCase) => testCase.id === 'D46');
+  const metrics = {
+    rounds: 4,
+    inputTokens: 10,
+    outputTokens: 10,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    costUsd: '0.0007',
+    serverMs: 5000,
+    clientMs: 6000,
+    tools: ['search_products', 'propose_stock_out'],
+    model: 'claude-haiku-5-5',
+    promptVersion: 'chat-v2',
+  };
+  const answer =
+    "Merkez Depo'da kaçak akım rölesi için 10 adet çıkış önerisi hazırladım, ama depoda yalnızca 4 adet var. Bu hâliyle onaylanamaz.";
+  const opened = operation([{ sku: 'KAR-40-30', quantity: '10.000', unit: null, baseQuantity: '10.000' }]);
+
+  function oldReport(casesHashValue: string): ReturnType<typeof buildReport> {
+    if (!d46) {
+      throw new Error('D46 yok');
+    }
+    // Eski kuralla kalmış sonuç: "onaylanamaz" yetersizlik sayılmıyordu.
+    const oldScore = {
+      passed: false,
+      failed: ['shortage' as const],
+      checks: [
+        { name: 'stockUnchanged' as const, passed: true },
+        { name: 'shortage' as const, passed: false, detail: 'yetersizlik söylenmedi' },
+      ],
+    };
+    return buildReport({
+      label: 'tekrar',
+      set: 'dev',
+      only: ['D46'],
+      model: 'claude-haiku-5-5',
+      effort: 'low',
+      casesHash: casesHashValue,
+      totalCostUsd: '0.0007',
+      costPerCaseUsd: '0.000700',
+      results: [toCaseResult(d46, oldScore, [turn(answer)], [opened], metrics)],
+    });
+  }
+
+  it('eski koşuyu güncel kuralla puanlar; cevaplar, ölçümler, maliyet ve tarih aynı kalır', () => {
+    const before = oldReport(casesHash(selectCases(cases, 'dev', ['D46'])));
+    const after = rescoreReport(before, cases, 'yeniden-puanlama');
+    expect(before.summary.passed).toBe(0);
+    expect(after.summary.passed).toBe(1);
+    expect(after.label).toBe('tekrar-yeniden-puanlama');
+    expect(after.measuredAt).toBe(before.measuredAt);
+    expect(after.summary.totalCostUsd).toBe('0.0007');
+    expect(after.results[0]?.answers).toEqual(before.results[0]?.answers);
+    expect(after.results[0]?.metrics).toEqual(metrics);
+  });
+
+  it('küme değiştiyse yeniden puanlamaz', () => {
+    expect(() => rescoreReport(oldReport('0000000000000000'), cases, 'yeniden-puanlama')).toThrow(/yeniden puanlanamaz/);
   });
 });
 

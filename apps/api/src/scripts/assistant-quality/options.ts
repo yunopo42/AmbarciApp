@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AI_EFFORTS } from '../../modules/ai/ai-provider.js';
 import type { AiEffort } from '../../modules/ai/ai-provider.js';
 import { hasPricing } from '../../modules/ai/pricing.js';
+import { hasChatPrompt } from '../../modules/ai/prompts/index.js';
 import type { SetSelection } from './cases.js';
 
 export interface RunOptions {
@@ -14,6 +15,8 @@ export interface RunOptions {
   /** Boşsa .env'deki CLAUDE_CHAT_MODEL (yoksa ADR-001'deki model). */
   model: string | null;
   effort: AiEffort | null;
+  /** Prompt sürümü (ör. "chat-v3"). Boşsa .env'deki CLAUDE_CHAT_PROMPT, o da yoksa güncel sürüm. */
+  prompt: string | null;
   /** Aynı anda koşan mesaj sayısı. */
   concurrency: number;
   /** Sonuç dosyasının adına eklenir (ör. "prompt-v3"). */
@@ -25,6 +28,7 @@ const ENV = {
   only: 'ASSISTANT_QUALITY_ONLY',
   model: 'ASSISTANT_QUALITY_MODEL',
   effort: 'ASSISTANT_QUALITY_EFFORT',
+  prompt: 'ASSISTANT_QUALITY_PROMPT',
   concurrency: 'ASSISTANT_QUALITY_CONCURRENCY',
   label: 'ASSISTANT_QUALITY_LABEL',
 } as const;
@@ -52,6 +56,14 @@ const optionsSchema = z.object({
       .optional(),
   ),
   effort: z.preprocess(blankToUndefined, z.enum(AI_EFFORTS, { error: `--effort şunlardan biri olmalı: ${AI_EFFORTS.join(', ')}.` }).optional()),
+  prompt: z.preprocess(
+    blankToUndefined,
+    z
+      .string()
+      .trim()
+      .refine(hasChatPrompt, { error: '--prompt tanımlı bir prompt sürümü olmalı (ör. chat-v2, chat-v3).' })
+      .optional(),
+  ),
   concurrency: z.preprocess(
     blankToUndefined,
     z.coerce.number({ error: '--concurrency bir sayı olmalı.' }).int().min(1).max(6, { error: '--concurrency en fazla 6 olabilir.' }).default(3),
@@ -70,8 +82,8 @@ export function parseRunOptions(raw: RawOptions): RunOptions {
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => issue.message).join(' '));
   }
-  const { set, only, model, effort, concurrency, label } = parsed.data;
-  return { set, only, model: model ?? null, effort: effort ?? null, concurrency, label: label ?? null };
+  const { set, only, model, effort, prompt, concurrency, label } = parsed.data;
+  return { set, only, model: model ?? null, effort: effort ?? null, prompt: prompt ?? null, concurrency, label: label ?? null };
 }
 
 export function runOptionsToEnv(options: RunOptions): Record<string, string> {
@@ -80,6 +92,7 @@ export function runOptionsToEnv(options: RunOptions): Record<string, string> {
     [ENV.only]: options.only.join(','),
     [ENV.model]: options.model ?? '',
     [ENV.effort]: options.effort ?? '',
+    [ENV.prompt]: options.prompt ?? '',
     [ENV.concurrency]: String(options.concurrency),
     [ENV.label]: options.label ?? '',
   };
@@ -91,6 +104,7 @@ export function runOptionsFromEnv(env: NodeJS.ProcessEnv): RunOptions {
     only: env[ENV.only],
     model: env[ENV.model],
     effort: env[ENV.effort],
+    prompt: env[ENV.prompt],
     concurrency: env[ENV.concurrency],
     label: env[ENV.label],
   });

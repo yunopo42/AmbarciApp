@@ -62,6 +62,8 @@ export interface RegisteredTool {
   readonly toolClass: ToolClass;
   readonly allowedRoles: readonly OrganizationRole[];
   readonly inputSchema: Record<string, unknown>;
+  /** Aynı şema, zorunlu alanlar önce (chat-v3'ten itibaren; bkz. StrictSchemaOptions.requiredFirst). */
+  readonly inputSchemaRequiredFirst: Record<string, unknown>;
   /** Girdi şemaya uymuyorsa Türkçe hata listesi, uyuyorsa aracın sonucu. */
   invoke(rawInput: unknown, context: ToolContext): Promise<{ ok: true; value: unknown } | { ok: false; issues: string[] }>;
   operationOf?(result: unknown): OperationRef | null;
@@ -75,6 +77,7 @@ export function defineTool<TInput>(spec: ToolSpec<TInput>): RegisteredTool {
     toolClass: spec.toolClass,
     allowedRoles: spec.allowedRoles,
     inputSchema: toStrictJsonSchema(spec.input),
+    inputSchemaRequiredFirst: toStrictJsonSchema(spec.input, { requiredFirst: true }),
     ...(spec.operationOf ? { operationOf: spec.operationOf } : {}),
     async invoke(rawInput, context) {
       const parsed = spec.input.safeParse(rawInput);
@@ -124,9 +127,10 @@ export class ToolRegistry {
   /**
    * Modele gönderilen araç tanımları, kayıt defterindeki sırayla. `names` verilirse yalnızca o araçlar: her prompt
    * sürümünün kendi araç listesi vardır (ChatPrompt.tools); süren bir sohbet başladığı sürümün araçlarıyla devam eder.
-   * Sıra sabittir: değişirse önbellek ve düşünme blokları geçersiz olur.
+   * Sıra sabittir: değişirse önbellek ve düşünme blokları geçersiz olur. `requiredFirst` da sürümün parçasıdır
+   * (ChatPrompt.requiredFieldsFirst): süren sohbetin şemasındaki alan sırası değişmez.
    */
-  definitions(names?: readonly string[]): AiToolDefinition[] {
+  definitions(names?: readonly string[], { requiredFirst = false }: { requiredFirst?: boolean } = {}): AiToolDefinition[] {
     if (names) {
       const unknown = names.filter((name) => !this.tools.has(name));
       if (unknown.length > 0) {
@@ -138,7 +142,7 @@ export class ToolRegistry {
       .map((tool) => ({
         name: tool.name,
         description: tool.description,
-        inputSchema: tool.inputSchema,
+        inputSchema: requiredFirst ? tool.inputSchemaRequiredFirst : tool.inputSchema,
       }));
   }
 

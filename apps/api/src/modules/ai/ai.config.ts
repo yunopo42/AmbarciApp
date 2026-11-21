@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AI_EFFORTS } from './ai-provider.js';
 import type { AiEffort } from './ai-provider.js';
 import { hasPricing } from './pricing.js';
+import { hasChatPrompt } from './prompts/index.js';
 
 /** ai modülünün ayarları. Değerler ortam değişkenlerinden okunur (ADR-001: model ve effort env'de). */
 export interface AiConfig {
@@ -13,6 +14,12 @@ export interface AiConfig {
   apiKey: string | null;
   chatModel: string;
   chatEffort: AiEffort;
+  /**
+   * Yeni sohbetlerin prompt sürümü. Boşsa (null) güncel sürüm (prompts/index.ts, CURRENT_CHAT_PROMPT). Süren sohbet
+   * her zaman başladığı sürümle devam eder. Değerlendirmede sürümleri kıyaslamak ve gerekirse deploy etmeden eski
+   * sürüme dönmek için.
+   */
+  chatPromptVersion: string | null;
   /** Kullanıcı başına günlük token bütçesi (giriş, çıkış ve önbellek tokenları toplamı). */
   dailyTokenLimitPerUser: number;
   /** Şirket başına günlük token bütçesi. */
@@ -36,6 +43,7 @@ const envSchema = z.object({
     (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined),
     z.enum(AI_EFFORTS).default('low'),
   ),
+  CLAUDE_CHAT_PROMPT: optionalText.refine((value) => value === undefined || hasChatPrompt(value)),
   // Kullanıcı başına ~55 mesaj, şirket başına ~220 mesaj (2. hafta denemesinde mesaj başına ~9.000 token).
   AI_DAILY_TOKEN_LIMIT_USER: tokenLimit(500_000),
   AI_DAILY_TOKEN_LIMIT_ORG: tokenLimit(2_000_000),
@@ -61,6 +69,7 @@ export function readAiConfig(env: NodeJS.ProcessEnv = process.env): AiConfig {
     apiKey: parsed.data.ANTHROPIC_API_KEY ?? null,
     chatModel,
     chatEffort: parsed.data.CLAUDE_CHAT_EFFORT,
+    chatPromptVersion: parsed.data.CLAUDE_CHAT_PROMPT ?? null,
     dailyTokenLimitPerUser: parsed.data.AI_DAILY_TOKEN_LIMIT_USER,
     dailyTokenLimitPerOrganization: parsed.data.AI_DAILY_TOKEN_LIMIT_ORG,
   };

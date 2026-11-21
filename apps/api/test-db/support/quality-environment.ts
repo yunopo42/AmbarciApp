@@ -92,6 +92,8 @@ export interface QualityEnvironment {
 export interface QualityEnvironmentOptions {
   model: string | null;
   effort: AiEffort | null;
+  /** Yeni sohbetlerin prompt sürümü; boşsa .env'deki CLAUDE_CHAT_PROMPT, o da yoksa güncel sürüm. */
+  prompt: string | null;
 }
 
 function parseEvents(body: string): ChatStreamEvent[] {
@@ -196,6 +198,7 @@ export async function createQualityEnvironment(options: QualityEnvironmentOption
     ...base,
     chatModel: options.model ?? base.chatModel,
     chatEffort: options.effort ?? base.chatEffort,
+    chatPromptVersion: options.prompt ?? base.chatPromptVersion,
     // Koşu 100 mesaja kadar sürer; günlük bütçe yarıda kesmesin (bu şirket ve kullanıcılar yalnızca koşu için var).
     dailyTokenLimitPerUser: 100_000_000,
     dailyTokenLimitPerOrganization: 100_000_000,

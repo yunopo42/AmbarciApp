@@ -84,10 +84,11 @@ export class AiService {
   /**
    * Süren bir sohbetin başladığı prompt sürümü: sohbetin kullanıcı mesajlarına bağlı ilk model çağrısının sürümü.
    * Sohbetin ortasında sistem promptu değişirse geri gönderilen düşünme blokları geçersiz olur (ADR-001); sohbet bu
-   * yüzden başladığı sürümle devam eder. Henüz model çağrısı yoksa null (güncel sürüm kullanılır).
+   * yüzden başladığı sürümle devam eder. Henüz model çağrısı yoksa (yeni sohbet) CLAUDE_CHAT_PROMPT ile seçilen sürüm;
+   * o da boşsa null (güncel sürüm kullanılır).
    */
-  conversationPromptVersion(organizationId: string, userMessageIds: string[]): Promise<string | null> {
-    return this.runs.firstPromptVersion(this.db, organizationId, userMessageIds);
+  async conversationPromptVersion(organizationId: string, userMessageIds: string[]): Promise<string | null> {
+    return (await this.runs.firstPromptVersion(this.db, organizationId, userMessageIds)) ?? this.config.chatPromptVersion;
   }
 
   /**

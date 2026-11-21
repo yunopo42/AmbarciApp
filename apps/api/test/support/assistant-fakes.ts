@@ -51,9 +51,14 @@ export const employeeContext: ToolContext = {
 };
 
 /** ai_runs'ın bellek içi sürümü: yazılan kayıtlar ve günlük kullanım. */
-export class InMemoryAiRuns implements Pick<AiRunsRepository, 'insert' | 'dailyTokenUsage'> {
+export class InMemoryAiRuns implements Pick<AiRunsRepository, 'insert' | 'dailyTokenUsage' | 'firstPromptVersion'> {
   readonly entries: AiRunEntry[] = [];
   usage: DailyTokenUsage = { user: 0, organization: 0 };
+
+  /** Verilen kullanıcı mesajlarına bağlı ilk kaydın prompt sürümü (gerçek sorguyla aynı sözleşme). */
+  async firstPromptVersion(_executor: unknown, _organizationId: string, userMessageIds: string[]): Promise<string | null> {
+    return this.entries.find((entry) => entry.messageId !== null && userMessageIds.includes(entry.messageId))?.promptVersion ?? null;
+  }
 
   async insert(_executor: unknown, entry: AiRunEntry): Promise<{ id: string; costUsd: string }> {
     this.entries.push(entry);
@@ -69,6 +74,7 @@ export const TEST_AI_CONFIG: AiConfig = {
   apiKey: null,
   chatModel: 'claude-haiku-5-5',
   chatEffort: 'low',
+  chatPromptVersion: null,
   dailyTokenLimitPerUser: 500_000,
   dailyTokenLimitPerOrganization: 2_000_000,
 };
