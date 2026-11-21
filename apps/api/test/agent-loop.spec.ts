@@ -166,19 +166,31 @@ describe('Ajan döngüsü', () => {
     expect(rounds).toHaveLength(1);
   });
 
-  it('süren sohbet başladığı prompt sürümüyle devam eder; yeni ya da bilinmeyen sürümde güncel sürüm (chat-v2)', async () => {
+  it('süren sohbet başladığı prompt sürümüyle devam eder; yeni ya da bilinmeyen sürümde güncel sürüm (chat-v3)', async () => {
     const { loop, provider } = setup();
-    provider.push(aiResult(), aiResult(), aiResult());
+    provider.push(aiResult(), aiResult(), aiResult(), aiResult());
     expect((await loop.run(turnInput({ promptVersion: 'chat-v1' }))).promptVersion).toBe('chat-v1');
-    expect((await loop.run(turnInput({ promptVersion: 'chat-v0' }))).promptVersion).toBe('chat-v2');
-    expect((await loop.run(turnInput())).promptVersion).toBe('chat-v2');
+    expect((await loop.run(turnInput({ promptVersion: 'chat-v2' }))).promptVersion).toBe('chat-v2');
+    expect((await loop.run(turnInput({ promptVersion: 'chat-v0' }))).promptVersion).toBe('chat-v3');
+    expect((await loop.run(turnInput())).promptVersion).toBe('chat-v3');
+  });
+
+  it('chat-v3 sohbetinde araç şemalarında zorunlu alanlar önce; chat-v2 sohbetinin şeması değişmez (#86)', async () => {
+    const { loop, provider } = setup();
+    provider.push(aiResult(), aiResult());
+    await loop.run(turnInput({ promptVersion: 'chat-v2' }));
+    await loop.run(turnInput({ promptVersion: 'chat-v3' }));
+    const wasteKeys = (index: number): string[] =>
+      Object.keys((provider.requests[index]?.tools.find((tool) => tool.name === 'propose_waste')?.inputSchema.properties ?? {}) as object);
+    expect(wasteKeys(0)).toEqual(['operation_id', 'warehouse_id', 'note', 'lines']);
+    expect(wasteKeys(1)).toEqual(['warehouse_id', 'lines', 'operation_id', 'note']);
   });
 
   it('her sürüm kendi araç listesini alır: chat-v1 dört okuma aracı, chat-v2 öneri araçları dahil on araç', async () => {
     const { loop, provider } = setup();
     provider.push(aiResult(), aiResult());
     await loop.run(turnInput({ promptVersion: 'chat-v1' }));
-    await loop.run(turnInput());
+    await loop.run(turnInput({ promptVersion: 'chat-v2' }));
 
     const [v1, v2] = provider.requests;
     expect(v1?.system).toBe(CHAT_PROMPT_V1.text);

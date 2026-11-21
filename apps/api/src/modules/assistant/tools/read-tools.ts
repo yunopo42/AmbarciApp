@@ -1,5 +1,4 @@
 import {
-  formatDecimal,
   getStockToolInputSchema,
   listRecentMovementsToolInputSchema,
   listWarehousesToolInputSchema,
@@ -18,6 +17,7 @@ import type { InventoryService } from '../../inventory/inventory.service.js';
 import type { OrganizationContext } from '../../organizations/organization-context.js';
 import type { OrganizationsService } from '../../organizations/organizations.service.js';
 import type { StockService } from '../../stock/stock.service.js';
+import { modelNumber } from './model-number.js';
 import { defineTool } from './registry.js';
 import type { RegisteredTool } from './registry.js';
 
@@ -25,8 +25,8 @@ import type { RegisteredTool } from './registry.js';
 // depo yetkisi gibi kurallar ekranlarla aynıdır: çalışan yalnızca yetkili olduğu depoları görür, başka şirketin kaydı
 // "bulunamadı" görünür. Şirket ve kullanıcı ToolContext'ten (oturumdan) gelir.
 //
-// Miktarlar modele Türkçe yazımla verilir (formatDecimal: "1412.500" → "1.412,5"). Veritabanındaki "120.000" metni
-// Türkçede yüz yirmi bin diye okunur; model bunu kullanıcıya olduğu gibi aktarabilirdi.
+// Miktarlar modele binlik ayırıcısız, ondalık noktalı verilir (modelNumber: "1412.500" → "1412.5"). Veritabanının ham
+// metni ("120.000") verilmez, Türkçe yazım ("1.412,5") da verilmez: model "2.000"ı "2" okudu (#86, model-number.ts).
 
 const EVERY_ROLE = ['ADMIN', 'EMPLOYEE'] as const;
 const SEARCH_LIMIT = 5;
@@ -138,14 +138,14 @@ export function createReadTools(services: ReadToolServices): RegisteredTool[] {
       return {
         product_id: result.productId,
         base_unit: result.baseUnit,
-        min_stock: result.minStock === null ? null : formatDecimal(result.minStock),
+        min_stock: result.minStock === null ? null : modelNumber(result.minStock),
         // Toplam SQL'de hesaplanır; tek depo sorulduysa o deponun miktarıdır.
-        total: formatDecimal(only && input.warehouse_id ? only.quantity : result.total),
+        total: modelNumber(only && input.warehouse_id ? only.quantity : result.total),
         warehouses: rows.map((row) => ({
           warehouse_id: row.warehouse.id,
           name: row.warehouse.name,
           type: WAREHOUSE_TYPE_LABELS[row.warehouse.type],
-          quantity: formatDecimal(row.quantity),
+          quantity: modelNumber(row.quantity),
           below_min_stock: row.belowMinimum,
         })),
       };
@@ -174,8 +174,8 @@ export function createReadTools(services: ReadToolServices): RegisteredTool[] {
           date: dateTime.format(new Date(movement.createdAt)),
           warehouse: movement.warehouse.name,
           type: MOVEMENT_TYPE_LABELS[movement.type],
-          quantity_change: formatDecimal(movement.quantityChange, { signed: true }),
-          quantity_after: formatDecimal(movement.quantityAfter),
+          quantity_change: modelNumber(movement.quantityChange, { signed: true }),
+          quantity_after: modelNumber(movement.quantityAfter),
         })),
       };
     },

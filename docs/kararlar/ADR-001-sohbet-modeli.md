@@ -2,9 +2,9 @@
 
 | Alan | Değer |
 | --- | --- |
-| Durum | Kabul edildi |
-| Tarih | 2026-10-20 (taslak ve kabul) |
-| İlgili | Issue #13, `eval/arac-cagirma-denemesi.md` |
+| Durum | Kabul edildi; 100 mesajlık değerlendirmeyle doğrulandı |
+| Tarih | 2026-10-20 (taslak ve kabul), 2026-11-21 (değerlendirme, aşağıda) |
+| İlgili | Issue #13, `eval/arac-cagirma-denemesi.md`; #86, `docs/degerlendirme.md` |
 
 ## Bağlam
 
@@ -90,3 +90,30 @@ Uygulama:
   Yerel `.env` ve Render ortam değişkenleri elle güncellenir.
 - [x] `ambarci-standartlari` skill'indeki yığın tablosu ve `docs/teknik-arastirma.md` dosyasındaki model
   seçimi ve işlem başı maliyet bölümleri güncellendi.
+
+## Değerlendirme (21 Kasım 2026, #86)
+
+6. haftada 100 etiketli mesajla (60 geliştirme, 40 dondurulmuş test) ölçüldü; yöntem ve bütün koşular
+`docs/degerlendirme.md`'de. Geliştirme kümesi, aynı puanlamayla:
+
+| Yapılandırma | Prompt | Geçen (60) | Mesaj başına | Medyan süre |
+| --- | --- | ---: | ---: | ---: |
+| Haiku 5.5 `low` (iki koşu) | chat-v2 | 55, 56 | 0,0007 $ | 9,8–9,9 sn |
+| Haiku 5.5 `medium` | chat-v2 | 56 | 0,0007 $ | 10,4 sn |
+| Sonnet 5.5 `low` | chat-v2 | 57 | 0,0134 $ | 11,0 sn |
+| Haiku 5.5 `low` (iki koşu) | chat-v3 | 60, 60 | 0,0006 $ | 7,4 sn |
+
+Seçilen yapılandırma (Haiku 5.5 `low`, `chat-v3`) dondurulmuş test kümesinde bir kez: **38/40**, mesaj başına 0,00065 $,
+medyan 7,5 sn; stok hiçbir mesajda değişmedi.
+
+Sonuç:
+
+- **Karar değişmedi.** `low` ile `medium` arasında anlamlı fark yok (Karar bölümündeki 6. hafta kıyası). Sonnet 5.5
+  `chat-v2` ile Haiku'dan bir iki mesaj iyi, ama yaklaşık 20 kat pahalı ve daha yavaş; `chat-v3`'lü Haiku onu geçti.
+  Sonnet sohbet için seçilmedi; belge okuma modeli olarak kalıyor.
+- **Risklerdeki `low` uyarısı:** bu kümede `low`'un bir aramayı ya da kontrolü atlaması `medium`'dan sık görülmedi.
+- Hataların asıl nedenleri model düzeyi değildi: araç şemasında isteğe bağlı alanların zorunlu `lines`'tan önce
+  gelmesi (fire notu ve cari hiç gönderilemiyordu), araç sonuçlarında Türkçe binlik ayırıcı ("2.000" → 2 okundu) ve
+  promptta eksik kurallar. Bunlar `chat-v3`'te düzeltildi.
+- Yeni ortam değişkeni: `CLAUDE_CHAT_PROMPT` (boşsa güncel sürüm). Gerekirse deploy etmeden `chat-v2`'ye dönülebilir;
+  süren sohbetler her zaman başladıkları sürümle sürer.

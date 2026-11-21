@@ -1,6 +1,5 @@
 import {
   createOperationSchema,
-  formatDecimal,
   OPERATION_STATUS_LABELS,
   OPERATION_TYPE_LABELS,
   proposeCountToolInputSchema,
@@ -16,6 +15,7 @@ import type { z } from 'zod';
 import { ApiException } from '../../../common/api-exception.js';
 import type { CatalogService } from '../../catalog/catalog.service.js';
 import type { LineError, OperationActor, OperationsService } from '../../operations/operations.service.js';
+import { modelNumber } from './model-number.js';
 import { defineTool } from './registry.js';
 import type { RegisteredTool, ToolContext } from './registry.js';
 
@@ -255,7 +255,7 @@ async function explainForModel(
       }
       const units = [
         `${product.baseUnit} (ana birim)`,
-        ...product.units.map((unit) => `${unit.unit} (1 ${unit.unit} = ${formatDecimal(unit.factor)} ${product.baseUnit})`),
+        ...product.units.map((unit) => `${unit.unit} (1 ${unit.unit} = ${modelNumber(unit.factor)} ${product.baseUnit})`),
       ];
       return `${text} Ürünün birimleri: ${units.join(', ')}.`;
     }),
@@ -263,9 +263,9 @@ async function explainForModel(
   return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, error.code, `${error.message} ${details.join(' ')}`, error.details);
 }
 
-/** Miktar birimiyle, Türkçe yazımla (ADR-003: sayıya çevrilmez). */
+/** Miktar birimiyle, binlik ayırıcısız ve ondalık noktalı (model-number.ts; ADR-003: sayıya çevrilmez). */
 function amount(value: string, unit: string): string {
-  return `${formatDecimal(value)} ${unit}`;
+  return `${modelNumber(value)} ${unit}`;
 }
 
 function stockChange(effect: OperationPreviewLine['stock'], unit: string): string | null {
@@ -308,7 +308,7 @@ function summarize(preview: OperationPreview, { reused = false }: { reused?: boo
       sku: line.sku,
       [preview.type === 'COUNT' ? 'counted_quantity' : 'quantity']: entered,
       ...(line.unit ? { base_quantity: amount(line.baseQuantity, line.baseUnit) } : {}),
-      ...(line.unitCost ? { unit_cost: `${formatDecimal(line.unitCost)} TL / ${line.unit ?? line.baseUnit}` } : {}),
+      ...(line.unitCost ? { unit_cost: `${modelNumber(line.unitCost)} TL / ${line.unit ?? line.baseUnit}` } : {}),
       warehouse: line.warehouse.name,
       ...(sufficient ? { stock_change: stockChange(line.stock, line.baseUnit) } : shortage(line)),
       ...(line.targetWarehouse

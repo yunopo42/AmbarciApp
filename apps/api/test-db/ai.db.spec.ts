@@ -21,6 +21,7 @@ const CONFIG: AiConfig = {
   apiKey: null,
   chatModel: 'claude-haiku-5-5',
   chatEffort: 'low',
+  chatPromptVersion: null,
   dailyTokenLimitPerUser: 10_000,
   dailyTokenLimitPerOrganization: 25_000,
 };

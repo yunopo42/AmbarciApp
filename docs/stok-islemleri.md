@@ -166,7 +166,7 @@ Seçenek olarak "normal giriş/çıkış gibi" kuralı vardı: geri giden mal or
 
 **Kilit sırası.** İstek geri alınacak işlemi kilitler; ters kaydı yalnızca süresi dolmuşsa (EXPIRED yazmak için) kilitler. Onay önce ters kaydı, sonra geri alınan işlemi kilitler; ama süresi dolmuş ters kaydın onayı ikinci kilide gelmeden döner. Böylece istek ile onay birbirinin tuttuğu kilidi beklemez.
 
-**Ekranda.** Web özet sayfasında ve sohbetteki uygulanmış kartta (mobil, web) "Geri al" düğmesi, yalnızca önizleme izin verdiğinde (`canReverse`) görünür. Düğme ters kaydı açar. Web'de ters kaydın özetine geçilir; sohbette ters kayıt, işlemin kartının hemen altında kendi kartıyla görünür. Ters kayıt onaylanınca işlemin kartı "Geri alındı" olur. Sohbetten geri alma (asistanın `propose_reversal` aracı, `chat-v3`) ayrı bir işte gelecek.
+**Ekranda.** Web özet sayfasında ve sohbetteki uygulanmış kartta (mobil, web) "Geri al" düğmesi, yalnızca önizleme izin verdiğinde (`canReverse`) görünür. Düğme ters kaydı açar. Web'de ters kaydın özetine geçilir; sohbette ters kayıt, işlemin kartının hemen altında kendi kartıyla görünür. Ters kayıt onaylanınca işlemin kartı "Geri alındı" olur. Sohbetten geri alma (asistanın `propose_reversal` aracı, `chat-v4`) ayrı bir işte gelecek.
 
 ## Önizleme (onaydan önce "önce → sonra")
 

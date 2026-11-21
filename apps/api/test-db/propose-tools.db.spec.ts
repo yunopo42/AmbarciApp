@@ -139,7 +139,7 @@ describe('Asistanın öneri araçları (gerçek veritabanı)', () => {
       type: 'Çıkış',
       status: 'Onay bekliyor',
       party: 'Yıldız Yapı İnşaat',
-      lines: [{ quantity: '2 koli', base_quantity: '200 metre', stock_change: '1.000 metre → 800 metre', sufficient: true }],
+      lines: [{ quantity: '2 koli', base_quantity: '200 metre', stock_change: '1000 metre → 800 metre', sufficient: true }],
     });
     expect(await operationRow(proposal.operation_id)).toEqual({
       status: 'PENDING_CONFIRMATION',
@@ -256,7 +256,7 @@ describe('Asistanın öneri araçları (gerçek veritabanı)', () => {
     expect(proposal).toMatchObject({
       type: 'Fire',
       insufficient_stock: true,
-      lines: [{ sufficient: false, available: '845 metre', required: '999.999 metre' }],
+      lines: [{ sufficient: false, available: '845 metre', required: '999999 metre' }],
     });
     // Stok eksiye düşmez; modele eksi bir "sonra" değeri de verilmez (#74 denemesi).
     expect(proposal.lines[0]).not.toHaveProperty('stock_change');

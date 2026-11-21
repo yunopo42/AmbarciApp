@@ -15,7 +15,8 @@
     "measure:latency": "vitest run --config vitest.measure.config.ts",
     "measure:remote": "nest build && node dist/scripts/measure-confirm-remote.js",
     "gen:openapi": "nest build && node dist/scripts/generate-openapi.js",
-    "measure:chat": "nest build && node dist/scripts/measure-chat-remote.js"
+    "measure:chat": "nest build && node dist/scripts/measure-chat-remote.js",
+    "quality": "nest build && node dist/scripts/assistant-quality/cli.js"
   },
   "dependencies": {
     "@ambarci/db": "workspace:*",
