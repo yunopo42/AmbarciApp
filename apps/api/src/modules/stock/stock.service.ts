@@ -1,5 +1,15 @@
 import type { Database } from '@ambarci/db';
-import type { ProductMovementList, ProductMovementQuery, ProductStock, StockListQuery, WarehouseStock } from '@ambarci/shared';
+import type {
+  CriticalStockList,
+  CriticalStockQuery,
+  MovementListQuery,
+  ProductMovementList,
+  ProductMovementQuery,
+  ProductStock,
+  RecentMovementList,
+  StockListQuery,
+  WarehouseStock,
+} from '@ambarci/shared';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 
 import { ApiException } from '../../common/api-exception.js';
@@ -104,6 +114,73 @@ export class StockService {
         averageCost,
         belowMinimum,
       })),
+    };
+  }
+
+  /**
+   * Kritik stoktaki ürünler, depo bazında (gösterge paneli, #87). Eşiği tanımlı aktif ürünler katalogdan, eşiğin
+   * altındaki stok satırları inventory modülünden okunur; karşılaştırma SQL'de. Yönetici bütün aktif depoları, çalışan
+   * yalnızca yetkili olduğu depoları görür.
+   */
+  async criticalStock(organization: OrganizationContext, query: CriticalStockQuery): Promise<CriticalStockList> {
+    const [products, warehouseIds] = await Promise.all([
+      this.catalog.listProductsWithMinStock(this.db, organization.id),
+      this.organizations.visibleWarehouseIds(organization),
+    ]);
+    const { items, total } = await this.inventory.listBelowMinimum(
+      organization.id,
+      products.map((product) => ({ productId: product.id, minStock: product.minStock })),
+      { warehouseIds, warehouseId: query.warehouseId?.toLowerCase(), page: query.page, pageSize: query.pageSize },
+    );
+    const productOf = new Map(products.map((product) => [product.id, product]));
+    return {
+      items: items.map((row) => {
+        const product = productOf.get(row.productId);
+        if (!product) {
+          throw new Error(`Kritik stok satırının ürünü bulunamadı (${row.productId}).`);
+        }
+        return {
+          product: { id: product.id, sku: product.sku, name: product.name, baseUnit: product.baseUnit },
+          warehouse: { id: row.warehouseId, name: row.warehouseName },
+          quantity: row.quantity,
+          minStock: row.minStock,
+        };
+      }),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
+  }
+
+  /**
+   * Şirketin son hareketleri, en yeni önce (gösterge paneli, #87). Yönetici bütün depoların, çalışan yalnızca yetkili
+   * olduğu depoların hareketlerini görür (ürünün hareket geçmişiyle aynı kural). Ürün adları katalogdan okunur.
+   */
+  async recentMovements(organization: OrganizationContext, query: MovementListQuery): Promise<RecentMovementList> {
+    const warehouseIds = await this.organizations.visibleWarehouseIds(organization);
+    const { items, total } = await this.inventory.listRecentMovements(organization.id, {
+      warehouseIds,
+      warehouseId: query.warehouseId?.toLowerCase(),
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    const refs = await this.catalog.findProductRefs(
+      this.db,
+      organization.id,
+      items.map((item) => item.productId),
+    );
+    const productOf = new Map(refs.map((product) => [product.id, product]));
+    return {
+      items: items.map(({ productId, ...movement }) => {
+        const product = productOf.get(productId);
+        if (!product) {
+          throw new Error(`Hareketin ürünü bulunamadı (${productId}).`);
+        }
+        return { ...movement, product };
+      }),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
     };
   }
 

@@ -1,6 +1,6 @@
 # Stok işlemleri ve onay transaction'ı
 
-Bu belge stoğun nasıl değiştiğini anlatır: işlemin açılması, onay transaction'ı, kilit sırası, hareketli ortalama maliyet, tekrar eden onay ve hata kodları. İlgili işler: #33 (onay transaction'ı), #37 (web ekranları, önizleme ve stok okuma uçları). Tablolar ve kısıtlar: [veritabani.md](veritabani.md#stok-defteri-tabloları). Ondalık hesap kararı: [ADR-003](kararlar/ADR-003-ondalik-hesap-sql.md).
+Bu belge stoğun nasıl değiştiğini anlatır: işlemin açılması, onay transaction'ı, kilit sırası, hareketli ortalama maliyet, tekrar eden onay ve hata kodları. İlgili işler: #33 (onay transaction'ı), #37 (web ekranları, önizleme ve stok okuma uçları), #87 (onay kuyruğu ve gösterge paneli). Tablolar ve kısıtlar: [veritabani.md](veritabani.md#stok-defteri-tabloları). Ondalık hesap kararı: [ADR-003](kararlar/ADR-003-ondalik-hesap-sql.md).
 
 ## Kural: stok yalnızca onayla değişir
 
@@ -9,7 +9,7 @@ Ekrandan, asistandan (5. hafta) ya da içe aktarmadan (#39) gelen her işlem ön
 | Uç nokta | Ne yapar |
 | --- | --- |
 | `POST /v1/operations` | İşlemi açar: tür, kalemler (ürün, depo, miktar, birim), isteğe bağlı cari ve not. Ürün, birim, depo ve yetki burada kontrol edilir; stok değişmez. |
-| `GET /v1/operations?status=&page=&pageSize=` | İşlemler, en yeni önce; varsayılan yalnızca onay bekleyenler. Kalem sayısı ve dokunduğu depolar. Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür; açılış işlemlerini yalnızca yönetici görür |
+| `GET /v1/operations?status=&type=&source=&warehouseId=&page=&pageSize=` | İşlemler, en yeni önce; varsayılan yalnızca onay bekleyenler. Satırda tür, kaynak, sürüm, açan kişi (e-posta), tarih, kalem sayısı, dokunduğu depolar ve sohbet önerisinde son onay anı (`expiresAt`). Süzgeçler isteğe bağlı: tür, kaynak ve depo (işlemin dokunduğu depolardan biri, transferde hedef dahil). Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür; açılış işlemlerini yalnızca yönetici görür |
 | `GET /v1/operations/{id}` | İşlem ve kalemleri |
 | `GET /v1/operations/{id}/preview` | Onay ekranının özeti: ürün ve depo adları, ana birim karşılığı ve onay bekleyen işlemde stoğun önce → sonra hâli. Stok değişmez (aşağıda: Önizleme) |
 | `POST /v1/operations/{id}/confirm` | Onay. Gövde: `{ "version": 1 }`; başlık: `Idempotency-Key`. Stok, hareketler ve maliyet tek transaction'da yazılır. |
@@ -18,6 +18,8 @@ Ekrandan, asistandan (5. hafta) ya da içe aktarmadan (#39) gelen her işlem ön
 | `GET /v1/warehouses/{id}/stock` | Depodaki stok: aktif ürünler, miktar, ortalama maliyet, kritik eşik altında mı. Arama ve sayfalama ürün listesindekiyle aynı; depoda hareketi olmayan ürün 0 görünür |
 | `GET /v1/products/{id}/movements` | Ürünün hareketleri, en yeni önce; depo süzgeci ve sayfalama |
 | `GET /v1/products/{id}/stock` | Ürünün depolara göre stoğu ve toplamı (mobil ürün detayı; 4. haftada asistanın stok sorgusu). Çalışan yalnızca yetkili depoları görür, toplam da onların toplamıdır |
+| `GET /v1/stock/critical?warehouseId=&page=&pageSize=` | Kritik stoktaki ürünler, depo bazında (gösterge paneli): eşiği tanımlı aktif ürünün aktif bir depoda eşiğin altına düşen stoğu. Depo adına, sonra en ağır eksiğe (miktar ÷ eşik) göre. Çalışan yalnızca yetkili depoları görür |
+| `GET /v1/movements?warehouseId=&page=&pageSize=` | Şirketin son hareketleri, bütün ürünlerde, en yeni önce; ürünün kodu, adı ve ana birimiyle (gösterge paneli). Çalışan yalnızca yetkili depolarının hareketlerini görür |
 
 İşlem türleri: giriş (`STOCK_IN`), çıkış (`STOCK_OUT`), transfer (`TRANSFER`), sayım (`COUNT`), fire (`WASTE`), açılış (`OPENING`, yalnızca yönetici). Ters kayıt (`REVERSAL`, #78) bu uçtan açılmaz; kendi ucu var (aşağıda: Ters kayıt).
 
@@ -183,14 +185,20 @@ Kod: `operations.service.ts` (`preview`), `inventory/stock-preview.ts` ve `stock
 | --- | --- |
 | `/operations/new` | Fiş formu: tür (giriş, çıkış, transfer, sayım, fire), depo (transferde çıkış ve hedef), girişte tedarikçi, çıkışta müşteri, not; kalemler: ürün arama penceresi, birim (ana birim ya da ek birimler, "1 koli = 12 adet"), miktar, girişte birim maliyet. Kaydedince işlem onay bekleyen olarak açılır |
 | `/operations/{id}` | Özet: kalem başına girilen miktar ve ana birim karşılığı, depo, stok önce → sonra (transferde iki depo), yeterli/yetersiz. "Onayla" ve "İptal et". Onaydan sonra yazılan hareketler ve yeni stok |
-| `/stock` | Onay bekleyen işlemler (varsa; özete bağlantıyla) ve depo bazında stok: depo seçimi, arama, sayfalama; miktar, kritik eşik, "Kritik"/"Yeterli" rozeti, ortalama maliyet |
+| `/` (gösterge paneli, #87) | Onay bekleyen işlem sayısı (kuyruğa bağlantı), kritik stoktaki ürün sayısı ve depo bazında listesi (ürün sayfasına bağlantı), son 10 hareket (ürün ve işleme bağlantı) |
+| `/approvals` (onay kuyruğu, #87) | Onay bekleyen işlemler: tür, kaynak, açan kişi, depolar, kalem sayısı, tarih, sohbet önerisinde son onay anı ve kalan süre; kaynak çipleri (Tümü, Sohbet, Ekran, İçe aktarma, Belge), tür ve depo süzgeci, sayfalama; satırdan özete bağlantı. Satır seçip toplu onay; sonuç işlem işlem gösterilir. Menüde bekleyen sayısı rozetle görünür |
+| `/stock` | Onay bekleyen işlemlerin kısa listesi (varsa; özete ve onay kuyruğuna bağlantıyla) ve depo bazında stok: depo seçimi, arama, sayfalama; miktar, kritik eşik, "Kritik"/"Yeterli" rozeti, ortalama maliyet |
 | `/products/{id}` | Ürün formunun altında hareket geçmişi (depo süzgeci, sayfalama) |
 | Mobil: stok listesi ve ürün detayı | Depo çipleri, arama, "KRİTİK"/"YETERLİ" rozeti, kaydırdıkça sonraki sayfa; ürün detayında depolara göre stok, birimler, alternatif adlar, son 10 hareket (#38) |
 
 - **Çift tıklama:** Özet sayfası açılınca bir `Idempotency-Key` (UUID) üretilir ve o sayfadaki bütün onay denemeleri aynı anahtarla gider. Düğme istek sürerken kapalıdır; yine de ikinci istek giderse API işlemi uygulanmış ve anahtarı aynı bulur, ilk cevabı döner. Stok bir kez değişir.
 - **Depo yetkisi:** Çalışanın yetkili olduğu depolar üyelik bilgisinde gelir (`GET /v1/organizations` → `warehouseIds`). Formdaki ve stok listesindeki depo seçenekleri buna göre süzülür; asıl kontrol API'de.
 - **Ana birim karşılığı** formda çarpılarak gösterilmez (JS'de ondalık hesap yok, ADR-003); formda katsayı ("1 koli = 12 adet"), özette sunucunun hesapladığı miktar ("3 koli = 36 adet") görünür.
-- **Onay bekleyen işlemler:** Ekrandan açılıp bırakılan fiş ya da içe aktarmanın açılış işlemi Stok sayfasındaki listeden özetine döner. Süzme ve toplu onayla tam onay kuyruğu 5–6. haftada bunun üzerine kurulur.
+- **Onay bekleyen işlemler:** Ekrandan açılıp bırakılan fiş, içe aktarmanın açılış işlemi ya da sohbet önerisi onay kuyruğunda (`/approvals`) toplanır; Stok sayfasında en yeni 20'si kısa liste olarak durur.
+- **Toplu onay (#87):** Ayrı bir "toplu onay" ucu yoktur. Seçilen işlemler sırayla, her biri kendi `POST /v1/operations/{id}/confirm` isteğiyle, listede görülen sürümle ve kendi `Idempotency-Key`'iyle gönderilir (`packages/api-client/src/bulk-confirm.ts`, `confirmEach`). Her istek kendi transaction'ındadır: biri yetersiz stok, süre ya da sürüm yüzünden reddedilirse ötekiler etkilenmez. Sırayla gönderilir; aynı ürünü kullanan iki işlem stok satırında birbirini beklemez, yetersiz stokta hangisinin önce uygulandığı bellidir. Sonuç işlem işlem gösterilir: uygulandı, yetersiz stok, süresi doldu, sürüm değişti; ayrıca başka ekrandan onaylanmış, onay beklemiyor (iptal), yetki yok, gönderilemedi (ağ). Anahtar işlem ve sürüm başına sayfa açık kaldıkça saklanır: ağ hatasından sonra aynı işlem yeniden seçilirse aynı anahtar gider, API ilk isteği tanır ve stok bir kez değişir; işlem bu arada düzenlendiyse (yeni sürüm) yeni anahtar üretilir. Onaydan önce bir pencere seçilen işlemleri listeler.
+- **Süresi dolan öneri:** API süresi dolmuş sohbet önerisini onay bekleyen saymaz. Kuyrukta kalan süre yarım dakikada bir güncellenir; en yakın son onay anı gelince liste yeniden okunur ve öneri listeden düşer. O ana kadar satır "Süresi doldu" görünür ve seçilemez. Asıl kontrol onayda, kilit altında ve veritabanının saatiyledir.
+- **Açan kişi:** Kullanıcıların görünen adı olmadığı için e-postası gösterilir (organizations modülünün servisinden; operations modülü kullanıcı tablosuna bakmaz). Sistemin açtığı işlem (açılış betiği) "Sistem" görünür.
+- **Kritik stok (gösterge paneli):** Yalnızca o depoda stok satırı olan (en az bir kez hareket görmüş) ürünler sayılır. Ürünün eşiği şirket genelindedir; satırı olmayan depoları da saysaydık, bir depoda hiç tutulmayan her ürün o depoda "kritik" görünürdü. Stok sayfası ise seçilen depoda bütün aktif ürünleri gösterir ve hareketi olmayanı 0 ile "Kritik" işaretleyebilir; ikisi bu yüzden farklı sayabilir. Pasif depo ve pasif ürün sayılmaz. Kalan miktar ve eşik ekranda yazıyla gösterilir; oran çubuğu çizilmez (JS'de ondalık hesap yok, ADR-003).
 
 ## Açılış stoğu
 
@@ -203,7 +211,10 @@ Kod: `operations.service.ts` (`preview`), `inventory/stock-preview.ts` ve `stock
 | `apps/api/test/operations-rules.spec.ts` | CI | Durum makinesi, kilit sırası (ters sıralı iki işlem aynı sırayı üretir), işlem şeması |
 | `apps/api/test/operations.e2e.spec.ts` | CI | Şema hataları, depo yetkisi, açılış rolü, Idempotency-Key zorunluluğu |
 | `apps/api/test-db/operations.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Beş işlem türü, birim çevrimi, ortalama maliyet, sayımın onay anındaki farkı, yetersiz stok (hiçbir şey yazılmaz), aynı onayın tekrarı, sürüm, başka şirket, depo yetkisi, açılış betiğinin tekrarı, stok = hareketlerin toplamı |
-| `apps/api/test-db/operation-list.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | İşlem listesi: yalnızca onay bekleyenler, en yeni önce, kalem sayısı ve depolar; sayfalama ve durum süzgeci; çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür, açılışı görmez; başka şirketin işlemi görünmez |
+| `apps/api/test-db/operation-list.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | İşlem listesi: yalnızca onay bekleyenler, en yeni önce, kalem sayısı ve depolar; sayfalama ve durum süzgeci; çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür, açılışı görmez; başka şirketin işlemi görünmez. Onay kuyruğu (#87): sürüm, açan kişi, son onay anı; tür, kaynak ve depo süzgeci (transferin hedef deposu dahil), süzgeçlerin birlikte ve sayfalamayla kullanımı, geçersiz süzgeç 400; çalışan süzgeçle de yetkisiz işlemi görmez; süresi dolan sohbet önerisi bekleyenlerde değil `EXPIRED` listesinde |
+| `apps/api/test-db/dashboard.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Gösterge paneli (#87): kritik stok depo bazında ve en ağır eksik önce; eşiksiz ürün, pasif ürün, pasif depo ve stok satırı olmayan depo sayılmaz, sıfıra inen stok sayılır; son hareketler en yeni önce ve ürün bilgisiyle; depo süzgeci, sayfalama, çalışanın depo yetkisi, başka şirket |
+| `packages/api-client/test/bulk-confirm.spec.ts` | CI | Toplu onay: her işlem ayrı istek ve ayrı anahtarla, sırayla; biri reddedilse de ötekiler gider; ağ hatasından sonra aynı sürüm aynı anahtarla, yeni sürüm yeni anahtarla; sonuç eşlemesi (uygulandı, yetersiz stok, süresi doldu, sürüm değişti ve diğerleri) ve özet |
+| `packages/api-client/test/approval-deadline.spec.ts` | CI | Kuyruktaki kalan süre etiketi ve listenin yeniden okunacağı en yakın son onay anı |
 | `apps/api/test/stock-preview.spec.ts` | CI | Önizlemenin etkileri onayın uygulama sırasıyla üretmesi (transferde kaynak sonra hedef) |
 | `apps/api/test-db/stock.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Önizleme: aynı üründen iki çıkış kalemi, transfer, sayım, yetersiz kalem, onaylanmış işlem; depo bazında stok ve kritik eşik; hareket geçmişi, depo süzgeci ve sayfalama; çalışanın depo yetkisi; başka şirketin ürünü |
 | `apps/api/test-db/concurrency.db.spec.ts` | Gerçek veritabanı (`pnpm db:test`) | Eşzamanlı çıkış, deadlock tehlikesi ve kilit sırası, aynı anda gelen çift onay, çok kalemli rollback (aşağıda) |

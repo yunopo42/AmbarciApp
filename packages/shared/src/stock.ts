@@ -158,3 +158,62 @@ export const productMovementListSchema = z.object({
   pageSize: z.number().int(),
 });
 export type ProductMovementList = z.infer<typeof productMovementListSchema>;
+
+/** Ürünün listelerde gösterilen kimliği (gösterge paneli). */
+export const productRefSchema = z.object({
+  id: z.uuid(),
+  sku: z.string(),
+  name: z.string(),
+  baseUnit: z.string(),
+});
+export type ProductRef = z.infer<typeof productRefSchema>;
+
+/** GET /v1/stock/critical: kritik eşiğin altındaki ürünler, depo bazında; isteğe bağlı depo süzgeci. */
+export const criticalStockQuerySchema = z.object({
+  warehouseId: z.uuid().optional(),
+  ...pageQuery,
+});
+export type CriticalStockQuery = z.infer<typeof criticalStockQuerySchema>;
+
+/**
+ * Bir depoda kritik eşiğin altına düşmüş ürün. Yalnızca o depoda stok satırı olan (en az bir kez hareket görmüş) aktif
+ * ürünler ve aktif depolar sayılır: o depoda hiç tutulmayan ürün her depoda "kritik" görünmesin. Karşılaştırma SQL'de.
+ */
+export const criticalStockItemSchema = z.object({
+  product: productRefSchema,
+  warehouse: warehouseRefSchema,
+  /** Ana birimde. */
+  quantity: z.string(),
+  /** Ürünün kritik stok eşiği, ana birimde. */
+  minStock: z.string(),
+});
+export type CriticalStockItem = z.infer<typeof criticalStockItemSchema>;
+
+export const criticalStockListSchema = z.object({
+  items: z.array(criticalStockItemSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type CriticalStockList = z.infer<typeof criticalStockListSchema>;
+
+/** GET /v1/movements: şirketin son stok hareketleri, en yeni önce; isteğe bağlı depo süzgeci. */
+export const movementListQuerySchema = z.object({
+  warehouseId: z.uuid().optional(),
+  ...pageQuery,
+});
+export type MovementListQuery = z.infer<typeof movementListQuerySchema>;
+
+/** Son hareketler listesinin satırı: ürünün hareketi ve ürünün kendisi. */
+export const recentMovementSchema = productMovementSchema.extend({
+  product: productRefSchema,
+});
+export type RecentMovement = z.infer<typeof recentMovementSchema>;
+
+export const recentMovementListSchema = z.object({
+  items: z.array(recentMovementSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type RecentMovementList = z.infer<typeof recentMovementListSchema>;

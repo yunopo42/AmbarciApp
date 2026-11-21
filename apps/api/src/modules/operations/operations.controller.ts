@@ -35,7 +35,9 @@ import {
   CreateOperationDto,
   OperationDto,
   OperationListDto,
+  OPERATION_TYPES,
   OperationPreviewDto,
+  SOURCES,
   STATUSES,
 } from './operations.dto.js';
 import { OperationsService } from './operations.service.js';
@@ -72,6 +74,15 @@ export class OperationsController {
       'İşlemler, en yeni önce; varsayılan yalnızca onay bekleyenler. Çalışan yalnızca bütün depolarında yetkili olduğu işlemleri görür',
   })
   @ApiQuery({ name: 'status', required: false, enum: STATUSES, description: 'Varsayılan PENDING_CONFIRMATION' })
+  @ApiQuery({ name: 'type', required: false, enum: OPERATION_TYPES })
+  @ApiQuery({ name: 'source', required: false, enum: SOURCES })
+  @ApiQuery({
+    name: 'warehouseId',
+    required: false,
+    type: String,
+    format: 'uuid',
+    description: 'İşlemin dokunduğu depolardan biri (transferde hedef dahil)',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'En fazla 100' })
   @ApiOkResponse({ type: OperationListDto })

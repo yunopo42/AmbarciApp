@@ -7,7 +7,13 @@ import { postgresErrorOf } from '../../common/postgres-error.js';
 import { DATABASE } from '../../database/database.module.js';
 import type { ReversalStep } from './apply-stock.service.js';
 import { StockLedgerRepository } from './stock-ledger.repository.js';
-import type { PreviewedEffect, ProductWarehouseStockRow, StockLevelRow } from './stock-ledger.repository.js';
+import type {
+  BelowMinimumRow,
+  MovementFilter,
+  PreviewedEffect,
+  ProductWarehouseStockRow,
+  StockLevelRow,
+} from './stock-ledger.repository.js';
 import { reversalEffectsOf, stockEffectsOf } from './stock-preview.js';
 import type { PreviewLine } from './stock-preview.js';
 import { WarehousesRepository } from './warehouses.repository.js';
@@ -85,9 +91,26 @@ export class InventoryService {
   listProductMovements(
     organizationId: string,
     productId: string,
-    filter: { warehouseIds: string[] | null; warehouseId?: string | undefined; page: number; pageSize: number },
+    filter: MovementFilter,
   ): Promise<{ items: ProductMovement[]; total: number }> {
     return this.ledger.listProductMovements(this.db, organizationId, productId, filter);
+  }
+
+  /** Şirketin son hareketleri, bütün ürünlerde (gösterge paneli). */
+  listRecentMovements(
+    organizationId: string,
+    filter: MovementFilter,
+  ): Promise<{ items: (ProductMovement & { productId: string })[]; total: number }> {
+    return this.ledger.listRecentMovements(this.db, organizationId, filter);
+  }
+
+  /** Verilen ürünlerden aktif depolarda kritik eşiğin altına düşenler (gösterge paneli). */
+  listBelowMinimum(
+    organizationId: string,
+    products: { productId: string; minStock: string }[],
+    filter: MovementFilter,
+  ): Promise<{ items: BelowMinimumRow[]; total: number }> {
+    return this.ledger.listBelowMinimum(this.db, organizationId, products, filter);
   }
 
   productHasMovements(organizationId: string, productId: string): Promise<boolean> {

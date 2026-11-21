@@ -128,6 +128,12 @@ export function inMemoryOrganizationsRepository(store: InMemoryStore): Organizat
             .map((warehouse) => warehouse.id),
         }));
     },
+    async findMemberEmails(organizationId, userIds) {
+      // Bellekteki kullanıcıların e-postası yok (listMembers'taki gibi null).
+      return store.memberships
+        .filter((row) => row.organizationId === organizationId && userIds.includes(row.userId))
+        .map((row) => ({ userId: row.userId, email: null }));
+    },
     async grantWarehouseAccess(organizationId, membershipId, warehouseId): Promise<GrantAccessResult> {
       // Gerçek veritabanında bunu bileşik yabancı anahtarlar sağlar.
       if (!store.memberships.some((row) => row.id === membershipId && row.organizationId === organizationId)) {

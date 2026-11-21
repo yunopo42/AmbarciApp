@@ -387,6 +387,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stock/critical": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kritik stoktaki ürünler, depo bazında: eşiği tanımlı aktif ürünlerin aktif depolarda eşiğin altına düşen stoğu; çalışan yalnızca yetkili olduğu depoları görür */
+        get: operations["StockController_criticalStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Şirketin son stok hareketleri, en yeni önce; çalışan yalnızca yetkili olduğu depoların hareketlerini görür */
+        get: operations["StockController_recentMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/products/import": {
         parameters: {
             query?: never;
@@ -765,6 +799,12 @@ export interface components {
             reversedOperationId: string | null;
             items: components["schemas"]["OperationItemDto"][];
         };
+        OperationCreatorDto: {
+            /** Format: uuid */
+            userId: string;
+            /** @description Şirketten ayrılmış ya da hesabı silinmiş kullanıcıda null */
+            email: string | null;
+        };
         WarehouseRefDto: {
             /** Format: uuid */
             id: string;
@@ -780,8 +820,20 @@ export interface components {
             status: "RECEIVED" | "NEEDS_CLARIFICATION" | "PENDING_CONFIRMATION" | "APPLIED" | "REVERSED" | "CANCELLED" | "EXPIRED" | "FAILED";
             /** @enum {string} */
             source: "SCREEN" | "CHAT" | "DOCUMENT" | "IMPORT" | "SYSTEM";
+            /**
+             * @description Onay isteği bu sürümü gönderir
+             * @example 1
+             */
+            version: number;
+            /** @description İşlemi açan; sistemin açtığı işlemde null */
+            createdBy: components["schemas"]["OperationCreatorDto"] | null;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description Yalnızca sohbetten açılmış, onay bekleyen öneride: onaylanabileceği son an
+             */
+            expiresAt: string | null;
             /** @example 2 */
             lineCount: number;
             /** @description İşlemin dokunduğu depolar (transferde hedef dahil) */
@@ -1010,6 +1062,68 @@ export interface components {
         };
         ProductMovementListDto: {
             items: components["schemas"]["ProductMovementDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ProductRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example PRZ-TOP-B */
+            sku: string;
+            /** @example Topraklı priz, beyaz */
+            name: string;
+            /** @example adet */
+            baseUnit: string;
+        };
+        CriticalStockItemDto: {
+            product: components["schemas"]["ProductRefDto"];
+            warehouse: components["schemas"]["WarehouseRefDto"];
+            /**
+             * @description Ana birimde
+             * @example 4.000
+             */
+            quantity: string;
+            /**
+             * @description Ürünün kritik stok eşiği, ana birimde
+             * @example 10.000
+             */
+            minStock: string;
+        };
+        CriticalStockListDto: {
+            items: components["schemas"]["CriticalStockItemDto"][];
+            /** @description Kritik eşiğin altındaki (ürün, depo) satırlarının sayısı */
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        RecentMovementDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            operationId: string;
+            /** @example 1 */
+            lineNo: number;
+            /** Format: date-time */
+            createdAt: string;
+            warehouse: components["schemas"]["WarehouseRefDto"];
+            /** @enum {string} */
+            type: "IN" | "OUT" | "TRANSFER_OUT" | "TRANSFER_IN" | "COUNT_SURPLUS" | "COUNT_SHORTAGE" | "WASTE" | "REVERSAL";
+            /**
+             * @description Ana birimde, işaretli: giriş +, çıkış −
+             * @example -36.000
+             */
+            quantityChange: string;
+            /** @example 10.0000 */
+            unitCost: string;
+            /** @example 84.000 */
+            quantityAfter: string;
+            /** @example 10.0000 */
+            averageCostAfter: string;
+            product: components["schemas"]["ProductRefDto"];
+        };
+        RecentMovementListDto: {
+            items: components["schemas"]["RecentMovementDto"][];
             total: number;
             page: number;
             pageSize: number;
@@ -2025,6 +2139,10 @@ export interface operations {
                 /** @description En fazla 100 */
                 pageSize?: number;
                 page?: number;
+                /** @description İşlemin dokunduğu depolardan biri (transferde hedef dahil) */
+                warehouseId?: string;
+                source?: "SCREEN" | "CHAT" | "DOCUMENT" | "IMPORT" | "SYSTEM";
+                type?: "STOCK_IN" | "STOCK_OUT" | "TRANSFER" | "COUNT" | "WASTE" | "OPENING" | "REVERSAL";
                 /** @description Varsayılan PENDING_CONFIRMATION */
                 status?: "RECEIVED" | "NEEDS_CLARIFICATION" | "PENDING_CONFIRMATION" | "APPLIED" | "REVERSED" | "CANCELLED" | "EXPIRED" | "FAILED";
             };
@@ -2549,6 +2667,90 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    StockController_criticalStock: {
+        parameters: {
+            query?: {
+                /** @description En fazla 100 */
+                pageSize?: number;
+                page?: number;
+                warehouseId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CriticalStockListDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    StockController_recentMovements: {
+        parameters: {
+            query?: {
+                /** @description En fazla 100 */
+                pageSize?: number;
+                page?: number;
+                warehouseId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecentMovementListDto"];
+                };
+            };
+            /** @description Şirket seçilmemiş ya da kimlik geçersiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Şirkete, role ya da depoya erişim yok */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

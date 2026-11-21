@@ -2,7 +2,7 @@ import { invitations, organizations, organizationUsers, userWarehouseAccess } fr
 import type { Database, DbExecutor } from '@ambarci/db';
 import type { Member, OrganizationMembership, OrganizationRole } from '@ambarci/shared';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { authUsers } from 'drizzle-orm/supabase';
 
 import { postgresErrorOf } from '../../common/postgres-error.js';
@@ -169,6 +169,23 @@ export class OrganizationsRepository {
       .groupBy(organizationUsers.id, authUsers.email)
       .orderBy(asc(authUsers.email));
     return rows.map((row) => ({ ...row, email: row.email ?? null }));
+  }
+
+  /**
+   * Verilen kullanıcılardan bu şirketin üyesi olanların e-postası (işlem listesinde "açan kişi"). Üyeliği pasife
+   * alınmış kullanıcı da döner: ayrılmış bir çalışanın açtığı işlem de kimin açtığını göstermeli. Şirkette hiç üyeliği
+   * olmayan kullanıcı dönmez.
+   */
+  async findMemberEmails(organizationId: string, userIds: string[]): Promise<{ userId: string; email: string | null }[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    const rows = await this.db
+      .select({ userId: organizationUsers.userId, email: authUsers.email })
+      .from(organizationUsers)
+      .leftJoin(authUsers, eq(authUsers.id, organizationUsers.userId))
+      .where(and(eq(organizationUsers.organizationId, organizationId), inArray(organizationUsers.userId, userIds)));
+    return rows.map((row) => ({ userId: row.userId, email: row.email ?? null }));
   }
 
   /**

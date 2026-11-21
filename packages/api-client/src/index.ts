@@ -12,7 +12,17 @@ import type { components, paths } from './schema.js';
 
 export type { components, paths } from './schema.js';
 export { ApiRequestError, describeApiError } from './errors.js';
+export { approvalDeadline, nextDeadline } from './approval-deadline.js';
+export type { ApprovalDeadline } from './approval-deadline.js';
 export { splitBoldText } from './bold-text.js';
+export { bulkConfirmOutcome, bulkConfirmSummary, confirmEach } from './bulk-confirm.js';
+export type {
+  BulkConfirmOptions,
+  BulkConfirmOutcome,
+  BulkConfirmResult,
+  BulkConfirmTarget,
+  BulkConfirmTone,
+} from './bulk-confirm.js';
 export { cardActionFailure, confirmKeyFor, operationCardView } from './operation-card.js';
 export type { CardConfirmKey, CardLine, CardPreview, CardStockChange, CardTone, OperationCardView } from './operation-card.js';
 export type { TextSegment } from './bold-text.js';

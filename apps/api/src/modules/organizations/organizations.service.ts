@@ -79,6 +79,12 @@ export class OrganizationsService {
     return this.repository.listMembers(organizationId);
   }
 
+  /** Kullanıcı kimliğinden e-postaya; yalnızca bu şirketin (pasif dahil) üyeleri. Listelerde "açan kişi" için. */
+  async memberEmails(organizationId: string, userIds: string[]): Promise<Map<string, string | null>> {
+    const rows = await this.repository.findMemberEmails(organizationId, [...new Set(userIds)]);
+    return new Map(rows.map((row) => [row.userId, row.email]));
+  }
+
   async grantWarehouseAccess(organizationId: string, membershipId: string, warehouseId: string): Promise<void> {
     const result = await this.repository.grantWarehouseAccess(organizationId, membershipId, warehouseId);
     if (result === 'member_not_found') {

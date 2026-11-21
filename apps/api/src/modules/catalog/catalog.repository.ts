@@ -1,7 +1,8 @@
 import { parties, productUnits, products } from '@ambarci/db';
 import type { DbExecutor } from '@ambarci/db';
+import type { ProductRef } from '@ambarci/shared';
 import { Injectable } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 /** Çevrilecek kalem: girilen birimde miktar ve isteğe bağlı birim maliyet (metin, ADR-003). */
 export interface UnitConversionInput {
@@ -34,6 +35,9 @@ export type UnitConversion = {
 
 /** Stok ekranlarının ihtiyaç duyduğu ürün bilgisi. */
 export type ProductSummary = { id: string; baseUnit: string; minStock: string | null };
+
+/** Kritik stok eşiği tanımlı ürün (gösterge panelinin kritik stok listesi). */
+export type ProductWithMinStock = ProductRef & { minStock: string };
 
 /**
  * Diğer modüllerin ihtiyaç duyduğu ürün, birim ve cari sorguları: stok işleminin birim çevrimi ve doğrulaması,
@@ -83,6 +87,27 @@ export class CatalogRepository {
       .where(and(eq(products.organizationId, organizationId), eq(products.id, productId)))
       .limit(1);
     return row ?? null;
+  }
+
+  /** Kritik stok eşiği tanımlı aktif ürünler, SKU sırasıyla. Eşik karşılaştırması stok tarafında, SQL'de yapılır. */
+  async listProductsWithMinStock(executor: DbExecutor, organizationId: string): Promise<ProductWithMinStock[]> {
+    const rows = await executor
+      .select({ id: products.id, sku: products.sku, name: products.name, baseUnit: products.baseUnit, minStock: products.minStock })
+      .from(products)
+      .where(and(eq(products.organizationId, organizationId), eq(products.isActive, true), isNotNull(products.minStock)))
+      .orderBy(asc(products.sku));
+    return rows.flatMap((row) => (row.minStock === null ? [] : [{ ...row, minStock: row.minStock }]));
+  }
+
+  /** Kimlikleri verilen ürünlerin kodu, adı ve ana birimi (pasifler dahil); bu şirkette olmayan kimlik dönmez. */
+  async findProductRefs(executor: DbExecutor, organizationId: string, productIds: string[]): Promise<ProductRef[]> {
+    if (productIds.length === 0) {
+      return [];
+    }
+    return executor
+      .select({ id: products.id, sku: products.sku, name: products.name, baseUnit: products.baseUnit })
+      .from(products)
+      .where(and(eq(products.organizationId, organizationId), inArray(products.id, productIds)));
   }
 
   async findPartyName(executor: DbExecutor, organizationId: string, partyId: string): Promise<string | null> {

@@ -363,15 +363,37 @@ export class StockLedgerRepository {
     executor: DbExecutor,
     organizationId: string,
     productId: string,
-    filter: { warehouseIds: string[] | null; warehouseId?: string | undefined; page: number; pageSize: number },
+    filter: MovementFilter,
   ): Promise<{ items: ProductMovement[]; total: number }> {
+    const { items, total } = await this.queryMovements(executor, organizationId, productId, filter);
+    return { items: items.map(({ productId: _productId, ...movement }) => movement), total };
+  }
+
+  /**
+   * Şirketin son hareketleri, bütün ürünlerde, en yeni önce (gösterge paneli, #87). Görünürlük ve depo süzgeci ürünün
+   * hareket geçmişindekiyle aynı. Ürünün adı katalog modülünden okunur; burada yalnızca kimliği döner.
+   */
+  listRecentMovements(
+    executor: DbExecutor,
+    organizationId: string,
+    filter: MovementFilter,
+  ): Promise<{ items: (ProductMovement & { productId: string })[]; total: number }> {
+    return this.queryMovements(executor, organizationId, null, filter);
+  }
+
+  private async queryMovements(
+    executor: DbExecutor,
+    organizationId: string,
+    productId: string | null,
+    filter: MovementFilter,
+  ): Promise<{ items: (ProductMovement & { productId: string })[]; total: number }> {
     if (filter.warehouseIds?.length === 0) {
       return { items: [], total: 0 };
     }
-    const conditions: SQL[] = [
-      eq(inventoryMovements.organizationId, organizationId),
-      eq(inventoryMovements.productId, productId),
-    ];
+    const conditions: SQL[] = [eq(inventoryMovements.organizationId, organizationId)];
+    if (productId) {
+      conditions.push(eq(inventoryMovements.productId, productId));
+    }
     if (filter.warehouseIds) {
       conditions.push(inArray(inventoryMovements.warehouseId, filter.warehouseIds));
     }
@@ -386,6 +408,7 @@ export class StockLedgerRepository {
         operationId: inventoryMovements.operationId,
         lineNo: inventoryMovements.lineNo,
         createdAt: inventoryMovements.createdAt,
+        productId: inventoryMovements.productId,
         warehouseId: inventoryMovements.warehouseId,
         warehouseName: warehouses.name,
         type: inventoryMovements.type,
@@ -400,7 +423,8 @@ export class StockLedgerRepository {
         and(eq(warehouses.organizationId, inventoryMovements.organizationId), eq(warehouses.id, inventoryMovements.warehouseId)),
       )
       .where(where)
-      .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.lineNo))
+      // Aynı onayın hareketleri aynı zaman damgasını taşır: kalem ve kimlik sırası sonucu sabitler.
+      .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.lineNo), desc(inventoryMovements.id))
       .limit(filter.pageSize)
       .offset((filter.page - 1) * filter.pageSize);
     return {
@@ -412,7 +436,73 @@ export class StockLedgerRepository {
       total: totalRow?.total ?? 0,
     };
   }
+
+  /**
+   * Kritik eşiğin altındaki stok satırları (gösterge paneli, #87): verilen ürünlerin (eşiği tanımlı aktif ürünler,
+   * katalogdan) aktif depolardaki miktarı eşiğin altında. Yalnızca stok satırı olan depo sayılır: ürün o depoda hiç
+   * tutulmadıysa orada "kritik" değildir. Karşılaştırma SQL'de, NUMERIC ile. Depo adına, sonra en ağır eksiğe (miktar
+   * ÷ eşik en küçük) göre sıralanır. `warehouseIds` verilirse yalnızca o depolar (çalışanın yetkili depoları).
+   */
+  async listBelowMinimum(
+    executor: DbExecutor,
+    organizationId: string,
+    products: { productId: string; minStock: string }[],
+    filter: MovementFilter,
+  ): Promise<{ items: BelowMinimumRow[]; total: number }> {
+    if (products.length === 0 || filter.warehouseIds?.length === 0) {
+      return { items: [], total: 0 };
+    }
+    const values = sql.join(
+      products.map((product) => sql`(${product.productId}::uuid, ${product.minStock}::numeric)`),
+      sql`, `,
+    );
+    const visible = filter.warehouseIds
+      ? sql`and w.id in (${sql.join(
+          filter.warehouseIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})`
+      : sql``;
+    const selected = filter.warehouseId ? sql`and w.id = ${filter.warehouseId}::uuid` : sql``;
+    // Eşik sıfırsa miktar onun altına düşemez (CHECK quantity >= 0): bölme yalnızca eşiği pozitif satırlarda yapılır.
+    const below = sql`
+      with c as (
+        select v.product_id, w.id as warehouse_id, w.name as warehouse_name,
+               round(i.quantity, 3) as quantity, round(v.min_stock, 3) as min_stock,
+               i.quantity / v.min_stock as ratio
+        from (values ${values}) as v(product_id, min_stock)
+        join ${inventory} i on i.organization_id = ${organizationId} and i.product_id = v.product_id
+        join ${warehouses} w on w.organization_id = i.organization_id and w.id = i.warehouse_id and w.is_active
+        where i.quantity < v.min_stock ${visible} ${selected}
+      )`;
+    const [totalRow] = await executor.execute<{ total: number }>(sql`${below} select count(*)::int as total from c`);
+    const items = await executor.execute<BelowMinimumRow>(sql`${below}
+      select product_id as "productId", warehouse_id as "warehouseId", warehouse_name as "warehouseName",
+             quantity, min_stock as "minStock"
+      from c
+      order by warehouse_name, ratio, product_id
+      limit ${filter.pageSize} offset ${(filter.page - 1) * filter.pageSize}`);
+    return { items, total: totalRow?.total ?? 0 };
+  }
 }
+
+/** Hareket listelerinin süzgeci ve sayfası. */
+export interface MovementFilter {
+  /** Verilirse yalnızca bu depolar (çalışanın yetkili depoları); boş liste hiçbir depo demektir. */
+  warehouseIds: string[] | null;
+  /** Ekranın depo süzgeci. */
+  warehouseId?: string | undefined;
+  page: number;
+  pageSize: number;
+}
+
+/** Kritik eşiğin altındaki stok satırı (miktar ve eşik ana birimde, metin). */
+export type BelowMinimumRow = {
+  productId: string;
+  warehouseId: string;
+  warehouseName: string;
+  quantity: string;
+  minStock: string;
+};
 
 /** Önizlenen bir etkinin sonucu (miktarlar ana birimde, metin). */
 export type PreviewedEffect = {
