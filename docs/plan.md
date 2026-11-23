@@ -100,11 +100,13 @@ Planda olmayan, eklenen işler: Claude API adresinin kodda sabitlenmesi (#72); s
 
 **Kapı:** —
 
-- [ ] 100 etiketli mesaj (60 geliştirme, 40 test); `pnpm eval` betiği
-- [ ] Haiku–Sonnet kıyası, prompt iyileştirme, test kümesini dondurma
-- [ ] Web onay kuyruğu ve dashboard
+- [x] 100 etiketli mesaj (60 geliştirme, 40 test); `pnpm eval` betiği
+- [x] Haiku–Sonnet kıyası, prompt iyileştirme, test kümesini dondurma
+- [x] Web onay kuyruğu ve dashboard
 
 Push bildirimi 7. haftaya alındı (Plan değişikliği, 20 Kasım).
+
+Planda olmayan, eklenen işler: fire nedeninin nota yazılmaması 7. haftadan öne alındı (#86: araç şemasında alan sırası); araç sonuçlarında sayı yazımının düzeltilmesi (#86); prompt sürümünü seçen `CLAUDE_CHAT_PROMPT` ve kayıtlı koşuyu yeniden puanlayan `pnpm eval --rescore` (#86).
 
 ## Hafta 7 — Belge, ses, barkod; bildirim (23–29 Kasım)
 
